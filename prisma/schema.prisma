@@ -1,0 +1,320 @@
+/// 文件说明：该文件定义企业微信业务增长中台 V1.0 的数据库结构。
+/// 功能说明：覆盖多租户、用户角色、线索、标签、跟进、策略库、资料包、表单和企业微信配置预留。
+///
+/// 结构概览：
+///   第一部分：Prisma 生成器与数据源
+///   第二部分：业务枚举
+///   第三部分：多租户与用户模型
+///   第四部分：线索增长闭环模型
+///   第五部分：资料、表单和企业微信预留模型
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TenantStatus {
+  active
+  paused
+  expired
+}
+
+enum TenantPlan {
+  flagship
+}
+
+enum UserRole {
+  PLATFORM_ADMIN
+  TENANT_ADMIN
+  OPERATOR
+  SALES
+}
+
+enum UserStatus {
+  active
+  disabled
+}
+
+enum LeadSource {
+  douyin
+  xiaohongshu
+  shipinhao
+  gongzhonghao
+  website
+  friend_circle
+  offline_event
+  referral
+  other
+}
+
+enum CustomerType {
+  OWNER_CLIENT
+  DEALER_CLIENT
+  DESIGNER_CLIENT
+  FACTORY_CLIENT
+  CHANNEL_PARTNER
+  OLD_CLIENT
+  OTHER
+}
+
+enum NeedType {
+  PRODUCT_INQUIRY
+  COOPERATION
+  GET_MATERIAL
+  ASK_PRICE
+  BOOK_CONSULTATION
+  AFTER_SALES
+  INVESTMENT_JOIN
+  GROWTH_SYSTEM
+  OTHER
+}
+
+enum IntentionLevel {
+  LOW
+  MEDIUM
+  HIGH
+  STRONG
+}
+
+enum LeadStage {
+  NEW
+  MATERIAL_SENT
+  CONTACTED
+  DIAGNOSED
+  QUOTED
+  PENDING_DEAL
+  DEAL_DONE
+  LOST
+  TO_REACTIVATE
+}
+
+enum DealStatus {
+  NONE
+  PENDING
+  WON
+  LOST
+}
+
+enum TagGroup {
+  SOURCE
+  CUSTOMER_TYPE
+  NEED
+  INTENTION
+  STAGE
+  CUSTOM
+}
+
+enum FormType {
+  material_request
+  diagnosis
+  booking
+  event_signup
+}
+
+enum MaterialType {
+  pdf
+  image
+  video
+  link
+  document
+}
+
+enum WeComConfigStatus {
+  draft
+  enabled
+  disabled
+}
+
+model Tenant {
+  id          String                 @id @default(cuid())
+  name        String
+  slug        String                 @unique
+  industry    String?
+  status      TenantStatus           @default(active)
+  plan        TenantPlan             @default(flagship)
+  startedAt   DateTime               @default(now())
+  expiredAt   DateTime?
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  users       User[]
+  leads       Lead[]
+  leadTags    LeadTag[]
+  followUps   FollowUp[]
+  strategies  CustomerTypeStrategy[]
+  materials   Material[]
+  intakeForms IntakeForm[]
+  weComConfig WeComConfig?
+}
+
+model User {
+  id           String      @id @default(cuid())
+  tenantId     String?
+  tenant       Tenant?     @relation(fields: [tenantId], references: [id])
+  name         String
+  email        String      @unique
+  phone        String?
+  passwordHash String
+  role         UserRole
+  status       UserStatus  @default(active)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  ownedLeads   Lead[]      @relation("LeadOwner")
+  followUps    FollowUp[]
+  sessions     Session[]
+
+  @@index([tenantId, role])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Lead {
+  id             String          @id @default(cuid())
+  tenantId       String
+  tenant         Tenant          @relation(fields: [tenantId], references: [id])
+  name           String
+  phone          String
+  wechat         String?
+  company        String?
+  industry       String?
+  city           String?
+  source         LeadSource      @default(other)
+  customerType   CustomerType    @default(OTHER)
+  needType       NeedType        @default(OTHER)
+  intentionLevel IntentionLevel  @default(MEDIUM)
+  stage          LeadStage       @default(NEW)
+  message        String?
+  ownerId        String?
+  owner          User?           @relation("LeadOwner", fields: [ownerId], references: [id])
+  nextFollowAt   DateTime?
+  lastFollowAt   DateTime?
+  dealStatus     DealStatus      @default(NONE)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  tags           LeadTag[]
+  followUps      FollowUp[]
+  intakeForms    IntakeForm[]
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, source])
+  @@index([tenantId, customerType])
+  @@index([tenantId, stage])
+}
+
+model LeadTag {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id])
+  tagName   String
+  tagGroup  TagGroup @default(CUSTOM)
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, leadId])
+}
+
+model FollowUp {
+  id           String     @id @default(cuid())
+  tenantId     String
+  tenant       Tenant     @relation(fields: [tenantId], references: [id])
+  leadId       String
+  lead         Lead       @relation(fields: [leadId], references: [id])
+  userId       String
+  user         User       @relation(fields: [userId], references: [id])
+  content      String
+  nextAction   String?
+  nextFollowAt DateTime?
+  stageBefore  LeadStage?
+  stageAfter   LeadStage?
+  createdAt    DateTime   @default(now())
+
+  @@index([tenantId, leadId, createdAt])
+}
+
+model CustomerTypeStrategy {
+  id                        String       @id @default(cuid())
+  tenantId                  String
+  tenant                    Tenant       @relation(fields: [tenantId], references: [id])
+  customerType              CustomerType
+  name                      String
+  painPoints                String[]
+  firstMaterials            String[]
+  welcomeScript             String
+  day3Script                String
+  day7Script                String
+  day15Script               String
+  manualTriggerRules        String[]
+  recommendedNextAction     String
+  recommendedPrivateContent String
+  createdAt                 DateTime     @default(now())
+  updatedAt                 DateTime     @updatedAt
+
+  @@unique([tenantId, customerType])
+}
+
+model Material {
+  id           String        @id @default(cuid())
+  tenantId     String
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  title        String
+  description  String?
+  type         MaterialType  @default(link)
+  url          String
+  customerType CustomerType?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([tenantId, customerType])
+}
+
+model IntakeForm {
+  id            String        @id @default(cuid())
+  tenantId      String
+  tenant        Tenant        @relation(fields: [tenantId], references: [id])
+  formType      FormType
+  source        LeadSource    @default(other)
+  name          String
+  phone         String
+  wechat        String?
+  company       String?
+  industry      String?
+  city          String?
+  customerType  CustomerType  @default(OTHER)
+  needType      NeedType      @default(OTHER)
+  message       String?
+  createdLeadId String?
+  createdLead   Lead?         @relation(fields: [createdLeadId], references: [id])
+  createdAt     DateTime      @default(now())
+
+  @@index([tenantId, createdAt])
+}
+
+model WeComConfig {
+  id              String            @id @default(cuid())
+  tenantId        String            @unique
+  tenant          Tenant            @relation(fields: [tenantId], references: [id])
+  corpId          String?
+  agentId         String?
+  secretEncrypted String?
+  token           String?
+  encodingAESKey  String?
+  callbackUrl     String?
+  status          WeComConfigStatus @default(draft)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
