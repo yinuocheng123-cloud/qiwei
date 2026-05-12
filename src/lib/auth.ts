@@ -12,9 +12,9 @@ import crypto from "crypto";
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import type { Tenant, User, UserRole } from "@prisma/client";
+import { AUTH_CONTEXT_COOKIE_NAME, SESSION_COOKIE_NAME } from "@/lib/auth-constants";
 import { prisma } from "@/lib/prisma";
 
-export const SESSION_COOKIE_NAME = "growthhub_session";
 const SESSION_MAX_AGE_DAYS = 7;
 
 type CurrentUser = User & {
@@ -33,13 +33,30 @@ function hashToken(token: string) {
   return crypto.createHmac("sha256", getSessionSecret()).update(token).digest("hex");
 }
 
-export async function createSession(userId: string) {
+function base64Url(input: string | Buffer) {
+  return Buffer.from(input).toString("base64url");
+}
+
+function createAuthContextCookieValue(input: { userId: string; role: UserRole; tenantSlug: string | null; expiresAt: Date }) {
+  const payload = base64Url(
+    JSON.stringify({
+      userId: input.userId,
+      role: input.role,
+      tenantSlug: input.tenantSlug,
+      expiresAt: input.expiresAt.getTime()
+    })
+  );
+  const signature = crypto.createHmac("sha256", getSessionSecret()).update(payload).digest("base64url");
+  return `${payload}.${signature}`;
+}
+
+export async function createSession(input: { userId: string; role: UserRole; tenantSlug: string | null }) {
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_DAYS * 24 * 60 * 60 * 1000);
 
   await prisma.session.create({
     data: {
-      userId,
+      userId: input.userId,
       tokenHash: hashToken(token),
       expiresAt
     }
@@ -48,6 +65,15 @@ export async function createSession(userId: string) {
   cookies().set({
     name: SESSION_COOKIE_NAME,
     value: token,
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    expires: expiresAt
+  });
+  cookies().set({
+    name: AUTH_CONTEXT_COOKIE_NAME,
+    value: createAuthContextCookieValue({ ...input, expiresAt }),
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -64,6 +90,7 @@ export async function destroyCurrentSession() {
     });
   }
   cookies().delete(SESSION_COOKIE_NAME);
+  cookies().delete(AUTH_CONTEXT_COOKIE_NAME);
 }
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
@@ -80,6 +107,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       await prisma.session.deleteMany({ where: { id: session.id } });
     }
     cookies().delete(SESSION_COOKIE_NAME);
+    cookies().delete(AUTH_CONTEXT_COOKIE_NAME);
     return null;
   }
 

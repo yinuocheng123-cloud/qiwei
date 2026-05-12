@@ -112,6 +112,21 @@ async function main() {
   const leadCountAfter = await prisma.lead.count({ where: { tenantId: tenant.id } });
   assert(leadCountAfter === leadCountBefore + 1, "模拟公开表单提交后线索数量没有增加。");
 
+  await prisma.auditLog.create({
+    data: {
+      tenantId: tenant.id,
+      userId: sales.id,
+      action: "verification_audit_log_created",
+      entityType: "Lead",
+      entityId: createdLead.id,
+      metadata: {
+        source: "custom/experiments/verify-v11-e2e.ts"
+      }
+    }
+  });
+  const auditLogCount = await prisma.auditLog.count({ where: { tenantId: tenant.id } });
+  assert(auditLogCount >= 1, "AuditLog 写入验证失败。");
+
   console.log(
     JSON.stringify(
       {
@@ -124,6 +139,7 @@ async function main() {
         leadCountAfter,
         salesVisibleCount,
         isolationLeadCount,
+        auditLogCount,
         createdLeadId: createdLead.id
       },
       null,

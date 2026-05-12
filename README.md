@@ -160,9 +160,181 @@ powershell.exe -ExecutionPolicy Bypass -File custom\experiments\run-v11-postgres
 - 客户基础数据 CSV 导出
 - PostgreSQL 迁移、seed 和验证脚本
 
+## V1.1.1 安全与审计补强
+
+V1.1.1 增加了 `middleware.ts` 后台路径拦截：
+
+- 未登录访问 `/admin`、`/app/*` 会跳转 `/login?next=...`。
+- 已登录但非 `PLATFORM_ADMIN` 访问 `/admin` 会跳转 `/forbidden`。
+- 企业角色访问 `/app/[tenantSlug]` 时，middleware 会校验签名 cookie 中的 `tenantSlug` 是否匹配。
+- `/t/[tenantSlug]/diagnosis`、`/t/[tenantSlug]/material`、`/login`、`/logout`、`/forbidden`、首页和静态资源不在后台拦截范围内。
+- middleware 只做路径层基础保护，页面和 Server Actions 里的数据库权限校验仍然保留。
+
+为支持 middleware，登录成功后会额外写入一个 httpOnly 的签名权限提示 cookie。该 cookie 只保存 `userId`、`role`、`tenantSlug` 和过期时间，不替代数据库 Session。
+
+## 审计日志
+
+Prisma 新增 `AuditLog` 模型，字段包括：
+
+- `tenantId`
+- `userId`
+- `action`
+- `entityType`
+- `entityId`
+- `metadata`
+- `ip`
+- `userAgent`
+- `createdAt`
+
+当前已记录：
+
+- 登录成功：`login_succeeded`
+- 登录失败：`login_failed`
+- 退出登录：`logout`
+- 公开表单创建线索：`public_form_lead_created`
+- 新增跟进：`followup_created`
+- 更新客户阶段：`lead_stage_updated`
+- 导出客户 CSV：`lead_csv_exported`
+- 创建租户：`tenant_created`
+- 更新租户状态：`tenant_status_updated`
+
+V1.1.1 暂不做审计日志查询页面。
+
+## Playwright E2E 测试
+
+安装依赖后可运行：
+
+```bash
+npm run test:e2e
+```
+
+测试文件：
+
+```text
+tests/v11-browser-e2e.spec.ts
+```
+
+覆盖流程：
+
+- 平台管理员登录并进入 `/admin`
+- 企业管理员登录并进入 `/app/zhengmu-demo/dashboard`
+- 匿名提交公开诊断表单
+- 企业管理员在客户列表看到新线索
+- 客户详情展示客户类型策略
+- 新增跟进并更新阶段/下次跟进时间
+- 销售只能看到自己负责的客户
+- 销售访问非本人客户详情会被拒绝
+- 企业管理员可下载 CSV
+- 销售不能导出全量客户
+
+运行浏览器端 E2E 前请确保：
+
+1. PostgreSQL 正在运行。
+2. `.env` 已配置 `DATABASE_URL`、`SESSION_SECRET`、`APP_URL`。
+3. 已执行 `npx prisma migrate deploy` 或 `npm run prisma:migrate -- --name init`。
+4. 已执行 `npm run prisma:seed`。
+5. 已安装 Playwright 浏览器：`npx playwright install chromium`。
+6. 执行 `npm run test:e2e`。
+
+当前开发环境可以通过 `custom\experiments\run-v11-postgres-check.ps1` 临时运行 PostgreSQL 并验证数据库闭环，但该临时服务难以跨多次工具调用长期驻留；因此浏览器 E2E 在真实本地开发时建议使用常驻 PostgreSQL。
+
+Windows 环境如果 Playwright 内置 `webServer` 收尾卡住，可以手动启动 `npm run dev`，再设置 `PLAYWRIGHT_SKIP_WEBSERVER=1` 后执行 `npx playwright test --reporter=list`。
+
 ## 后续开发计划
 
-1. 增加 middleware 级别的更早拦截和审计日志。
-2. 增加自动化测试，覆盖登录、权限、表单和导出。
+1. 增加审计日志查询页面和筛选。
+2. 补充 CI 中的 Playwright 数据库准备流程。
 3. 企业微信 API 适配层从客户联系、外部联系人、客户标签同步开始。
 4. 完善策略库版本管理和运营提醒队列。
+
+## V1.2 业务可用增强
+
+V1.2 在 V1.1.1 的登录、RBAC、多租户隔离、middleware 和 AuditLog 基础上，补齐销售、运营、企业管理员日常使用的基础闭环。
+
+- 客户分配：`TENANT_ADMIN` 和 `OPERATOR` 可在客户详情页把线索分配给本租户下的 `SALES` 或 `OPERATOR`，销售不能转派客户。
+- 销售待办：新增 `/app/[tenantSlug]/todos`，展示今日待跟进、超时未跟进、高意向待处理、待激活客户、最近新增客户；未分配客户仅企业管理员和运营可见。
+- 客户详情增强：继续按 `customerType` 匹配 `CustomerTypeStrategy`，展示关心点、首发资料、欢迎语、3/7/15 天话术、人工介入条件、推荐下一步动作和绑定资料包。
+- 资料包绑定：资料包可绑定客户类型，客户详情页会按客户类型推荐；运营和企业管理员可维护，销售只读。
+- 策略库权限：企业管理员和运营可编辑策略库，销售只读查看。
+- 看板增强：dashboard 增加今日待跟进、超时未跟进、未分配、待激活和销售跟进概览表。
+- 审计日志查询：新增 `/app/[tenantSlug]/audit-logs`，企业管理员和运营可查看本租户日志，销售只能查看自己的操作日志。
+
+### V1.2 权限边界
+
+- `TENANT_ADMIN`：可查看本租户全部客户、待办、销售概览、审计日志，可分配客户、维护策略库和资料包。
+- `OPERATOR`：可查看本租户全部客户与待办，可分配客户、维护策略库和资料包、查看审计日志。
+- `SALES`：只能查看和跟进 `ownerId` 等于自己的客户；不能导出全部客户，不能编辑策略库或资料包，不能查看未分配客户。
+- 所有业务查询继续基于 `tenantId` 过滤，客户详情和 Server Actions 继续使用服务端权限校验。
+
+### V1.2 E2E 测试
+
+新增浏览器端测试文件：
+
+```text
+tests/v12-business-e2e.spec.ts
+```
+
+覆盖企业管理员分配客户、销售待办与隔离、销售新增跟进、销售禁止编辑资料包、运营编辑资料包、客户详情推荐资料和话术、审计日志动作查询。
+
+运行方式：
+
+```bash
+npm run test:e2e
+```
+
+## V1.3 任务驱动型业务工作台
+
+V1.3 在 V1.2 的客户分配、销售待办、资料包绑定和审计日志基础上，新增真实任务模型 `FollowTask`，把待办从查询型规则升级为任务驱动。
+
+- 任务模型：新增 `FollowTask`，包含任务类型、状态、优先级、负责人、创建人、关联客户、到期时间、完成/取消时间。
+- 自动生成规则：公开表单创建线索、客户分配、设置下次跟进、阶段更新为 `QUOTED` 或 `TO_REACTIVATE` 时，会生成对应跟进任务。
+- 销售工作台：`/app/[tenantSlug]/todos` 展示今日任务、逾期任务、高优先级任务、本周待跟进、已完成任务，以及我的高意向、报价、待激活客户。
+- 任务操作：销售可完成、延期、取消自己的任务；企业管理员和运营可处理本租户任务。
+- 批量操作：客户列表支持批量分配负责人、批量更新阶段、批量设置下次跟进、批量添加标签、批量转入待激活。
+- 团队管理视图：dashboard 的销售概览增加今日任务、逾期任务、已完成任务、报价客户等指标。
+- 平台级审计日志：新增 `/admin/audit-logs`，仅 `PLATFORM_ADMIN` 可访问，可跨租户按 tenant、action、user、entityType 和时间筛选。
+
+### V1.3 权限边界
+
+- `PLATFORM_ADMIN`：可访问 `/admin` 和 `/admin/audit-logs`，企业角色访问平台审计页会被拒绝。
+- `TENANT_ADMIN`：可管理本租户全部客户和任务，可执行批量操作，可查看团队任务概览。
+- `OPERATOR`：可管理本租户客户、任务、策略和资料，可执行批量操作。
+- `SALES`：只能查看和处理 `ownerId` 等于自己的客户和任务；不能批量分配、不能编辑策略库/资料包、不能导出全部客户。
+- 所有任务和批量操作继续基于 `tenantId` 过滤，不能跨租户。
+
+### V1.3 E2E 测试
+
+新增测试文件：
+
+```text
+tests/v13-task-workbench-e2e.spec.ts
+```
+
+覆盖企业管理员批量分配、批量更新阶段、销售任务可见范围、销售完成任务、团队任务概览、批量操作 AuditLog、平台审计日志访问，以及企业管理员访问平台审计页被拒绝。
+## V1.3.1 任务去重、模板与提醒队列
+
+V1.3.1 在 V1.3 的 `FollowTask` 基础上补强任务生产质量和后续消息提醒边界，不做企业微信 API 真实发送。
+
+- 任务去重规则：`src/lib/tasks.ts` 统一处理任务创建。同一 `tenantId`、`leadId`、`ownerId`、`type`，且状态为 `PENDING` 或 `DELAYED`、`dueAt` 位于同一天时，不再新建重复任务，而是更新原任务的标题、说明、优先级和到期时间，并写入 `task_deduped_updated` 审计日志。
+- 手动任务创建：客户详情页新增“创建任务”表单。`TENANT_ADMIN` 和 `OPERATOR` 可给本租户销售或运营创建任务；`SALES` 只能给自己负责的客户创建任务，且负责人必须是自己。
+- 任务模板：新增 `TaskTemplate` 模型和 `/app/[tenantSlug]/task-templates` 页面。企业管理员和运营可新增、编辑、停用模板；销售不可访问模板管理页。客户详情页创建任务时可选择模板，空白字段会使用模板标题、说明、类型、优先级和默认到期天数。
+- 提醒队列：新增 `ReminderQueue` 模型，当前仅生成 `IN_APP` 提醒记录，不真实发送消息。创建有 `dueAt` 的任务会生成待发送提醒；任务完成或取消会取消未发送提醒，为后续企业微信内部应用消息提醒预留队列结构。
+- 工作台增强：`/app/[tenantSlug]/todos` 支持按任务状态、任务类型、优先级和负责人筛选；销售仍只能看到自己的任务。
+- 审计日志增强：新增 `task_manual_created`、`task_template_created`、`task_template_updated`、`task_template_deactivated`、`task_template_used`、`task_deduped_updated`、`reminder_created`、`reminder_updated`、`reminder_cancelled` 等动作。
+
+### V1.3.1 权限边界
+
+- `TENANT_ADMIN`：可管理本租户全部任务、任务模板和提醒相关动作。
+- `OPERATOR`：可管理本租户任务和任务模板，可给销售创建任务。
+- `SALES`：只能查看和处理自己的任务，只能给自己负责的客户创建任务，不能访问任务模板管理页。
+- 所有任务、模板、提醒队列查询和写入继续基于 `tenantId` 过滤；middleware、页面权限和 Server Actions 权限校验均保留。
+
+### V1.3.1 E2E 测试
+
+新增测试文件：
+
+```text
+tests/v131-task-template-reminder-e2e.spec.ts
+```
+
+覆盖企业管理员创建模板、运营创建模板、销售禁止访问模板管理页、客户详情使用模板创建任务、重复创建同类同日任务去重、销售创建自己客户任务、销售跨租户访问被拒绝、取消任务后取消提醒队列，以及关键动作进入 AuditLog。

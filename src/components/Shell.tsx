@@ -4,7 +4,7 @@
  *
  * 结构概览：
  *   第一部分：导入依赖
- *   第二部分：企业导航组件
+ *   第二部分：企业后台导航组件
  *   第三部分：后台页面壳组件
  */
 import Link from "next/link";
@@ -14,9 +14,12 @@ export function TenantNav({ tenant }: { tenant: Tenant }) {
   const base = `/app/${tenant.slug}`;
   const items = [
     ["看板", `${base}/dashboard`],
+    ["工作台", `${base}/todos`],
     ["客户线索", `${base}/leads`],
     ["策略库", `${base}/strategies`],
     ["资料包", `${base}/materials`],
+    ["任务模板", `${base}/task-templates`],
+    ["审计日志", `${base}/audit-logs`],
     ["企微配置", `${base}/wecom`],
     ["导出客户", `${base}/export`],
     ["退出", "/logout"]

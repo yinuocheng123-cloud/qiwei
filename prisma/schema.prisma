@@ -129,6 +129,46 @@ enum WeComConfigStatus {
   disabled
 }
 
+enum FollowTaskType {
+  FIRST_FOLLOW
+  SEND_MATERIAL
+  PHONE_CALL
+  WECHAT_FOLLOW
+  QUOTE_FOLLOW
+  REACTIVATE
+  VISIT_INVITE
+  DEAL_PUSH
+  CUSTOM
+}
+
+enum FollowTaskStatus {
+  PENDING
+  DONE
+  DELAYED
+  CANCELLED
+}
+
+enum FollowTaskPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum ReminderChannel {
+  IN_APP
+  WECOM_APP
+  EMAIL
+  SMS
+}
+
+enum ReminderStatus {
+  PENDING
+  SENT
+  FAILED
+  CANCELLED
+}
+
 model Tenant {
   id          String                 @id @default(cuid())
   name        String
@@ -148,6 +188,10 @@ model Tenant {
   materials   Material[]
   intakeForms IntakeForm[]
   weComConfig WeComConfig?
+  auditLogs   AuditLog[]
+  followTasks FollowTask[]
+  taskTemplates TaskTemplate[]
+  reminderQueues ReminderQueue[]
 }
 
 model User {
@@ -165,6 +209,10 @@ model User {
   ownedLeads   Lead[]      @relation("LeadOwner")
   followUps    FollowUp[]
   sessions     Session[]
+  auditLogs    AuditLog[]
+  ownedTasks   FollowTask[] @relation("TaskOwner")
+  createdTasks FollowTask[] @relation("TaskCreator")
+  reminderQueues ReminderQueue[]
 
   @@index([tenantId, role])
 }
@@ -208,6 +256,8 @@ model Lead {
   tags           LeadTag[]
   followUps      FollowUp[]
   intakeForms    IntakeForm[]
+  followTasks    FollowTask[]
+  reminderQueues ReminderQueue[]
 
   @@index([tenantId, createdAt])
   @@index([tenantId, source])
@@ -317,4 +367,96 @@ model WeComConfig {
   status          WeComConfigStatus @default(draft)
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  tenantId   String?
+  tenant     Tenant?  @relation(fields: [tenantId], references: [id])
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+}
+
+model FollowTask {
+  id          String             @id @default(cuid())
+  tenantId    String
+  tenant      Tenant             @relation(fields: [tenantId], references: [id])
+  leadId      String?
+  lead        Lead?              @relation(fields: [leadId], references: [id])
+  ownerId     String?
+  owner       User?              @relation("TaskOwner", fields: [ownerId], references: [id])
+  createdById String?
+  createdBy   User?              @relation("TaskCreator", fields: [createdById], references: [id])
+  title       String
+  description String?
+  type        FollowTaskType     @default(CUSTOM)
+  status      FollowTaskStatus   @default(PENDING)
+  priority    FollowTaskPriority @default(NORMAL)
+  dueAt       DateTime?
+  completedAt DateTime?
+  cancelledAt DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  reminderQueues ReminderQueue[]
+
+  @@index([tenantId, status, dueAt])
+  @@index([tenantId, ownerId, status, dueAt])
+  @@index([tenantId, leadId])
+}
+
+model TaskTemplate {
+  id             String             @id @default(cuid())
+  tenantId       String
+  tenant         Tenant             @relation(fields: [tenantId], references: [id])
+  name           String
+  type           FollowTaskType     @default(CUSTOM)
+  title          String
+  description    String?
+  priority       FollowTaskPriority @default(NORMAL)
+  defaultDueDays Int                @default(1)
+  customerType   CustomerType?
+  stage          LeadStage?
+  isActive       Boolean            @default(true)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([tenantId, isActive])
+  @@index([tenantId, customerType, stage])
+}
+
+model ReminderQueue {
+  id           String          @id @default(cuid())
+  tenantId     String
+  tenant       Tenant          @relation(fields: [tenantId], references: [id])
+  taskId       String?
+  task         FollowTask?     @relation(fields: [taskId], references: [id])
+  leadId       String?
+  lead         Lead?           @relation(fields: [leadId], references: [id])
+  userId       String?
+  user         User?           @relation(fields: [userId], references: [id])
+  channel      ReminderChannel @default(IN_APP)
+  status       ReminderStatus  @default(PENDING)
+  scheduledAt  DateTime
+  sentAt       DateTime?
+  failedAt     DateTime?
+  retryCount   Int             @default(0)
+  payload      Json?
+  errorMessage String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([tenantId, status, scheduledAt])
+  @@index([tenantId, userId, status])
+  @@index([taskId, status])
 }

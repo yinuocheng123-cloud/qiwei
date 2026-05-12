@@ -11,6 +11,7 @@
  */
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
+import { safeWriteAuditLog } from "@/lib/audit";
 import { createSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -30,15 +31,40 @@ export async function loginAction(formData: FormData) {
   });
 
   if (!user || user.status !== "active") {
+    await safeWriteAuditLog({
+      action: "login_failed",
+      entityType: "User",
+      metadata: { email, reason: "user_not_found_or_disabled" }
+    });
     redirect("/login?error=invalid");
   }
 
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) {
+    await safeWriteAuditLog({
+      tenantId: user.tenantId,
+      userId: user.id,
+      action: "login_failed",
+      entityType: "User",
+      entityId: user.id,
+      metadata: { email, reason: "password_invalid" }
+    });
     redirect("/login?error=invalid");
   }
 
-  await createSession(user.id);
+  await createSession({
+    userId: user.id,
+    role: user.role,
+    tenantSlug: user.tenant?.slug ?? null
+  });
+  await safeWriteAuditLog({
+    tenantId: user.tenantId,
+    userId: user.id,
+    action: "login_succeeded",
+    entityType: "User",
+    entityId: user.id,
+    metadata: { email, role: user.role, tenantSlug: user.tenant?.slug ?? null }
+  });
 
   if (next && next.startsWith("/") && !next.startsWith("//")) {
     redirect(next);

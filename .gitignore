@@ -6,3 +6,5 @@ node_modules
 custom/experiments/postgres-data
 custom/experiments/*.log
 tsconfig.tsbuildinfo
+test-results
+playwright-report

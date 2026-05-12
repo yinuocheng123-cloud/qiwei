@@ -80,6 +80,32 @@ export const materialTypeOptions: Option[] = [
   { value: "document", label: "文档" }
 ];
 
+export const taskTypeOptions: Option[] = [
+  { value: "FIRST_FOLLOW", label: "首次跟进" },
+  { value: "SEND_MATERIAL", label: "发送资料" },
+  { value: "PHONE_CALL", label: "电话沟通" },
+  { value: "WECHAT_FOLLOW", label: "企微跟进" },
+  { value: "QUOTE_FOLLOW", label: "报价跟进" },
+  { value: "REACTIVATE", label: "客户激活" },
+  { value: "VISIT_INVITE", label: "邀约到店" },
+  { value: "DEAL_PUSH", label: "成交推进" },
+  { value: "CUSTOM", label: "自定义" }
+];
+
+export const taskStatusOptions: Option[] = [
+  { value: "PENDING", label: "待处理" },
+  { value: "DONE", label: "已完成" },
+  { value: "DELAYED", label: "已延期" },
+  { value: "CANCELLED", label: "已取消" }
+];
+
+export const taskPriorityOptions: Option[] = [
+  { value: "LOW", label: "低" },
+  { value: "NORMAL", label: "普通" },
+  { value: "HIGH", label: "高" },
+  { value: "URGENT", label: "紧急" }
+];
+
 export function labelOf(options: Option[], value?: string | null) {
   return options.find((option) => option.value === value)?.label ?? value ?? "-";
 }

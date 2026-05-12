@@ -152,6 +152,47 @@ async function seedTenant({
     ]
   });
 
+  await prisma.taskTemplate.deleteMany({ where: { tenantId: tenant.id } });
+  await prisma.taskTemplate.createMany({
+    data: [
+      {
+        tenantId: tenant.id,
+        name: "首次沟通模板",
+        title: "首次沟通客户需求",
+        description: "确认客户当前需求、预算、时间计划和下一步资料发送。",
+        type: "FIRST_FOLLOW",
+        priority: "NORMAL",
+        defaultDueDays: 1,
+        customerType: null,
+        stage: "NEW"
+      },
+      {
+        tenantId: tenant.id,
+        name: "报价后跟进模板",
+        title: "报价反馈跟进",
+        description: "跟进客户对报价的反馈，识别成交阻力并约定下一步。",
+        type: "QUOTE_FOLLOW",
+        priority: "HIGH",
+        defaultDueDays: 2,
+        customerType: null,
+        stage: "QUOTED"
+      },
+      {
+        tenantId: tenant.id,
+        name: "高意向推进模板",
+        title: "高意向客户推进",
+        description: "优先推进高意向客户，明确下一步沟通或到店安排。",
+        type: "DEAL_PUSH",
+        priority: "HIGH",
+        defaultDueDays: 0,
+        customerType: null,
+        stage: null
+      }
+    ]
+  });
+
+  await prisma.reminderQueue.deleteMany({ where: { tenantId: tenant.id } });
+  await prisma.followTask.deleteMany({ where: { tenantId: tenant.id } });
   await prisma.followUp.deleteMany({ where: { tenantId: tenant.id } });
   await prisma.leadTag.deleteMany({ where: { tenantId: tenant.id } });
 
@@ -197,6 +238,31 @@ async function seedTenant({
       ]
     });
   }
+
+  const now = new Date();
+  const today = new Date(now);
+  today.setHours(10, 0, 0, 0);
+  const overdue = new Date(today);
+  overdue.setDate(overdue.getDate() - 1);
+  const nextWeek = new Date(today);
+  nextWeek.setDate(nextWeek.getDate() + 3);
+  await prisma.followTask.createMany({
+    data: leads
+      .filter((lead) => lead.stage !== "DEAL_DONE" && lead.stage !== "LOST")
+      .map((lead, index) => ({
+        tenantId: tenant.id,
+        leadId: lead.id,
+        ownerId: ownerMap[lead.owner],
+        createdById: ownerMap.admin,
+        title: lead.stage === "QUOTED" ? `报价跟进：${lead.name}` : lead.stage === "TO_REACTIVATE" ? `客户激活：${lead.name}` : `跟进任务：${lead.name}`,
+        description: "seed 生成的 V1.3 销售工作台演示任务。",
+        type: lead.stage === "QUOTED" ? "QUOTE_FOLLOW" : lead.stage === "TO_REACTIVATE" ? "REACTIVATE" : "FIRST_FOLLOW",
+        status: index === 1 ? "DONE" : "PENDING",
+        priority: lead.intentionLevel === "STRONG" ? "URGENT" : lead.intentionLevel === "HIGH" ? "HIGH" : "NORMAL",
+        dueAt: index === 2 ? overdue : index === 3 ? nextWeek : today,
+        completedAt: index === 1 ? now : null
+      }))
+  });
 
   await prisma.followUp.create({
     data: {

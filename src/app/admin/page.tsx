@@ -26,6 +26,9 @@ export default async function AdminPage() {
   return (
     <PageShell title="平台总后台" description="平台管理员视角：创建企业、停用企业、查看项目到期状态和导出入口。">
       <div className="mb-4 flex justify-end">
+        <Link className="mr-2 rounded-md border border-slate-300 px-3 py-2 text-sm font-medium" href="/admin/audit-logs">
+          平台审计日志
+        </Link>
         <Link className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium" href="/logout">
           退出登录
         </Link>

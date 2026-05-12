@@ -1,15 +1,25 @@
 /*
- * 文件说明：该文件提供企业看板统计查询。
- * 功能说明：所有统计都以 tenantId 为强制过滤条件，保证企业之间数据隔离。
+ * 文件说明：该文件提供企业看板与销售待办统计查询。
+ * 功能说明：所有统计都以 tenantId 为强制过滤条件，并在销售视角下追加 ownerId 过滤。
  *
  * 结构概览：
  *   第一部分：日期边界计算
- *   第二部分：看板统计聚合
+ *   第二部分：待办规则构造
+ *   第三部分：看板统计聚合
+ *   第四部分：销售跟进概览
  */
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { taskWhere as followTaskWhere } from "@/lib/tasks";
 
-function startOfDay(date: Date) {
+export function startOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+export function endOfDay(date: Date) {
+  const end = startOfDay(date);
+  end.setDate(end.getDate() + 1);
+  return end;
 }
 
 function startOfWeek(date: Date) {
@@ -23,12 +33,53 @@ function startOfMonth(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), 1);
 }
 
+function scopedWhere(tenantId: string, ownerId?: string): Prisma.LeadWhereInput {
+  return ownerId ? { tenantId, ownerId } : { tenantId };
+}
+
+export function todoWhere(tenantId: string, ownerId?: string) {
+  const now = new Date();
+  const today = startOfDay(now);
+  const tomorrow = endOfDay(now);
+  const base = scopedWhere(tenantId, ownerId);
+
+  return {
+    todayFollow: {
+      ...base,
+      nextFollowAt: { gte: today, lt: tomorrow },
+      dealStatus: { not: "WON" }
+    },
+    overdueFollow: {
+      ...base,
+      nextFollowAt: { lt: today },
+      dealStatus: { not: "WON" }
+    },
+    highIntent: {
+      ...base,
+      intentionLevel: { in: ["HIGH", "STRONG"] },
+      stage: { not: "DEAL_DONE" },
+      dealStatus: { not: "WON" }
+    },
+    unassigned: {
+      tenantId,
+      ownerId: null
+    },
+    reactivate: {
+      ...base,
+      stage: "TO_REACTIVATE"
+    },
+    recent: base
+  } satisfies Record<string, Prisma.LeadWhereInput>;
+}
+
 export async function getDashboardMetrics(tenantId: string, ownerId?: string) {
   const now = new Date();
   const today = startOfDay(now);
   const week = startOfWeek(now);
   const month = startOfMonth(now);
-  const baseWhere = ownerId ? { tenantId, ownerId } : { tenantId };
+  const baseWhere = scopedWhere(tenantId, ownerId);
+  const todos = todoWhere(tenantId, ownerId);
+  const tasks = followTaskWhere(tenantId, ownerId);
 
   const [
     todayCount,
@@ -39,10 +90,18 @@ export async function getDashboardMetrics(tenantId: string, ownerId?: string) {
     quotedCount,
     wonCount,
     silentCount,
+    todayFollowCount,
+    overdueFollowCount,
+    unassignedCount,
+    reactivateCount,
+    taskTodayCount,
+    taskOverdueCount,
+    taskHighPriorityCount,
     bySource,
     byCustomerType,
     byIntention,
-    byStage
+    byStage,
+    salesOverview
   ] = await Promise.all([
     prisma.lead.count({ where: { ...baseWhere, createdAt: { gte: today } } }),
     prisma.lead.count({ where: { ...baseWhere, createdAt: { gte: week } } }),
@@ -53,7 +112,7 @@ export async function getDashboardMetrics(tenantId: string, ownerId?: string) {
         OR: [{ nextFollowAt: { lte: now } }, { stage: { in: ["NEW", "CONTACTED"] } }]
       }
     }),
-    prisma.lead.count({ where: { ...baseWhere, intentionLevel: { in: ["HIGH", "STRONG"] } } }),
+    prisma.lead.count({ where: todos.highIntent }),
     prisma.lead.count({ where: { ...baseWhere, stage: "QUOTED" } }),
     prisma.lead.count({ where: { ...baseWhere, dealStatus: "WON" } }),
     prisma.lead.count({
@@ -63,10 +122,18 @@ export async function getDashboardMetrics(tenantId: string, ownerId?: string) {
         dealStatus: { not: "WON" }
       }
     }),
+    prisma.lead.count({ where: todos.todayFollow }),
+    prisma.lead.count({ where: todos.overdueFollow }),
+    prisma.lead.count({ where: todos.unassigned }),
+    prisma.lead.count({ where: todos.reactivate }),
+    prisma.followTask.count({ where: tasks.today }),
+    prisma.followTask.count({ where: tasks.overdue }),
+    prisma.followTask.count({ where: tasks.highPriority }),
     prisma.lead.groupBy({ by: ["source"], where: baseWhere, _count: true }),
     prisma.lead.groupBy({ by: ["customerType"], where: baseWhere, _count: true }),
     prisma.lead.groupBy({ by: ["intentionLevel"], where: baseWhere, _count: true }),
-    prisma.lead.groupBy({ by: ["stage"], where: baseWhere, _count: true })
+    prisma.lead.groupBy({ by: ["stage"], where: baseWhere, _count: true }),
+    ownerId ? Promise.resolve([]) : getSalesOverview(tenantId)
   ]);
 
   return {
@@ -78,9 +145,61 @@ export async function getDashboardMetrics(tenantId: string, ownerId?: string) {
     quotedCount,
     wonCount,
     silentCount,
+    todayFollowCount,
+    overdueFollowCount,
+    unassignedCount,
+    reactivateCount,
+    taskTodayCount,
+    taskOverdueCount,
+    taskHighPriorityCount,
     bySource,
     byCustomerType,
     byIntention,
-    byStage
+    byStage,
+    salesOverview
   };
+}
+
+export async function getSalesOverview(tenantId: string) {
+  const users = await prisma.user.findMany({
+    where: {
+      tenantId,
+      status: "active",
+      role: { in: ["SALES", "OPERATOR"] }
+    },
+    orderBy: [{ role: "asc" }, { createdAt: "asc" }]
+  });
+
+  return Promise.all(
+    users.map(async (user) => {
+      const todos = todoWhere(tenantId, user.id);
+      const tasks = followTaskWhere(tenantId, user.id);
+      const [leadCount, todayFollowCount, overdueFollowCount, highIntentCount, quotedCount, wonCount, todayTaskCount, overdueTaskCount, doneTaskCount] = await Promise.all([
+        prisma.lead.count({ where: { tenantId, ownerId: user.id } }),
+        prisma.lead.count({ where: todos.todayFollow }),
+        prisma.lead.count({ where: todos.overdueFollow }),
+        prisma.lead.count({ where: todos.highIntent }),
+        prisma.lead.count({ where: { tenantId, ownerId: user.id, stage: "QUOTED" } }),
+        prisma.lead.count({ where: { tenantId, ownerId: user.id, dealStatus: "WON" } }),
+        prisma.followTask.count({ where: tasks.today }),
+        prisma.followTask.count({ where: tasks.overdue }),
+        prisma.followTask.count({ where: tasks.done })
+      ]);
+
+      return {
+        userId: user.id,
+        name: user.name,
+        role: user.role,
+        leadCount,
+        todayFollowCount,
+        overdueFollowCount,
+        highIntentCount,
+        quotedCount,
+        wonCount,
+        todayTaskCount,
+        overdueTaskCount,
+        doneTaskCount
+      };
+    })
+  );
 }

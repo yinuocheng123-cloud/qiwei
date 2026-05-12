@@ -8,6 +8,7 @@
  *   第三部分：GET 导出处理
  */
 import { NextResponse } from "next/server";
+import { safeWriteAuditLog } from "@/lib/audit";
 import { requireTenantAccess } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -19,7 +20,7 @@ function csvCell(value: unknown) {
 }
 
 export async function GET(_: Request, { params }: { params: { tenantSlug: string } }) {
-  const { tenant } = await requireTenantAccess(params.tenantSlug, ["TENANT_ADMIN"]);
+  const { user, tenant } = await requireTenantAccess(params.tenantSlug, ["TENANT_ADMIN"]);
   const leads = await prisma.lead.findMany({
     where: { tenantId: tenant.id },
     include: { owner: true },
@@ -47,6 +48,13 @@ export async function GET(_: Request, { params }: { params: { tenantSlug: string
   ]);
 
   const csv = [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "lead_csv_exported",
+    entityType: "Lead",
+    metadata: { count: leads.length, tenantSlug: tenant.slug }
+  });
 
   return new NextResponse(`\uFEFF${csv}`, {
     headers: {

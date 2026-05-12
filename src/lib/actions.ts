@@ -13,18 +13,33 @@
 import {
   CustomerType,
   FormType,
+  FollowTaskPriority,
+  FollowTaskStatus,
+  FollowTaskType,
   IntentionLevel,
   LeadSource,
   LeadStage,
   MaterialType,
   NeedType,
   TenantStatus,
+  UserRole,
   WeComConfigStatus
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { safeWriteAuditLog } from "@/lib/audit";
 import { requireLeadAccess, requirePlatformAdmin, requireTenantAccess } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  cancelPendingRemindersForTask,
+  createFirstFollowTask,
+  createHighIntentTask,
+  createNextFollowTask,
+  createStageDrivenTask,
+  createTaskWithAudit,
+  defaultDueAfterDays,
+  syncInAppReminderForTask
+} from "@/lib/tasks";
 import { getDefaultTenantUser } from "@/lib/tenant";
 
 function text(formData: FormData, key: string) {
@@ -50,12 +65,12 @@ function splitLines(value?: string) {
 }
 
 export async function createTenant(formData: FormData) {
-  await requirePlatformAdmin();
+  const user = await requirePlatformAdmin();
   const name = text(formData, "name");
   const slug = text(formData, "slug");
   if (!name || !slug) return;
 
-  await prisma.tenant.create({
+  const tenant = await prisma.tenant.create({
     data: {
       name,
       slug,
@@ -63,21 +78,36 @@ export async function createTenant(formData: FormData) {
       expiredAt: parseDate(text(formData, "expiredAt"))
     }
   });
+  await safeWriteAuditLog({
+    userId: user.id,
+    action: "tenant_created",
+    entityType: "Tenant",
+    entityId: tenant.id,
+    metadata: { name: tenant.name, slug: tenant.slug, industry: tenant.industry }
+  });
 
   revalidatePath("/admin");
 }
 
 export async function updateTenantStatus(formData: FormData) {
-  await requirePlatformAdmin();
+  const user = await requirePlatformAdmin();
   const id = text(formData, "id");
   if (!id) return;
 
-  await prisma.tenant.update({
+  const tenant = await prisma.tenant.update({
     where: { id },
     data: {
       status: enumValue(TenantStatus, text(formData, "status"), TenantStatus.active),
       expiredAt: parseDate(text(formData, "expiredAt"))
     }
+  });
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "tenant_status_updated",
+    entityType: "Tenant",
+    entityId: tenant.id,
+    metadata: { status: tenant.status, expiredAt: tenant.expiredAt?.toISOString() ?? null }
   });
 
   revalidatePath("/admin");
@@ -147,6 +177,22 @@ export async function submitIntakeForm(tenantSlug: string, formType: FormType, f
       { tenantId: tenant.id, leadId: lead.id, tagName: intentionLevel, tagGroup: "INTENTION" }
     ]
   });
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    action: "public_form_lead_created",
+    entityType: "Lead",
+    entityId: lead.id,
+    metadata: {
+      formType,
+      source,
+      customerType,
+      needType,
+      intentionLevel,
+      ownerId: owner?.id ?? null
+    }
+  });
+  await createFirstFollowTask(lead);
+  await createHighIntentTask(lead);
 
   redirect(`/t/${tenantSlug}/thanks?lead=${lead.id}`);
 }
@@ -159,7 +205,7 @@ export async function addFollowUp(tenantSlug: string, leadId: string, formData: 
   const stageAfter = enumValue(LeadStage, text(formData, "stageAfter"), lead.stage);
   const nextFollowAt = parseDate(text(formData, "nextFollowAt"));
 
-  await prisma.followUp.create({
+  const followUp = await prisma.followUp.create({
     data: {
       tenantId: tenant.id,
       leadId: lead.id,
@@ -181,14 +227,421 @@ export async function addFollowUp(tenantSlug: string, leadId: string, formData: 
       dealStatus: stageAfter === "DEAL_DONE" ? "WON" : stageAfter === "LOST" ? "LOST" : lead.dealStatus
     }
   });
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "followup_created",
+    entityType: "FollowUp",
+    entityId: followUp.id,
+    metadata: {
+      leadId: lead.id,
+      stageBefore: lead.stage,
+      stageAfter,
+      nextFollowAt: nextFollowAt?.toISOString() ?? null
+    }
+  });
+  if (lead.stage !== stageAfter) {
+    await safeWriteAuditLog({
+      tenantId: tenant.id,
+      userId: user.id,
+      action: "lead_stage_updated",
+      entityType: "Lead",
+      entityId: lead.id,
+      metadata: { stageBefore: lead.stage, stageAfter }
+    });
+  }
+  const taskLead = { ...lead, stage: stageAfter, nextFollowAt };
+  if (nextFollowAt) {
+    await createNextFollowTask(taskLead, nextFollowAt, { userId: user.id });
+  }
+  await createStageDrivenTask(taskLead, stageAfter, { userId: user.id });
 
   revalidatePath(`/app/${tenantSlug}/leads/${leadId}`);
+  revalidatePath(`/app/${tenantSlug}/todos`);
+  revalidatePath(`/app/${tenantSlug}/dashboard`);
+}
+
+export async function assignLeadOwner(tenantSlug: string, leadId: string, formData: FormData) {
+  const { user, tenant, lead } = await requireLeadAccess(tenantSlug, leadId);
+  if (!["TENANT_ADMIN", "OPERATOR"].includes(user.role)) return;
+
+  const ownerId = text(formData, "ownerId");
+  const owner = ownerId
+    ? await prisma.user.findFirst({
+        where: {
+          id: ownerId,
+          tenantId: tenant.id,
+          status: "active",
+          role: { in: [UserRole.SALES, UserRole.OPERATOR] }
+        }
+      })
+    : null;
+
+  const updatedLead = await prisma.lead.update({
+    where: { id: lead.id },
+    data: { ownerId: owner?.id ?? null }
+  });
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "lead_owner_assigned",
+    entityType: "Lead",
+    entityId: lead.id,
+    metadata: {
+      ownerBefore: lead.ownerId,
+      ownerAfter: owner?.id ?? null
+    }
+  });
+  if (owner?.id) {
+    await createFirstFollowTask(updatedLead, { userId: user.id });
+    await createHighIntentTask(updatedLead, { userId: user.id });
+  }
+
+  revalidatePath(`/app/${tenantSlug}/leads`);
+  revalidatePath(`/app/${tenantSlug}/leads/${leadId}`);
+  revalidatePath(`/app/${tenantSlug}/todos`);
+  revalidatePath(`/app/${tenantSlug}/dashboard`);
+}
+
+async function requireTaskAccess(tenantSlug: string, taskId: string) {
+  const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR", "SALES"]);
+  const task = await prisma.followTask.findFirst({
+    where: { id: taskId, tenantId: tenant.id },
+    include: { lead: true }
+  });
+  if (!task) return redirect("/forbidden");
+  if (user.role === "SALES" && task.ownerId !== user.id) {
+    redirect("/forbidden");
+  }
+  return { user, tenant, task };
+}
+
+export async function completeTask(tenantSlug: string, taskId: string) {
+  const { user, tenant, task } = await requireTaskAccess(tenantSlug, taskId);
+  const updatedTask = await prisma.followTask.update({
+    where: { id: task.id },
+    data: {
+      status: FollowTaskStatus.DONE,
+      completedAt: new Date(),
+      cancelledAt: null
+    }
+  });
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "task_completed",
+    entityType: "FollowTask",
+    entityId: updatedTask.id,
+    metadata: { leadId: updatedTask.leadId, ownerId: updatedTask.ownerId }
+  });
+  await cancelPendingRemindersForTask(updatedTask, { userId: user.id, reason: "task_completed" });
+
+  revalidatePath(`/app/${tenantSlug}/todos`);
+  revalidatePath(`/app/${tenantSlug}/dashboard`);
+}
+
+export async function delayTask(tenantSlug: string, taskId: string, formData: FormData) {
+  const { user, tenant, task } = await requireTaskAccess(tenantSlug, taskId);
+  const dueAt = parseDate(text(formData, "dueAt"));
+  if (!dueAt) return;
+  const updatedTask = await prisma.followTask.update({
+    where: { id: task.id },
+    data: {
+      status: FollowTaskStatus.DELAYED,
+      dueAt
+    }
+  });
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "task_delayed",
+    entityType: "FollowTask",
+    entityId: updatedTask.id,
+    metadata: { leadId: updatedTask.leadId, ownerId: updatedTask.ownerId, dueAt: updatedTask.dueAt?.toISOString() ?? null }
+  });
+  await syncInAppReminderForTask(updatedTask, { userId: user.id });
+
+  revalidatePath(`/app/${tenantSlug}/todos`);
+  revalidatePath(`/app/${tenantSlug}/dashboard`);
+}
+
+export async function cancelTask(tenantSlug: string, taskId: string) {
+  const { user, tenant, task } = await requireTaskAccess(tenantSlug, taskId);
+  const updatedTask = await prisma.followTask.update({
+    where: { id: task.id },
+    data: {
+      status: FollowTaskStatus.CANCELLED,
+      cancelledAt: new Date()
+    }
+  });
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "task_cancelled",
+    entityType: "FollowTask",
+    entityId: updatedTask.id,
+    metadata: { leadId: updatedTask.leadId, ownerId: updatedTask.ownerId }
+  });
+  await cancelPendingRemindersForTask(updatedTask, { userId: user.id, reason: "task_cancelled" });
+
+  revalidatePath(`/app/${tenantSlug}/todos`);
+  revalidatePath(`/app/${tenantSlug}/dashboard`);
+}
+
+export async function createManualTask(tenantSlug: string, leadId: string, formData: FormData) {
+  const { user, tenant, lead } = await requireLeadAccess(tenantSlug, leadId);
+  const templateId = text(formData, "templateId");
+  const template = templateId
+    ? await prisma.taskTemplate.findFirst({
+        where: { id: templateId, tenantId: tenant.id, isActive: true }
+      })
+    : null;
+
+  const requestedOwnerId = text(formData, "ownerId");
+  const ownerId = user.role === "SALES" ? user.id : requestedOwnerId ?? lead.ownerId ?? undefined;
+  if (!ownerId) return;
+
+  if (user.role === "SALES" && ownerId !== user.id) {
+    redirect("/forbidden");
+  }
+
+  const owner = await prisma.user.findFirst({
+    where: {
+      id: ownerId,
+      tenantId: tenant.id,
+      status: "active",
+      role: { in: [UserRole.SALES, UserRole.OPERATOR] }
+    }
+  });
+  if (!owner) return;
+
+  const dueAt = parseDate(text(formData, "dueAt")) ?? (template ? defaultDueAfterDays(template.defaultDueDays) : undefined);
+  const task = await createTaskWithAudit({
+    tenantId: tenant.id,
+    leadId: lead.id,
+    ownerId: owner.id,
+    createdById: user.id,
+    title: text(formData, "title") ?? template?.title ?? `手动任务：${lead.name}`,
+    description: text(formData, "description") ?? template?.description ?? undefined,
+    type: enumValue(FollowTaskType, text(formData, "type") ?? template?.type, FollowTaskType.CUSTOM),
+    priority: enumValue(FollowTaskPriority, text(formData, "priority") ?? template?.priority, FollowTaskPriority.NORMAL),
+    dueAt,
+    auditAction: "task_manual_created",
+    auditMetadata: { source: "manual", templateId: template?.id ?? null }
+  });
+
+  if (template) {
+    await safeWriteAuditLog({
+      tenantId: tenant.id,
+      userId: user.id,
+      action: "task_template_used",
+      entityType: "TaskTemplate",
+      entityId: template.id,
+      metadata: { taskId: task.id, leadId: lead.id, ownerId: owner.id }
+    });
+  }
+
+  revalidatePath(`/app/${tenantSlug}/leads/${leadId}`);
+  revalidatePath(`/app/${tenantSlug}/todos`);
+  revalidatePath(`/app/${tenantSlug}/dashboard`);
+}
+
+export async function createTaskTemplate(tenantSlug: string, formData: FormData) {
+  const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
+  const name = text(formData, "name");
+  const title = text(formData, "title");
+  if (!name || !title) return;
+
+  const customerTypeInput = text(formData, "customerType");
+  const stageInput = text(formData, "stage");
+  const template = await prisma.taskTemplate.create({
+    data: {
+      tenantId: tenant.id,
+      name,
+      title,
+      description: text(formData, "description"),
+      type: enumValue(FollowTaskType, text(formData, "type"), FollowTaskType.CUSTOM),
+      priority: enumValue(FollowTaskPriority, text(formData, "priority"), FollowTaskPriority.NORMAL),
+      defaultDueDays: Number(text(formData, "defaultDueDays") ?? 1),
+      customerType: customerTypeInput ? enumValue(CustomerType, customerTypeInput, CustomerType.OTHER) : null,
+      stage: stageInput ? enumValue(LeadStage, stageInput, LeadStage.NEW) : null,
+      isActive: true
+    }
+  });
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "task_template_created",
+    entityType: "TaskTemplate",
+    entityId: template.id,
+    metadata: { name: template.name, type: template.type, priority: template.priority }
+  });
+
+  revalidatePath(`/app/${tenantSlug}/task-templates`);
+}
+
+export async function updateTaskTemplate(tenantSlug: string, templateId: string, formData: FormData) {
+  const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
+  const name = text(formData, "name");
+  const title = text(formData, "title");
+  if (!name || !title) return;
+  const customerTypeInput = text(formData, "customerType");
+  const stageInput = text(formData, "stage");
+
+  const template = await prisma.taskTemplate.update({
+    where: { id: templateId, tenantId: tenant.id },
+    data: {
+      name,
+      title,
+      description: text(formData, "description"),
+      type: enumValue(FollowTaskType, text(formData, "type"), FollowTaskType.CUSTOM),
+      priority: enumValue(FollowTaskPriority, text(formData, "priority"), FollowTaskPriority.NORMAL),
+      defaultDueDays: Number(text(formData, "defaultDueDays") ?? 1),
+      customerType: customerTypeInput ? enumValue(CustomerType, customerTypeInput, CustomerType.OTHER) : null,
+      stage: stageInput ? enumValue(LeadStage, stageInput, LeadStage.NEW) : null
+    }
+  });
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "task_template_updated",
+    entityType: "TaskTemplate",
+    entityId: template.id,
+    metadata: { name: template.name, type: template.type, priority: template.priority }
+  });
+
+  revalidatePath(`/app/${tenantSlug}/task-templates`);
+}
+
+export async function deactivateTaskTemplate(tenantSlug: string, templateId: string) {
+  const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
+  const template = await prisma.taskTemplate.update({
+    where: { id: templateId, tenantId: tenant.id },
+    data: { isActive: false }
+  });
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "task_template_deactivated",
+    entityType: "TaskTemplate",
+    entityId: template.id,
+    metadata: { name: template.name }
+  });
+
+  revalidatePath(`/app/${tenantSlug}/task-templates`);
+}
+
+export async function bulkUpdateLeads(tenantSlug: string, formData: FormData) {
+  const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
+  const leadIds = formData
+    .getAll("leadIds")
+    .map((value) => (typeof value === "string" ? value : ""))
+    .filter(Boolean);
+  const actionType = text(formData, "bulkAction");
+  if (!leadIds.length || !actionType) return;
+
+  const leads = await prisma.lead.findMany({
+    where: { id: { in: leadIds }, tenantId: tenant.id }
+  });
+  if (!leads.length) return;
+  const safeLeadIds = leads.map((lead) => lead.id);
+
+  if (actionType === "assign") {
+    const ownerId = text(formData, "ownerId");
+    const owner = ownerId
+      ? await prisma.user.findFirst({
+          where: { id: ownerId, tenantId: tenant.id, status: "active", role: { in: [UserRole.SALES, UserRole.OPERATOR] } }
+        })
+      : null;
+    await prisma.lead.updateMany({
+      where: { id: { in: safeLeadIds }, tenantId: tenant.id },
+      data: { ownerId: owner?.id ?? null }
+    });
+    await safeWriteAuditLog({
+      tenantId: tenant.id,
+      userId: user.id,
+      action: "lead_bulk_assigned",
+      entityType: "Lead",
+      metadata: { leadIds: safeLeadIds, ownerId: owner?.id ?? null, count: safeLeadIds.length }
+    });
+    if (owner?.id) {
+      for (const lead of leads) {
+        const taskLead = { ...lead, ownerId: owner.id };
+        await createFirstFollowTask(taskLead, { userId: user.id });
+        await createHighIntentTask(taskLead, { userId: user.id });
+      }
+    }
+  }
+
+  if (actionType === "stage" || actionType === "reactivate") {
+    const stage = actionType === "reactivate" ? LeadStage.TO_REACTIVATE : enumValue(LeadStage, text(formData, "stage"), LeadStage.CONTACTED);
+    await prisma.lead.updateMany({
+      where: { id: { in: safeLeadIds }, tenantId: tenant.id },
+      data: {
+        stage,
+        dealStatus: stage === "DEAL_DONE" ? "WON" : stage === "LOST" ? "LOST" : undefined
+      }
+    });
+    await safeWriteAuditLog({
+      tenantId: tenant.id,
+      userId: user.id,
+      action: actionType === "reactivate" ? "lead_bulk_reactivated" : "lead_bulk_stage_updated",
+      entityType: "Lead",
+      metadata: { leadIds: safeLeadIds, stage, count: safeLeadIds.length }
+    });
+    for (const lead of leads) {
+      await createStageDrivenTask({ ...lead, stage }, stage, { userId: user.id });
+    }
+  }
+
+  if (actionType === "nextFollow") {
+    const nextFollowAt = parseDate(text(formData, "nextFollowAt"));
+    if (!nextFollowAt) return;
+    await prisma.lead.updateMany({
+      where: { id: { in: safeLeadIds }, tenantId: tenant.id },
+      data: { nextFollowAt }
+    });
+    await safeWriteAuditLog({
+      tenantId: tenant.id,
+      userId: user.id,
+      action: "lead_bulk_next_follow_set",
+      entityType: "Lead",
+      metadata: { leadIds: safeLeadIds, nextFollowAt: nextFollowAt.toISOString(), count: safeLeadIds.length }
+    });
+    for (const lead of leads) {
+      await createNextFollowTask({ ...lead, nextFollowAt }, nextFollowAt, { userId: user.id });
+    }
+  }
+
+  if (actionType === "tag") {
+    const tagName = text(formData, "tagName");
+    if (!tagName) return;
+    await prisma.leadTag.createMany({
+      data: safeLeadIds.map((leadId) => ({
+        tenantId: tenant.id,
+        leadId,
+        tagName,
+        tagGroup: "CUSTOM" as const
+      }))
+    });
+    await safeWriteAuditLog({
+      tenantId: tenant.id,
+      userId: user.id,
+      action: "lead_bulk_tag_added",
+      entityType: "LeadTag",
+      metadata: { leadIds: safeLeadIds, tagName, count: safeLeadIds.length }
+    });
+  }
+
+  revalidatePath(`/app/${tenantSlug}/leads`);
+  revalidatePath(`/app/${tenantSlug}/todos`);
+  revalidatePath(`/app/${tenantSlug}/dashboard`);
 }
 
 export async function updateStrategy(tenantSlug: string, strategyId: string, formData: FormData) {
-  const { tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
+  const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
 
-  await prisma.customerTypeStrategy.update({
+  const strategy = await prisma.customerTypeStrategy.update({
     where: { id: strategyId, tenantId: tenant.id },
     data: {
       name: text(formData, "name") ?? "",
@@ -203,28 +656,77 @@ export async function updateStrategy(tenantSlug: string, strategyId: string, for
       recommendedPrivateContent: text(formData, "recommendedPrivateContent") ?? ""
     }
   });
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "strategy_updated",
+    entityType: "CustomerTypeStrategy",
+    entityId: strategy.id,
+    metadata: { customerType: strategy.customerType, name: strategy.name }
+  });
 
   revalidatePath(`/app/${tenantSlug}/strategies`);
 }
 
 export async function createMaterial(tenantSlug: string, formData: FormData) {
-  const { tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
+  const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
   const title = text(formData, "title");
   const url = text(formData, "url");
   if (!title || !url) return;
+  const customerTypeInput = text(formData, "customerType");
+  const customerType = customerTypeInput ? enumValue(CustomerType, customerTypeInput, CustomerType.OTHER) : null;
 
-  await prisma.material.create({
+  const material = await prisma.material.create({
     data: {
       tenantId: tenant.id,
       title,
       url,
       description: text(formData, "description"),
       type: enumValue(MaterialType, text(formData, "type"), MaterialType.link),
-      customerType: enumValue(CustomerType, text(formData, "customerType"), CustomerType.OTHER)
+      customerType
     }
+  });
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "material_created",
+    entityType: "Material",
+    entityId: material.id,
+    metadata: { title: material.title, customerType: material.customerType, type: material.type }
   });
 
   revalidatePath(`/app/${tenantSlug}/materials`);
+}
+
+export async function updateMaterial(tenantSlug: string, materialId: string, formData: FormData) {
+  const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
+  const title = text(formData, "title");
+  const url = text(formData, "url");
+  if (!title || !url) return;
+  const customerTypeInput = text(formData, "customerType");
+  const customerType = customerTypeInput ? enumValue(CustomerType, customerTypeInput, CustomerType.OTHER) : null;
+
+  const material = await prisma.material.update({
+    where: { id: materialId, tenantId: tenant.id },
+    data: {
+      title,
+      url,
+      description: text(formData, "description"),
+      type: enumValue(MaterialType, text(formData, "type"), MaterialType.link),
+      customerType
+    }
+  });
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "material_updated",
+    entityType: "Material",
+    entityId: material.id,
+    metadata: { title: material.title, customerType: material.customerType, type: material.type }
+  });
+
+  revalidatePath(`/app/${tenantSlug}/materials`);
+  revalidatePath(`/app/${tenantSlug}/strategies`);
 }
 
 export async function upsertWeComConfig(tenantSlug: string, formData: FormData) {
