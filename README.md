@@ -42,6 +42,12 @@ APP_URL="http://localhost:3000"
 
 如果本机 PostgreSQL 没有密码，可按实际情况调整 `DATABASE_URL`。不要把生产密钥写入仓库。
 
+## 本地演示环境启动手册
+
+完整本地演示启动步骤见：
+
+`custom/notes/v1.4.5-local-demo-runbook.md`
+
 ## 安装依赖
 
 ```bash
