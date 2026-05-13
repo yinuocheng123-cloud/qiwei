@@ -240,6 +240,19 @@ tests/v11-browser-e2e.spec.ts
 
 Windows 环境如果 Playwright 内置 `webServer` 收尾卡住，可以手动启动 `npm run dev`，再设置 `PLAYWRIGHT_SKIP_WEBSERVER=1` 后执行 `npx playwright test --reporter=list`。
 
+从 V1.2 到 V1.3.1 的浏览器用例会直接修改 seed 数据，请不要把 `tests/v11*`、`tests/v12*`、`tests/v13*`、`tests/v131*` 并行混跑。当前稳定执行方式是：每个 spec 单独重置数据库、重新 seed，并使用 `--workers=1` 按版本顺序依次运行。
+
+建议顺序：
+
+```bash
+npx playwright test tests/v131-task-template-reminder-e2e.spec.ts --workers=1 --reporter=list
+npx playwright test tests/v11-browser-e2e.spec.ts --workers=1 --reporter=list
+npx playwright test tests/v12-business-e2e.spec.ts --workers=1 --reporter=list
+npx playwright test tests/v13-task-workbench-e2e.spec.ts --workers=1 --reporter=list
+```
+
+每次运行上面任一 spec 前，都要先执行一轮数据库 reset + migrate + seed，避免上一个版本的测试结果污染当前版本断言。
+
 ## 后续开发计划
 
 1. 增加审计日志查询页面和筛选。
@@ -279,8 +292,10 @@ tests/v12-business-e2e.spec.ts
 运行方式：
 
 ```bash
-npm run test:e2e
+npx playwright test tests/v12-business-e2e.spec.ts --workers=1 --reporter=list
 ```
+
+执行前请先单独 reset 数据库并重新 seed，不要和其他版本 spec 混跑。
 
 ## V1.3 任务驱动型业务工作台
 
@@ -311,6 +326,12 @@ tests/v13-task-workbench-e2e.spec.ts
 ```
 
 覆盖企业管理员批量分配、批量更新阶段、销售任务可见范围、销售完成任务、团队任务概览、批量操作 AuditLog、平台审计日志访问，以及企业管理员访问平台审计页被拒绝。
+
+建议使用以下命令单独执行，并在执行前重置数据库与 seed：
+
+```bash
+npx playwright test tests/v13-task-workbench-e2e.spec.ts --workers=1 --reporter=list
+```
 ## V1.3.1 任务去重、模板与提醒队列
 
 V1.3.1 在 V1.3 的 `FollowTask` 基础上补强任务生产质量和后续消息提醒边界，不做企业微信 API 真实发送。
@@ -338,3 +359,9 @@ tests/v131-task-template-reminder-e2e.spec.ts
 ```
 
 覆盖企业管理员创建模板、运营创建模板、销售禁止访问模板管理页、客户详情使用模板创建任务、重复创建同类同日任务去重、销售创建自己客户任务、销售跨租户访问被拒绝、取消任务后取消提醒队列，以及关键动作进入 AuditLog。
+
+建议使用以下命令单独执行，并在执行前重置数据库与 seed：
+
+```bash
+npx playwright test tests/v131-task-template-reminder-e2e.spec.ts --workers=1 --reporter=list
+```

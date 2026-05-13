@@ -76,6 +76,8 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
   const ownerOptions = [{ value: "", label: "未分配" }, ...owners.map((owner) => ({ value: owner.id, label: `${owner.name}（${owner.role}）` }))];
   const taskOwnerOptions = owners.map((owner) => ({ value: owner.id, label: `${owner.name}（${owner.role}）` }));
   const taskTemplateOptions = [{ value: "", label: "不使用模板" }, ...taskTemplates.map((template) => ({ value: template.id, label: template.name }))];
+  const manualTaskTypeOptions = [{ value: "", label: "沿用模板默认类型" }, ...taskTypeOptions];
+  const manualTaskPriorityOptions = [{ value: "", label: "沿用模板默认优先级" }, ...taskPriorityOptions];
 
   return (
     <PageShell tenant={tenant} title={`客户详情：${lead.name}`} description="客户详情继续基于客户类型策略库驱动资料、话术、下一步动作和销售任务。">
@@ -194,8 +196,8 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
               <p className="text-xs text-slate-500">选择模板后，空白字段会自动使用模板内容和默认到期时间。</p>
               <Input label="任务标题" name="title" />
               <Textarea label="任务说明" name="description" rows={3} />
-              <Select label="任务类型" name="type" options={taskTypeOptions} defaultValue="CUSTOM" />
-              <Select label="优先级" name="priority" options={taskPriorityOptions} defaultValue="NORMAL" />
+              <Select label="任务类型" name="type" options={manualTaskTypeOptions} defaultValue="" />
+              <Select label="优先级" name="priority" options={manualTaskPriorityOptions} defaultValue="" />
               {canAssign ? <Select label="负责人" name="ownerId" options={taskOwnerOptions} defaultValue={lead.ownerId ?? taskOwnerOptions[0]?.value} /> : <input type="hidden" name="ownerId" value={user.id} />}
               <Input label="截止时间" name="dueAt" type="datetime-local" />
               <SubmitButton>创建任务</SubmitButton>

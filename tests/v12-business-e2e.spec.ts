@@ -29,11 +29,12 @@ function todayDateTimeLocal() {
 }
 
 async function selectSalesOwner(page: Page) {
-  const value = await page.locator('select[name="ownerId"] option').evaluateAll((options) => {
+  const assignForm = page.locator("form").filter({ has: page.getByRole("button", { name: "保存分配" }) });
+  const value = await assignForm.locator('select[name="ownerId"] option').evaluateAll((options) => {
     return options.find((option) => option.textContent?.includes("SALES"))?.getAttribute("value") ?? "";
   });
   expect(value).not.toBe("");
-  await page.locator('select[name="ownerId"]').selectOption(value);
+  await assignForm.locator('select[name="ownerId"]').selectOption(value);
 }
 
 test.describe.serial("V1.2 业务可用增强版", () => {
@@ -47,9 +48,10 @@ test.describe.serial("V1.2 业务可用增强版", () => {
     await expect(page.getByText("推荐欢迎语")).toBeVisible();
     await expect(page.getByText("推荐下一步动作", { exact: true })).toBeVisible();
 
+    const assignForm = page.locator("form").filter({ has: page.getByRole("button", { name: "保存分配" }) });
     await selectSalesOwner(page);
     await page.getByRole("button", { name: "保存分配" }).click();
-    await expect(page.locator('select[name="ownerId"]')).toHaveValue(/.+/);
+    await expect(assignForm.locator('select[name="ownerId"]')).toHaveValue(/.+/);
     await logout(page);
   });
 

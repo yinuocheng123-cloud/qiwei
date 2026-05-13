@@ -40,6 +40,18 @@ function taskForm(page: Page) {
   return page.locator("form").filter({ has: page.locator('select[name="templateId"]') });
 }
 
+function taskSection(page: Page, title: string) {
+  return page.getByRole("heading", { name: title }).locator("xpath=..");
+}
+
+function taskTitleInSection(page: Page, sectionTitle: string, taskTitle: string) {
+  return taskSection(page, sectionTitle).getByText(taskTitle, { exact: true });
+}
+
+function taskCardInSection(page: Page, sectionTitle: string, taskTitle: string) {
+  return taskTitleInSection(page, sectionTitle, taskTitle).locator("xpath=ancestor::div[contains(@class, 'rounded-md border border-slate-200 p-3 text-sm')][1]");
+}
+
 test.describe.serial("V1.3.1 任务模板与提醒队列", () => {
   test("企业管理员和运营可以创建任务模板，销售不能访问模板管理页", async ({ page }) => {
     await login(page, "boss@zhengmu.local");
@@ -76,19 +88,24 @@ test.describe.serial("V1.3.1 任务模板与提醒队列", () => {
     await page.goto("/app/zhengmu-demo/leads/demo-lead-001");
     await expect(page.getByRole("heading", { name: /客户详情/ })).toBeVisible();
 
-    const form = taskForm(page);
     const dueAt = futureDateTimeLocal(10);
-    await form.locator('select[name="templateId"]').selectOption({ label: adminTemplateName });
-    await form.locator('input[name="dueAt"]').fill(dueAt);
-    await form.getByRole("button", { name: "创建任务" }).click();
-    await expect(page.getByText("创建任务")).toBeVisible();
-
+    let form = taskForm(page);
     await form.locator('select[name="templateId"]').selectOption({ label: adminTemplateName });
     await form.locator('input[name="dueAt"]').fill(dueAt);
     await form.getByRole("button", { name: "创建任务" }).click();
 
     await page.goto("/app/zhengmu-demo/todos?type=PHONE_CALL&status=PENDING");
-    await expect(page.getByText(adminTemplateTaskTitle)).toHaveCount(1);
+    await expect(taskTitleInSection(page, "筛选结果", adminTemplateTaskTitle)).toHaveCount(1);
+
+    await page.goto("/app/zhengmu-demo/leads/demo-lead-001");
+    await expect(page.getByRole("heading", { name: /客户详情/ })).toBeVisible();
+    form = taskForm(page);
+    await form.locator('select[name="templateId"]').selectOption({ label: adminTemplateName });
+    await form.locator('input[name="dueAt"]').fill(dueAt);
+    await form.getByRole("button", { name: "创建任务" }).click();
+
+    await page.goto("/app/zhengmu-demo/todos?type=PHONE_CALL&status=PENDING");
+    await expect(taskTitleInSection(page, "筛选结果", adminTemplateTaskTitle)).toHaveCount(1);
     await logout(page);
   });
 
@@ -115,7 +132,7 @@ test.describe.serial("V1.3.1 任务模板与提醒队列", () => {
   test("取消任务会取消未发送提醒队列，审计日志能看到关键动作", async ({ page }) => {
     await login(page, "sales@zhengmu.local");
     await page.goto("/app/zhengmu-demo/todos?type=CUSTOM&status=PENDING");
-    const taskCard = page.locator("div").filter({ hasText: salesTaskTitle }).first();
+    const taskCard = taskCardInSection(page, "筛选结果", salesTaskTitle);
     await expect(taskCard).toBeVisible();
     await taskCard.getByRole("button", { name: "取消" }).click();
     await logout(page);
