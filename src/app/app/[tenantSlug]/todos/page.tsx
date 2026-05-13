@@ -176,6 +176,7 @@ function TaskSection({ tenantSlug, title, tasks, urgent = false, readOnly = fals
               <p className="mt-1 text-slate-600">
                 {labelOf(taskTypeOptions, task.type)} / {labelOf(taskPriorityOptions, task.priority)} / {labelOf(taskStatusOptions, task.status)}
               </p>
+              {task.lead ? <p className="mt-1 text-slate-500">客户类型：{labelOf(customerTypeOptions, task.lead.customerType)}</p> : null}
               <p className="mt-1 text-slate-500">负责人：{task.owner?.name ?? "未分配"}</p>
               {task.description ? <p className="mt-1 text-slate-500">{task.description}</p> : null}
               <div className="mt-3 flex flex-wrap items-center gap-2">

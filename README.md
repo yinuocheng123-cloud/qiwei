@@ -75,6 +75,7 @@ npm run dev
 - 登录页：`http://localhost:3000/login`
 - 平台总后台：`http://localhost:3000/admin`
 - 企业看板：`http://localhost:3000/app/zhengmu-demo/dashboard`
+- 演示说明页：`http://localhost:3000/app/zhengmu-demo/demo-guide`
 - 客户列表：`http://localhost:3000/app/zhengmu-demo/leads`
 - 客户类型策略库：`http://localhost:3000/app/zhengmu-demo/strategies`
 - 资料包管理：`http://localhost:3000/app/zhengmu-demo/materials`
@@ -94,6 +95,33 @@ seed 后可使用以下账号，密码均为 `123456`：
 - 第二租户管理员：`boss@isolation.local`
 - 第二租户运营：`operator@isolation.local`
 - 第二租户销售：`sales@isolation.local`
+
+## 整木行业演示路径
+
+V1.4 开始，`zhengmu-demo` 会在 seed 后自动生成整木行业样板数据，可直接用于对外演示和销售沟通。
+
+V1.4.1 新增系统内演示说明页 `/app/zhengmu-demo/demo-guide`，适合给企业管理员、运营和销售在正式演示前先统一讲解口径、演示顺序和四类客户路径。
+
+推荐演示账号：
+
+- 企业管理员：`boss@zhengmu.local`
+- 销售顾问：`sales@zhengmu.local`
+
+推荐演示顺序：
+
+1. 先用 `boss@zhengmu.local` 打开 `/app/zhengmu-demo/demo-guide`，快速讲清系统定位、推荐演示顺序、四类客户路径、老板视角和销售视角。
+2. 再进入 `/app/zhengmu-demo/dashboard`，看来源分布、客户类型分布、阶段分布和销售跟进概览。
+3. 进入 `/app/zhengmu-demo/leads`，按业主客户、经销商客户、设计师客户、工厂客户各打开一个客户详情。
+4. 在客户详情页重点演示客户类型、来源渠道、阶段、推荐资料、推荐话术、推荐下一步动作、已有跟进、当前任务和任务模板。
+5. 切换到 `sales@zhengmu.local`，进入 `/app/zhengmu-demo/todos`，演示今日任务、逾期任务、高优先级任务、本周待跟进、已完成任务和不同客户类型任务。
+6. 如需展示任务模板管理，可再切回企业管理员进入 `/app/zhengmu-demo/task-templates`。
+
+四类客户演示样本：
+
+- 业主客户：关注效果、环保、价格、交付、售后、设计落地。
+- 经销商客户：关注利润、政策、区域保护、总部支持、样板门店、风险。
+- 设计师客户：关注审美、落地、工艺、材料、案例、项目配合。
+- 工厂客户：关注获客、招商、品牌、成交、企业微信、AI 推广、GEO。
 
 ## 权限说明
 
@@ -249,6 +277,7 @@ npx playwright test tests/v131-task-template-reminder-e2e.spec.ts --workers=1 --
 npx playwright test tests/v11-browser-e2e.spec.ts --workers=1 --reporter=list
 npx playwright test tests/v12-business-e2e.spec.ts --workers=1 --reporter=list
 npx playwright test tests/v13-task-workbench-e2e.spec.ts --workers=1 --reporter=list
+npx playwright test tests/v14-demo-dataset-e2e.spec.ts --workers=1 --reporter=list
 ```
 
 每次运行上面任一 spec 前，都要先执行一轮数据库 reset + migrate + seed，避免上一个版本的测试结果污染当前版本断言。
@@ -364,4 +393,30 @@ tests/v131-task-template-reminder-e2e.spec.ts
 
 ```bash
 npx playwright test tests/v131-task-template-reminder-e2e.spec.ts --workers=1 --reporter=list
+```
+
+## V1.4 整木行业演示样板数据
+
+V1.4 不新增复杂技术功能，重点把 `zhengmu-demo` 打造成一套可直接演示的整木行业样板企业数据包。
+
+- seed 后默认生成 16 条以上整木行业样板线索，覆盖业主客户、经销商客户、设计师客户、工厂客户。
+- 四类客户各自拥有对应的转化策略、资料包、任务模板、跟进记录和任务。
+- dashboard、客户列表、客户详情、销售工作台都可以直接看到可演示的数据分布。
+- 客户详情页增加“当前任务”展示，便于演示任务闭环。
+
+### V1.4 演示数据验证
+
+脚本验证会在 `custom\experiments\verify-v11-e2e.ts` 中检查：
+
+- `zhengmu-demo` 存在；
+- 四类客户策略、资料包、任务模板存在；
+- 样板线索至少 16 条；
+- 四类客户都有 FollowUp 和 FollowTask；
+- sales 账号存在待办任务；
+- 看板统计和客户详情演示关键数据存在。
+
+如需执行浏览器端演示专项验证，可单独运行：
+
+```bash
+npx playwright test tests/v14-demo-dataset-e2e.spec.ts --workers=1 --reporter=list
 ```

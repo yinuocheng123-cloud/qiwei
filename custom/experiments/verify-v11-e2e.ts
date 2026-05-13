@@ -12,6 +12,9 @@ import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
+const demoCustomerTypes = ["OWNER_CLIENT", "DEALER_CLIENT", "DESIGNER_CLIENT", "FACTORY_CLIENT"] as const;
+const requiredSources = ["douyin", "xiaohongshu", "shipinhao", "gongzhonghao", "website", "friend_circle", "offline_event", "referral"] as const;
+const requiredStages = ["NEW", "MATERIAL_SENT", "CONTACTED", "DIAGNOSED", "QUOTED", "PENDING_DEAL", "DEAL_DONE", "TO_REACTIVATE"] as const;
 
 function assert(condition: unknown, message: string) {
   if (!condition) {
@@ -44,9 +47,45 @@ async function main() {
 
   const strategyCount = await prisma.customerTypeStrategy.count({ where: { tenantId: tenant.id } });
   assert(strategyCount >= 4, "客户类型策略不足 4 条。");
+  for (const customerType of demoCustomerTypes) {
+    const strategy = await prisma.customerTypeStrategy.findUnique({
+      where: { tenantId_customerType: { tenantId: tenant.id, customerType } }
+    });
+    assert(strategy, `${customerType} 的策略缺失。`);
+  }
+
+  const materialCounts = await Promise.all(
+    demoCustomerTypes.map(async (customerType) => ({
+      customerType,
+      count: await prisma.material.count({ where: { tenantId: tenant.id, customerType } })
+    }))
+  );
+  materialCounts.forEach((item) => assert(item.count >= 1, `${item.customerType} 的资料包缺失。`));
+
+  const taskTemplateCounts = await Promise.all(
+    demoCustomerTypes.map(async (customerType) => ({
+      customerType,
+      count: await prisma.taskTemplate.count({ where: { tenantId: tenant.id, customerType, isActive: true } })
+    }))
+  );
+  taskTemplateCounts.forEach((item) => assert(item.count >= 1, `${item.customerType} 的任务模板缺失。`));
 
   const leadCountBefore = await prisma.lead.count({ where: { tenantId: tenant.id } });
-  assert(leadCountBefore >= 8, "zhengmu-demo 示例线索不足 8 条。");
+  assert(leadCountBefore >= 16, "zhengmu-demo 样板线索不足 16 条。");
+
+  const leadCountsByType = await Promise.all(
+    demoCustomerTypes.map(async (customerType) => ({
+      customerType,
+      count: await prisma.lead.count({ where: { tenantId: tenant.id, customerType } })
+    }))
+  );
+  leadCountsByType.forEach((item) => assert(item.count >= 4, `${item.customerType} 的样板线索不足 4 条。`));
+
+  const sourceGroups = await prisma.lead.groupBy({ by: ["source"], where: { tenantId: tenant.id }, _count: true });
+  requiredSources.forEach((source) => assert(sourceGroups.some((item) => item.source === source), `样板线索缺少来源 ${source}。`));
+
+  const stageGroups = await prisma.lead.groupBy({ by: ["stage"], where: { tenantId: tenant.id }, _count: true });
+  requiredStages.forEach((stage) => assert(stageGroups.some((item) => item.stage === stage), `样板线索缺少阶段 ${stage}。`));
 
   const isolationLeadCount = await prisma.lead.count({ where: { tenantId: isolationTenant.id } });
   assert(isolationLeadCount >= 2, "第二租户隔离验证线索不足。");
@@ -54,6 +93,50 @@ async function main() {
   const salesVisibleCount = await prisma.lead.count({ where: { tenantId: tenant.id, ownerId: sales.id } });
   const allTenantLeadCount = await prisma.lead.count({ where: { tenantId: tenant.id } });
   assert(salesVisibleCount < allTenantLeadCount, "销售可见范围没有形成 ownerId 子集，无法验证销售隔离。");
+  assert(salesVisibleCount >= 6, "销售账号可见样板客户过少，不足以演示工作台。");
+
+  const followUpCountsByType = await Promise.all(
+    demoCustomerTypes.map(async (customerType) => ({
+      customerType,
+      count: await prisma.followUp.count({ where: { tenantId: tenant.id, lead: { customerType } } })
+    }))
+  );
+  followUpCountsByType.forEach((item) => assert(item.count >= 1, `${item.customerType} 缺少跟进记录。`));
+
+  const followTaskCountsByType = await Promise.all(
+    demoCustomerTypes.map(async (customerType) => ({
+      customerType,
+      count: await prisma.followTask.count({ where: { tenantId: tenant.id, lead: { customerType } } })
+    }))
+  );
+  followTaskCountsByType.forEach((item) => assert(item.count >= 1, `${item.customerType} 缺少任务。`));
+
+  const salesPendingTaskCount = await prisma.followTask.count({
+    where: { tenantId: tenant.id, ownerId: sales.id, status: { in: ["PENDING", "DELAYED"] } }
+  });
+  assert(salesPendingTaskCount >= 1, "销售账号没有待办任务。");
+
+  const todayTaskCount = await prisma.followTask.count({
+    where: { tenantId: tenant.id, dueAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)), lt: new Date(new Date().setHours(24, 0, 0, 0)) } }
+  });
+  const overdueTaskCount = await prisma.followTask.count({
+    where: { tenantId: tenant.id, dueAt: { lt: new Date(new Date().setHours(0, 0, 0, 0)) }, status: { in: ["PENDING", "DELAYED"] } }
+  });
+  const doneTaskCount = await prisma.followTask.count({ where: { tenantId: tenant.id, status: "DONE" } });
+  assert(todayTaskCount >= 1, "样板数据缺少今日任务。");
+  assert(overdueTaskCount >= 1, "样板数据缺少逾期任务。");
+  assert(doneTaskCount >= 1, "样板数据缺少已完成任务。");
+
+  const demoLead = assertDefined(
+    await prisma.lead.findUnique({ where: { id: "demo-lead-001" } }),
+    "演示客户 demo-lead-001 不存在。"
+  );
+  const demoMaterials = await prisma.material.count({ where: { tenantId: tenant.id, customerType: demoLead.customerType } });
+  const demoTemplates = await prisma.taskTemplate.count({ where: { tenantId: tenant.id, customerType: demoLead.customerType, isActive: true } });
+  const demoTasks = await prisma.followTask.count({ where: { tenantId: tenant.id, leadId: demoLead.id } });
+  assert(demoMaterials >= 1, "演示客户缺少可展示资料。");
+  assert(demoTemplates >= 1, "演示客户缺少可选任务模板。");
+  assert(demoTasks >= 1, "演示客户缺少当前任务。");
 
   const createdLead = await prisma.lead.create({
     data: {
@@ -135,10 +218,19 @@ async function main() {
         tenant: tenant.slug,
         isolationTenant: isolationTenant.slug,
         strategyCount,
+        materialCounts,
+        taskTemplateCounts,
         leadCountBefore,
         leadCountAfter,
+        leadCountsByType,
         salesVisibleCount,
+        salesPendingTaskCount,
         isolationLeadCount,
+        followUpCountsByType,
+        followTaskCountsByType,
+        todayTaskCount,
+        overdueTaskCount,
+        doneTaskCount,
         auditLogCount,
         createdLeadId: createdLead.id
       },

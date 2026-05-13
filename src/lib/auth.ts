@@ -146,6 +146,26 @@ export async function requireTenantAccess(tenantSlug: string, allowedRoles?: Use
   return { user, tenant };
 }
 
+export async function requireDemoGuideAccess(tenantSlug: string) {
+  const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+  if (!tenant) notFound();
+
+  const user = await requireUser(`/app/${tenantSlug}/demo-guide`);
+  if (user.role === "PLATFORM_ADMIN") {
+    return { user, tenant };
+  }
+
+  if (!user.tenantId || user.tenantId !== tenant.id) {
+    redirect("/forbidden");
+  }
+
+  if (!["TENANT_ADMIN", "OPERATOR", "SALES"].includes(user.role)) {
+    redirect("/forbidden");
+  }
+
+  return { user, tenant };
+}
+
 export function canViewAllTenantLeads(role: UserRole) {
   return role === "TENANT_ADMIN" || role === "OPERATOR";
 }

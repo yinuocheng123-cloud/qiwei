@@ -14,6 +14,7 @@ export function TenantNav({ tenant }: { tenant: Tenant }) {
   const base = `/app/${tenant.slug}`;
   const items = [
     ["看板", `${base}/dashboard`],
+    ["演示说明", `${base}/demo-guide`],
     ["工作台", `${base}/todos`],
     ["客户线索", `${base}/leads`],
     ["策略库", `${base}/strategies`],

@@ -81,6 +81,10 @@ export async function middleware(request: NextRequest) {
 
   if (pathname.startsWith("/app/")) {
     const tenantSlug = pathname.split("/")[2];
+    const isDemoGuide = pathname === `/app/${tenantSlug}/demo-guide`;
+    if (auth.role === "PLATFORM_ADMIN" && isDemoGuide) {
+      return NextResponse.next();
+    }
     const tenantRole = auth.role === "TENANT_ADMIN" || auth.role === "OPERATOR" || auth.role === "SALES";
     if (!tenantRole || !tenantSlug || auth.tenantSlug !== tenantSlug) {
       return NextResponse.redirect(new URL("/forbidden", request.url));

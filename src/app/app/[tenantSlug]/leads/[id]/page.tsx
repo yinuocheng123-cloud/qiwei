@@ -19,6 +19,7 @@ import {
   sourceOptions,
   stageOptions,
   taskPriorityOptions,
+  taskStatusOptions,
   taskTypeOptions
 } from "@/lib/options";
 import { prisma } from "@/lib/prisma";
@@ -40,7 +41,7 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
 
   if (!lead) notFound();
 
-  const [strategy, materials, owners, taskTemplates] = await Promise.all([
+  const [strategy, materials, owners, taskTemplates, currentTasks] = await Promise.all([
     prisma.customerTypeStrategy.findUnique({
       where: { tenantId_customerType: { tenantId: tenant.id, customerType: lead.customerType } }
     }),
@@ -66,6 +67,16 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
         ]
       },
       orderBy: [{ customerType: "desc" }, { updatedAt: "desc" }]
+    }),
+    prisma.followTask.findMany({
+      where: {
+        tenantId: tenant.id,
+        leadId: lead.id,
+        status: { in: ["PENDING", "DELAYED", "DONE"] }
+      },
+      include: { owner: true },
+      orderBy: [{ dueAt: "asc" }, { updatedAt: "desc" }],
+      take: 6
     })
   ]);
 
@@ -148,6 +159,29 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
                 ))
               ) : (
                 <p className="text-sm text-slate-500">暂无跟进记录</p>
+              )}
+            </div>
+          </Card>
+
+          <Card>
+            <h2 className="mb-4 text-base font-semibold">当前任务</h2>
+            <div className="space-y-3">
+              {currentTasks.length ? (
+                currentTasks.map((task) => (
+                  <div key={task.id} className="rounded-md border border-slate-200 p-3 text-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-medium text-emerald-700">{task.title}</span>
+                      <span className="text-slate-500">{formatDate(task.dueAt)}</span>
+                    </div>
+                    <p className="mt-1 text-slate-600">
+                      {labelOf(taskTypeOptions, task.type)} / {labelOf(taskPriorityOptions, task.priority)} / {labelOf(taskStatusOptions, task.status)}
+                    </p>
+                    <p className="mt-1 text-slate-500">负责人：{task.owner?.name ?? "未分配"}</p>
+                    {task.description ? <p className="mt-1 text-slate-500">{task.description}</p> : null}
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-slate-500">当前客户暂无任务</p>
               )}
             </div>
           </Card>
