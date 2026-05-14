@@ -48,6 +48,25 @@ APP_URL="http://localhost:3000"
 
 `custom/notes/v1.4.5-local-demo-runbook.md`
 
+## 直接给链接测试
+
+如果你希望把当前本地环境直接变成“给一个链接就能测”，建议先按本地演示手册准备好 `.env`、PostgreSQL、migrate 和 seed，然后执行：
+
+```bash
+npm run demo:link
+```
+
+这个脚本会做两件事：
+
+1. 用 `0.0.0.0:3000` 启动开发服务器，方便同一局域网直接访问；
+2. 如果机器已经安装 `cloudflared`，会额外给出一个可对外分享的 `trycloudflare.com` 公网测试链接。
+
+如果只想看脚本会做什么、不真正启动服务，可执行：
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File custom\experiments\start-demo-link.ps1 -DryRun
+```
+
 ## 安装依赖
 
 ```bash
@@ -285,6 +304,51 @@ npx playwright test tests/v12-business-e2e.spec.ts --workers=1 --reporter=list
 npx playwright test tests/v13-task-workbench-e2e.spec.ts --workers=1 --reporter=list
 npx playwright test tests/v14-demo-dataset-e2e.spec.ts --workers=1 --reporter=list
 ```
+
+## V1.5.1 智能标签建议
+
+V1.5.1 在 V1.5 的“智能跟进助手”上补齐“智能标签建议”。
+- 系统只推荐标签，不自动打标签。
+- 推荐标签来自客户问题、客户类型、当前阶段、需求类型以及现有策略和资料上下文。
+- 销售、运营或企业管理员必须人工勾选并确认后，标签才会真正写入客户档案。
+- 已存在的同名标签不会重复添加。
+- 这项能力适合减少销售判断成本，但不能替代人工判断。
+
+当前入口：
+- `/app/[tenantSlug]/leads/[id]`
+
+当前页面会同步展示：
+- 三条不同风格的建议回复。
+- 本次推荐标签。
+- 客户已有标签。
+- “确认添加标签”后的审计记录。
+
+## V1.5 智能跟进助手
+
+V1.5 在客户详情页新增“智能跟进助手”，定位是销售辅助，不是 AI 客服。
+
+- 不自动回复客户。
+- 不接企业微信消息接口。
+- 不读取企业微信真实聊天记录。
+- 只根据当前客户类型、跟进阶段、策略库和资料包生成建议回复。
+- 销售需要自己查看、复制、修改后再发送给客户。
+
+当前入口：
+
+- `/app/[tenantSlug]/leads/[id]`
+
+每次生成会给出三条不同风格的建议回复：
+
+- 直接型
+- 温和型
+- 专业型
+
+每条建议都会包含：
+
+- 回复话术
+- 推荐资料
+- 下一步动作
+- 注意事项
 
 每次运行上面任一 spec 前，都要先执行一轮数据库 reset + migrate + seed，避免上一个版本的测试结果污染当前版本断言。
 

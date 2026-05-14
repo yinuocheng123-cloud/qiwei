@@ -169,6 +169,12 @@ enum ReminderStatus {
   CANCELLED
 }
 
+enum ReplySuggestionStyle {
+  DIRECT
+  WARM
+  PROFESSIONAL
+}
+
 model Tenant {
   id          String                 @id @default(cuid())
   name        String
@@ -192,6 +198,7 @@ model Tenant {
   followTasks FollowTask[]
   taskTemplates TaskTemplate[]
   reminderQueues ReminderQueue[]
+  replySuggestions ReplySuggestion[]
 }
 
 model User {
@@ -213,6 +220,7 @@ model User {
   ownedTasks   FollowTask[] @relation("TaskOwner")
   createdTasks FollowTask[] @relation("TaskCreator")
   reminderQueues ReminderQueue[]
+  replySuggestions ReplySuggestion[]
 
   @@index([tenantId, role])
 }
@@ -258,6 +266,7 @@ model Lead {
   intakeForms    IntakeForm[]
   followTasks    FollowTask[]
   reminderQueues ReminderQueue[]
+  replySuggestions ReplySuggestion[]
 
   @@index([tenantId, createdAt])
   @@index([tenantId, source])
@@ -294,6 +303,27 @@ model FollowUp {
   createdAt    DateTime   @default(now())
 
   @@index([tenantId, leadId, createdAt])
+}
+
+model ReplySuggestion {
+  id                     String               @id @default(cuid())
+  tenantId               String
+  tenant                 Tenant               @relation(fields: [tenantId], references: [id])
+  leadId                 String
+  lead                   Lead                 @relation(fields: [leadId], references: [id])
+  userId                 String
+  user                   User                 @relation(fields: [userId], references: [id])
+  customerQuestion       String
+  suggestionText         String
+  recommendedMaterialIds Json?
+  suggestedTags          Json?
+  recommendedNextAction  String
+  style                  ReplySuggestionStyle
+  warning                String
+  createdAt              DateTime             @default(now())
+
+  @@index([tenantId, leadId, userId, createdAt])
+  @@index([tenantId, createdAt])
 }
 
 model CustomerTypeStrategy {

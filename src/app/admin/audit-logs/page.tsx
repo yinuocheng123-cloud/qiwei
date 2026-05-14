@@ -1,10 +1,10 @@
 /*
  * 文件说明：该文件实现平台级审计日志查询页面。
- * 功能说明：平台管理员可以跨租户查看 AuditLog，并按租户、动作、用户、对象类型和时间筛选。
+ * 功能说明：平台管理员可以跨租户查看审计日志，并按租户、动作、用户、对象类型和时间筛选。
  *
  * 结构概览：
- *   第一部分：导入依赖
- *   第二部分：筛选配置与 metadata 脱敏摘要
+ *   第一部分：导入依赖与筛选选项
+ *   第二部分：metadata 摘要处理
  *   第三部分：平台审计日志页面
  */
 import type { Prisma } from "@prisma/client";
@@ -18,6 +18,21 @@ export const dynamic = "force-dynamic";
 
 const actionOptions = [
   { value: "", label: "全部动作" },
+  { value: "login_succeeded", label: "登录成功" },
+  { value: "login_failed", label: "登录失败" },
+  { value: "logout", label: "退出登录" },
+  { value: "public_form_lead_created", label: "公开表单创建线索" },
+  { value: "followup_created", label: "新增跟进" },
+  { value: "lead_stage_updated", label: "更新客户阶段" },
+  { value: "lead_owner_assigned", label: "分配负责人" },
+  { value: "lead_csv_exported", label: "导出客户 CSV" },
+  { value: "strategy_updated", label: "更新策略库" },
+  { value: "material_created", label: "新增资料包" },
+  { value: "material_updated", label: "更新资料包" },
+  { value: "reply_suggestion_generated", label: "生成建议回复" },
+  { value: "reply_tag_suggested", label: "生成标签建议" },
+  { value: "reply_tag_confirmed", label: "确认添加标签" },
+  { value: "reply_suggestion_saved_as_followup", label: "建议回复保存为跟进" },
   { value: "task_created", label: "创建任务" },
   { value: "task_manual_created", label: "手动创建任务" },
   { value: "task_deduped_updated", label: "任务去重更新" },
@@ -35,7 +50,6 @@ const actionOptions = [
   { value: "lead_bulk_stage_updated", label: "批量更新阶段" },
   { value: "lead_bulk_tag_added", label: "批量添加标签" },
   { value: "lead_bulk_next_follow_set", label: "批量设置下次跟进" },
-  { value: "lead_csv_exported", label: "导出客户 CSV" },
   { value: "tenant_created", label: "创建租户" },
   { value: "tenant_status_updated", label: "更新租户状态" }
 ];
@@ -43,21 +57,22 @@ const actionOptions = [
 const entityTypeOptions = [
   { value: "", label: "全部对象" },
   { value: "Tenant", label: "企业租户" },
+  { value: "User", label: "用户" },
   { value: "Lead", label: "客户线索" },
   { value: "LeadTag", label: "客户标签" },
+  { value: "FollowUp", label: "跟进记录" },
+  { value: "ReplySuggestion", label: "建议回复" },
   { value: "FollowTask", label: "跟进任务" },
   { value: "TaskTemplate", label: "任务模板" },
   { value: "ReminderQueue", label: "提醒队列" },
-  { value: "FollowUp", label: "跟进记录" },
   { value: "Material", label: "资料包" },
   { value: "CustomerTypeStrategy", label: "客户策略" }
 ];
 
 function metadataSummary(value: Prisma.JsonValue | null) {
   if (!value) return "-";
-  const text = JSON.stringify(value);
-  const masked = text.replace(/secret|token|password/gi, "***");
-  return masked.length > 180 ? `${masked.slice(0, 180)}...` : masked;
+  const text = JSON.stringify(value).replace(/secret|token|password/gi, "***");
+  return text.length > 180 ? `${text.slice(0, 180)}...` : text;
 }
 
 export default async function PlatformAuditLogsPage({
@@ -66,6 +81,7 @@ export default async function PlatformAuditLogsPage({
   searchParams: Record<string, string | string[] | undefined>;
 }) {
   await requirePlatformAdmin();
+
   const [tenants, users] = await Promise.all([
     prisma.tenant.findMany({ orderBy: { createdAt: "desc" } }),
     prisma.user.findMany({ orderBy: [{ role: "asc" }, { createdAt: "asc" }] })
@@ -100,9 +116,19 @@ export default async function PlatformAuditLogsPage({
     <PageShell title="平台审计日志" description="仅平台管理员可访问，用于跨租户排查关键操作；metadata 会做基础敏感词遮蔽。">
       <Card>
         <form className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
-          <Select label="租户" name="tenantId" options={[{ value: "", label: "全部租户" }, ...tenants.map((tenant) => ({ value: tenant.id, label: `${tenant.name} / ${tenant.slug}` }))]} defaultValue={tenantId} />
+          <Select
+            label="租户"
+            name="tenantId"
+            options={[{ value: "", label: "全部租户" }, ...tenants.map((tenant) => ({ value: tenant.id, label: `${tenant.name} / ${tenant.slug}` }))]}
+            defaultValue={tenantId}
+          />
           <Select label="动作" name="action" options={actionOptions} defaultValue={action} />
-          <Select label="用户" name="userId" options={[{ value: "", label: "全部用户" }, ...users.map((item) => ({ value: item.id, label: `${item.name} / ${item.email}` }))]} defaultValue={userId} />
+          <Select
+            label="用户"
+            name="userId"
+            options={[{ value: "", label: "全部用户" }, ...users.map((item) => ({ value: item.id, label: `${item.name} / ${item.email}` }))]}
+            defaultValue={userId}
+          />
           <Select label="对象类型" name="entityType" options={entityTypeOptions} defaultValue={entityType} />
           <Input label="开始时间" name="start" type="datetime-local" defaultValue={start} />
           <Input label="结束时间" name="end" type="datetime-local" defaultValue={end} />

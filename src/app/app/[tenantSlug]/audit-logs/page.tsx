@@ -1,11 +1,11 @@
 /*
  * 文件说明：该文件实现租户内审计日志查询页面。
- * 功能说明：企业管理员与运营可查看本企业关键动作，销售仅能查看自己的操作日志。
+ * 功能说明：企业管理员与运营可查看本租户关键动作，销售仅能查看自己的操作日志。
  *
  * 结构概览：
- *   第一部分：导入依赖
- *   第二部分：筛选选项与 metadata 摘要
- *   第三部分：审计日志查询页面
+ *   第一部分：导入依赖与筛选选项
+ *   第二部分：metadata 摘要处理
+ *   第三部分：租户审计日志页面
  */
 import type { Prisma } from "@prisma/client";
 import { PageShell } from "@/components/Shell";
@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 
 const actionOptions = [
   { value: "", label: "全部动作" },
-  { value: "login_success", label: "登录成功" },
+  { value: "login_succeeded", label: "登录成功" },
   { value: "login_failed", label: "登录失败" },
   { value: "logout", label: "退出登录" },
   { value: "public_form_lead_created", label: "公开表单创建线索" },
@@ -29,6 +29,10 @@ const actionOptions = [
   { value: "strategy_updated", label: "更新策略库" },
   { value: "material_created", label: "新增资料包" },
   { value: "material_updated", label: "更新资料包" },
+  { value: "reply_suggestion_generated", label: "生成建议回复" },
+  { value: "reply_tag_suggested", label: "生成标签建议" },
+  { value: "reply_tag_confirmed", label: "确认添加标签" },
+  { value: "reply_suggestion_saved_as_followup", label: "建议回复保存为跟进" },
   { value: "task_created", label: "创建任务" },
   { value: "task_manual_created", label: "手动创建任务" },
   { value: "task_deduped_updated", label: "任务去重更新" },
@@ -50,10 +54,11 @@ const actionOptions = [
 
 const entityTypeOptions = [
   { value: "", label: "全部对象" },
-  { value: "Auth", label: "登录会话" },
+  { value: "User", label: "用户" },
   { value: "Lead", label: "客户线索" },
   { value: "LeadTag", label: "客户标签" },
   { value: "FollowUp", label: "跟进记录" },
+  { value: "ReplySuggestion", label: "建议回复" },
   { value: "FollowTask", label: "跟进任务" },
   { value: "TaskTemplate", label: "任务模板" },
   { value: "ReminderQueue", label: "提醒队列" },
@@ -111,12 +116,23 @@ export default async function AuditLogsPage({
   });
 
   return (
-    <PageShell tenant={tenant} title="审计日志" description={canViewAll ? "查看本企业关键业务动作和权限动作。" : "查看你自己的操作记录。"}>
+    <PageShell
+      tenant={tenant}
+      title="审计日志"
+      description={canViewAll ? "查看本企业关键业务动作和权限动作。" : "查看你自己的操作记录。"}
+    >
       <Card>
         <form className="grid gap-4 md:grid-cols-5">
           <Select label="动作" name="action" options={actionOptions} defaultValue={action} />
           <Select label="对象类型" name="entityType" options={entityTypeOptions} defaultValue={entityType} />
-          {canViewAll ? <Select label="用户" name="userId" options={[{ value: "", label: "全部用户" }, ...users.map((item) => ({ value: item.id, label: `${item.name} / ${item.role}` }))]} defaultValue={userId} /> : null}
+          {canViewAll ? (
+            <Select
+              label="用户"
+              name="userId"
+              options={[{ value: "", label: "全部用户" }, ...users.map((item) => ({ value: item.id, label: `${item.name} / ${item.role}` }))]}
+              defaultValue={userId}
+            />
+          ) : null}
           <Input label="开始时间" name="start" type="datetime-local" defaultValue={start} />
           <Input label="结束时间" name="end" type="datetime-local" defaultValue={end} />
           <div className="flex items-end">

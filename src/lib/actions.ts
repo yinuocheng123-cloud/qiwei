@@ -31,6 +31,14 @@ import { safeWriteAuditLog } from "@/lib/audit";
 import { requireLeadAccess, requirePlatformAdmin, requireTenantAccess } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
+  detectQuestionType,
+  detectTagSuggestionTopic,
+  generateReplySuggestions,
+  getSuggestedTagKey,
+  mapSuggestedTagGroupToLeadTagGroup,
+  parseSuggestedTags
+} from "@/lib/reply-suggestions";
+import {
   cancelPendingRemindersForTask,
   createFirstFollowTask,
   createHighIntentTask,
@@ -62,6 +70,10 @@ function splitLines(value?: string) {
         .map((item) => item.trim())
         .filter(Boolean)
     : [];
+}
+
+function truncateAuditQuestion(question: string, maxLength = 100) {
+  return question.length <= maxLength ? question : `${question.slice(0, Math.max(0, maxLength - 3))}...`;
 }
 
 export async function createTenant(formData: FormData) {
@@ -636,6 +648,237 @@ export async function bulkUpdateLeads(tenantSlug: string, formData: FormData) {
   revalidatePath(`/app/${tenantSlug}/leads`);
   revalidatePath(`/app/${tenantSlug}/todos`);
   revalidatePath(`/app/${tenantSlug}/dashboard`);
+}
+
+export async function generateReplySuggestionsForLead(tenantSlug: string, leadId: string, formData: FormData) {
+  const { user, tenant, lead } = await requireLeadAccess(tenantSlug, leadId);
+  const customerQuestion = text(formData, "customerQuestion");
+  if (!customerQuestion) return;
+
+  const [strategy, materials] = await Promise.all([
+    prisma.customerTypeStrategy.findUnique({
+      where: { tenantId_customerType: { tenantId: tenant.id, customerType: lead.customerType } }
+    }),
+    prisma.material.findMany({
+      where: {
+        tenantId: tenant.id,
+        OR: [{ customerType: lead.customerType }, { customerType: null }]
+      },
+      orderBy: { createdAt: "desc" }
+    })
+  ]);
+
+  const generatedAt = new Date();
+  const suggestions = generateReplySuggestions({
+    lead: {
+      name: lead.name,
+      customerType: lead.customerType,
+      stage: lead.stage,
+      needType: lead.needType
+    },
+    strategy,
+    materials,
+    customerQuestion
+  });
+
+  const questionType = detectQuestionType(customerQuestion);
+  const tagTopic = detectTagSuggestionTopic(customerQuestion);
+
+  const createdSuggestions = await prisma.$transaction(
+    suggestions.map((suggestion) =>
+      prisma.replySuggestion.create({
+        data: {
+          tenantId: tenant.id,
+          leadId: lead.id,
+          userId: user.id,
+          customerQuestion,
+          suggestionText: suggestion.suggestionText,
+          recommendedMaterialIds: suggestion.recommendedMaterialIds,
+          suggestedTags: suggestion.suggestedTags,
+          recommendedNextAction: suggestion.recommendedNextAction,
+          style: suggestion.style,
+          warning: suggestion.warning,
+          createdAt: generatedAt
+        }
+      })
+    )
+  );
+
+  for (const suggestion of createdSuggestions) {
+    await safeWriteAuditLog({
+      tenantId: tenant.id,
+      userId: user.id,
+      action: "reply_suggestion_generated",
+      entityType: "ReplySuggestion",
+      entityId: suggestion.id,
+      metadata: {
+        leadId: lead.id,
+        customerType: lead.customerType,
+        questionType,
+        style: suggestion.style
+      }
+    });
+  }
+
+  if (createdSuggestions[0]) {
+    await safeWriteAuditLog({
+      tenantId: tenant.id,
+      userId: user.id,
+      action: "reply_tag_suggested",
+      entityType: "ReplySuggestion",
+      entityId: createdSuggestions[0].id,
+      metadata: {
+        leadId: lead.id,
+        replySuggestionId: createdSuggestions[0].id,
+        customerType: lead.customerType,
+        questionType: tagTopic,
+        suggestedTagsCount: suggestions[0]?.suggestedTags.length ?? 0,
+        questionPreview: truncateAuditQuestion(customerQuestion)
+      }
+    });
+  }
+
+  revalidatePath(`/app/${tenantSlug}/leads/${leadId}`);
+  revalidatePath(`/app/${tenantSlug}/audit-logs`);
+}
+
+export async function confirmReplySuggestionTags(tenantSlug: string, leadId: string, formData: FormData) {
+  const { user, tenant, lead } = await requireLeadAccess(tenantSlug, leadId);
+  const suggestionId = text(formData, "suggestionId");
+  if (!suggestionId) return;
+
+  const suggestion = await prisma.replySuggestion.findFirst({
+    where: {
+      id: suggestionId,
+      tenantId: tenant.id,
+      leadId: lead.id
+    }
+  });
+  if (!suggestion) return;
+
+  const suggestedTags = parseSuggestedTags(suggestion.suggestedTags);
+  if (!suggestedTags.length) return;
+
+  const selectedKeys = formData
+    .getAll("selectedTags")
+    .map((value) => (typeof value === "string" ? value : ""))
+    .filter(Boolean);
+  if (!selectedKeys.length) return;
+
+  const selectedTags = suggestedTags.filter((tag) => selectedKeys.includes(getSuggestedTagKey(tag)));
+  if (!selectedTags.length) return;
+
+  const existingTags = await prisma.leadTag.findMany({
+    where: {
+      tenantId: tenant.id,
+      leadId: lead.id
+    }
+  });
+  const existingTagKeys = new Set(existingTags.map((tag) => `${tag.tagGroup}::${tag.tagName}`));
+
+  const tagsToCreate = selectedTags.filter((tag) => {
+    const storedGroup = mapSuggestedTagGroupToLeadTagGroup(tag.tagGroup);
+    return !existingTagKeys.has(`${storedGroup}::${tag.tagName}`);
+  });
+
+  if (tagsToCreate.length) {
+    await prisma.leadTag.createMany({
+      data: tagsToCreate.map((tag) => ({
+        tenantId: tenant.id,
+        leadId: lead.id,
+        tagName: tag.tagName,
+        tagGroup: mapSuggestedTagGroupToLeadTagGroup(tag.tagGroup)
+      }))
+    });
+  }
+
+  const questionType = detectTagSuggestionTopic(suggestion.customerQuestion);
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "reply_tag_confirmed",
+    entityType: "LeadTag",
+    entityId: lead.id,
+    metadata: {
+      leadId: lead.id,
+      replySuggestionId: suggestion.id,
+      customerType: lead.customerType,
+      questionType,
+      confirmedTags: selectedTags.map((tag) => tag.tagName),
+      confirmedTagsCount: selectedTags.length,
+      createdTagsCount: tagsToCreate.length,
+      questionPreview: truncateAuditQuestion(suggestion.customerQuestion)
+    }
+  });
+
+  revalidatePath(`/app/${tenantSlug}/leads/${leadId}`);
+  revalidatePath(`/app/${tenantSlug}/audit-logs`);
+  revalidatePath(`/app/${tenantSlug}/dashboard`);
+}
+
+export async function saveReplySuggestionAsFollowUp(tenantSlug: string, leadId: string, formData: FormData) {
+  const { user, tenant, lead } = await requireLeadAccess(tenantSlug, leadId);
+  const suggestionId = text(formData, "suggestionId");
+  if (!suggestionId) return;
+
+  const suggestion = await prisma.replySuggestion.findFirst({
+    where: {
+      id: suggestionId,
+      tenantId: tenant.id,
+      leadId: lead.id
+    }
+  });
+  if (!suggestion) return;
+
+  const questionType = detectQuestionType(suggestion.customerQuestion);
+  const followUp = await prisma.followUp.create({
+    data: {
+      tenantId: tenant.id,
+      leadId: lead.id,
+      userId: user.id,
+      content: suggestion.suggestionText,
+      nextAction: suggestion.recommendedNextAction,
+      stageBefore: lead.stage,
+      stageAfter: lead.stage
+    }
+  });
+
+  await prisma.lead.update({
+    where: { id: lead.id },
+    data: { lastFollowAt: new Date() }
+  });
+
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "followup_created",
+    entityType: "FollowUp",
+    entityId: followUp.id,
+    metadata: {
+      leadId: lead.id,
+      stageBefore: lead.stage,
+      stageAfter: lead.stage,
+      nextFollowAt: null
+    }
+  });
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "reply_suggestion_saved_as_followup",
+    entityType: "ReplySuggestion",
+    entityId: suggestion.id,
+    metadata: {
+      leadId: lead.id,
+      customerType: lead.customerType,
+      questionType,
+      style: suggestion.style
+    }
+  });
+
+  revalidatePath(`/app/${tenantSlug}/leads/${leadId}`);
+  revalidatePath(`/app/${tenantSlug}/todos`);
+  revalidatePath(`/app/${tenantSlug}/dashboard`);
+  revalidatePath(`/app/${tenantSlug}/audit-logs`);
 }
 
 export async function updateStrategy(tenantSlug: string, strategyId: string, formData: FormData) {

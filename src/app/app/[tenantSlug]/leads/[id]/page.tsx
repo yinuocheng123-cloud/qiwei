@@ -1,13 +1,17 @@
 /*
  * 文件说明：该文件实现客户详情页。
- * 功能说明：展示客户信息、负责人分配、策略推荐、资料包推荐、跟进记录和 V1.3.1 手动任务创建。
+ * 功能说明：展示客户基础信息、策略推荐、资料包、跟进记录、任务，以及 V1.5 智能跟进助手。
  *
  * 结构概览：
  *   第一部分：导入依赖
- *   第二部分：详情页查询
- *   第三部分：客户信息、策略、资料、跟进和任务表单
+ *   第二部分：详情页查询与表单动作绑定
+ *   第三部分：主界面渲染
+ *   第四部分：辅助展示组件
  */
 import { notFound } from "next/navigation";
+import { LeadReplyAssistant } from "@/components/LeadReplyAssistant";
+import { PageShell } from "@/components/Shell";
+import { Card, Input, Select, SubmitButton, Textarea } from "@/components/Ui";
 import { addFollowUp, assignLeadOwner, createManualTask } from "@/lib/actions";
 import { requireLeadAccess } from "@/lib/auth";
 import {
@@ -23,8 +27,7 @@ import {
   taskTypeOptions
 } from "@/lib/options";
 import { prisma } from "@/lib/prisma";
-import { PageShell } from "@/components/Shell";
-import { Card, Input, Select, SubmitButton, Textarea } from "@/components/Ui";
+import { getLatestReplySuggestionBatch } from "@/lib/reply-suggestions";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +44,7 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
 
   if (!lead) notFound();
 
-  const [strategy, materials, owners, taskTemplates, currentTasks] = await Promise.all([
+  const [strategy, materials, owners, taskTemplates, currentTasks, replySuggestions] = await Promise.all([
     prisma.customerTypeStrategy.findUnique({
       where: { tenantId_customerType: { tenantId: tenant.id, customerType: lead.customerType } }
     }),
@@ -61,10 +64,7 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
       where: {
         tenantId: tenant.id,
         isActive: true,
-        AND: [
-          { OR: [{ customerType: lead.customerType }, { customerType: null }] },
-          { OR: [{ stage: lead.stage }, { stage: null }] }
-        ]
+        AND: [{ OR: [{ customerType: lead.customerType }, { customerType: null }] }, { OR: [{ stage: lead.stage }, { stage: null }] }]
       },
       orderBy: [{ customerType: "desc" }, { updatedAt: "desc" }]
     }),
@@ -77,13 +77,15 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
       include: { owner: true },
       orderBy: [{ dueAt: "asc" }, { updatedAt: "desc" }],
       take: 6
-    })
+    }),
+    getLatestReplySuggestionBatch(tenant.id, lead.id, user.id)
   ]);
 
   const followAction = addFollowUp.bind(null, tenant.slug, lead.id);
   const assignAction = assignLeadOwner.bind(null, tenant.slug, lead.id);
   const manualTaskAction = createManualTask.bind(null, tenant.slug, lead.id);
   const canAssign = user.role === "TENANT_ADMIN" || user.role === "OPERATOR";
+
   const ownerOptions = [{ value: "", label: "未分配" }, ...owners.map((owner) => ({ value: owner.id, label: `${owner.name}（${owner.role}）` }))];
   const taskOwnerOptions = owners.map((owner) => ({ value: owner.id, label: `${owner.name}（${owner.role}）` }));
   const taskTemplateOptions = [{ value: "", label: "不使用模板" }, ...taskTemplates.map((template) => ({ value: template.id, label: template.name }))];
@@ -91,7 +93,7 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
   const manualTaskPriorityOptions = [{ value: "", label: "沿用模板默认优先级" }, ...taskPriorityOptions];
 
   return (
-    <PageShell tenant={tenant} title={`客户详情：${lead.name}`} description="客户详情继续基于客户类型策略库驱动资料、话术、下一步动作和销售任务。">
+    <PageShell tenant={tenant} title={`客户详情：${lead.name}`} description="客户详情页基于客户类型策略库驱动资料、话术、下一步动作、任务和智能跟进助手。">
       <div className="grid gap-6 lg:grid-cols-[1fr_440px]">
         <div className="space-y-6">
           <Card>
@@ -188,6 +190,17 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
         </div>
 
         <aside className="space-y-6">
+          <LeadReplyAssistant
+            tenantSlug={tenant.slug}
+            leadId={lead.id}
+            leadName={lead.name}
+            customerType={lead.customerType}
+            stage={lead.stage}
+            suggestions={replySuggestions}
+            materials={materials.map((material) => ({ id: material.id, title: material.title }))}
+            existingTags={lead.tags.map((tag) => ({ id: tag.id, tagName: tag.tagName }))}
+          />
+
           <Card>
             <h2 className="mb-4 text-base font-semibold">推荐转化策略</h2>
             {strategy ? (
@@ -227,12 +240,16 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
             <h2 className="mb-4 text-base font-semibold">创建任务</h2>
             <form action={manualTaskAction} className="space-y-4">
               <Select label="任务模板" name="templateId" options={taskTemplateOptions} defaultValue="" />
-              <p className="text-xs text-slate-500">选择模板后，空白字段会自动使用模板内容和默认到期时间。</p>
+              <p className="text-xs text-slate-500">选择模板后，空白字段会自动沿用模板内容和默认到期时间。</p>
               <Input label="任务标题" name="title" />
               <Textarea label="任务说明" name="description" rows={3} />
               <Select label="任务类型" name="type" options={manualTaskTypeOptions} defaultValue="" />
               <Select label="优先级" name="priority" options={manualTaskPriorityOptions} defaultValue="" />
-              {canAssign ? <Select label="负责人" name="ownerId" options={taskOwnerOptions} defaultValue={lead.ownerId ?? taskOwnerOptions[0]?.value} /> : <input type="hidden" name="ownerId" value={user.id} />}
+              {canAssign ? (
+                <Select label="负责人" name="ownerId" options={taskOwnerOptions} defaultValue={lead.ownerId ?? taskOwnerOptions[0]?.value} />
+              ) : (
+                <input type="hidden" name="ownerId" value={user.id} />
+              )}
               <Input label="截止时间" name="dueAt" type="datetime-local" />
               <SubmitButton>创建任务</SubmitButton>
             </form>
