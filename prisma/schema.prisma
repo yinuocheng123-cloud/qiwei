@@ -58,6 +58,14 @@ enum CustomerType {
   FACTORY_CLIENT
   CHANNEL_PARTNER
   OLD_CLIENT
+  PLATFORM_FACTORY_OWNER
+  PLATFORM_MEMBERSHIP_CLIENT
+  PLATFORM_GEO_AI_CLIENT
+  PLATFORM_TRAINING_CLIENT
+  PLATFORM_EVENT_RESOURCE_CLIENT
+  PLATFORM_SUPPLY_CHAIN_CLIENT
+  PLATFORM_AFTERMARKET_CLIENT
+  PLATFORM_PARTNER_CLIENT
   OTHER
 }
 
@@ -175,6 +183,23 @@ enum ReplySuggestionStyle {
   PROFESSIONAL
 }
 
+enum BusinessLineStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum BusinessLineCategory {
+  SERVICE
+  PRODUCT
+  ACTIVITY
+  COURSE
+  SUPPLY_CHAIN
+  MEMBERSHIP
+  PARTNERSHIP
+  OTHER
+}
+
 model Tenant {
   id          String                 @id @default(cuid())
   name        String
@@ -199,6 +224,7 @@ model Tenant {
   taskTemplates TaskTemplate[]
   reminderQueues ReminderQueue[]
   replySuggestions ReplySuggestion[]
+  businessLines BusinessLine[]
 }
 
 model User {
@@ -360,6 +386,29 @@ model Material {
   updatedAt    DateTime      @updatedAt
 
   @@index([tenantId, customerType])
+}
+
+model BusinessLine {
+  id                         String               @id @default(cuid())
+  tenantId                   String
+  tenant                     Tenant               @relation(fields: [tenantId], references: [id])
+  name                       String
+  slug                       String
+  description                String?
+  status                     BusinessLineStatus   @default(ACTIVE)
+  category                   BusinessLineCategory @default(OTHER)
+  priority                   Int                  @default(100)
+  targetCustomerTypes        Json?
+  recommendedTagNames        Json?
+  recommendedMaterialIds     Json?
+  recommendedTaskTemplateIds Json?
+  defaultNextAction          String?
+  notes                      String?
+  createdAt                  DateTime             @default(now())
+  updatedAt                  DateTime             @updatedAt
+
+  @@unique([tenantId, slug])
+  @@index([tenantId, status, priority])
 }
 
 model IntakeForm {

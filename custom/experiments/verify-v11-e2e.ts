@@ -13,6 +13,16 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 const demoCustomerTypes = ["OWNER_CLIENT", "DEALER_CLIENT", "DESIGNER_CLIENT", "FACTORY_CLIENT"] as const;
+const platformCustomerTypes = [
+  "PLATFORM_FACTORY_OWNER",
+  "PLATFORM_MEMBERSHIP_CLIENT",
+  "PLATFORM_GEO_AI_CLIENT",
+  "PLATFORM_TRAINING_CLIENT",
+  "PLATFORM_EVENT_RESOURCE_CLIENT",
+  "PLATFORM_SUPPLY_CHAIN_CLIENT",
+  "PLATFORM_AFTERMARKET_CLIENT",
+  "PLATFORM_PARTNER_CLIENT"
+] as const;
 const requiredSources = ["douyin", "xiaohongshu", "shipinhao", "gongzhonghao", "website", "friend_circle", "offline_event", "referral"] as const;
 const requiredStages = ["NEW", "MATERIAL_SENT", "CONTACTED", "DIAGNOSED", "QUOTED", "PENDING_DEAL", "DEAL_DONE", "TO_REACTIVATE"] as const;
 
@@ -35,6 +45,7 @@ async function main() {
   assert(await bcrypt.compare("123456", platformAdmin.passwordHash), "平台管理员密码 hash 校验失败。");
 
   const tenant = assertDefined(await prisma.tenant.findUnique({ where: { slug: "zhengmu-demo" } }), "zhengmu-demo 租户不存在。");
+  const platformTenant = assertDefined(await prisma.tenant.findUnique({ where: { slug: "zhengmu-platform" } }), "zhengmu-platform 租户不存在。");
   const isolationTenant = assertDefined(await prisma.tenant.findUnique({ where: { slug: "isolation-demo" } }), "isolation-demo 租户不存在。");
 
   const zhengmuUsers = await prisma.user.findMany({ where: { tenantId: tenant.id } });
@@ -43,6 +54,14 @@ async function main() {
   const sales = assertDefined(
     zhengmuUsers.find((user) => user.email === "sales@zhengmu.local" && user.role === "SALES"),
     "销售账号缺失。"
+  );
+
+  const platformUsers = await prisma.user.findMany({ where: { tenantId: platformTenant.id } });
+  assert(platformUsers.some((user) => user.email === "platform-boss@zhengmu.local" && user.role === "TENANT_ADMIN"), "整木网平台业务管理员缺失。");
+  assert(platformUsers.some((user) => user.email === "platform-operator@zhengmu.local" && user.role === "OPERATOR"), "整木网平台运营账号缺失。");
+  const platformSales = assertDefined(
+    platformUsers.find((user) => user.email === "platform-sales@zhengmu.local" && user.role === "SALES"),
+    "整木网平台销售账号缺失。"
   );
 
   const strategyCount = await prisma.customerTypeStrategy.count({ where: { tenantId: tenant.id } });
@@ -69,9 +88,30 @@ async function main() {
     }))
   );
   taskTemplateCounts.forEach((item) => assert(item.count >= 1, `${item.customerType} 的任务模板缺失。`));
+  const demoBusinessLineCount = await prisma.businessLine.count({ where: { tenantId: tenant.id, status: "ACTIVE" } });
+  assert(demoBusinessLineCount >= 4, "zhengmu-demo 启用业务线不足 4 条。");
+
+  const platformStrategyCount = await prisma.customerTypeStrategy.count({ where: { tenantId: platformTenant.id } });
+  assert(platformStrategyCount >= 8, "zhengmu-platform 客户策略不足 8 条。");
+  for (const customerType of platformCustomerTypes) {
+    const strategy = await prisma.customerTypeStrategy.findUnique({
+      where: { tenantId_customerType: { tenantId: platformTenant.id, customerType } }
+    });
+    assert(strategy, `${customerType} 的平台策略缺失。`);
+  }
+
+  const platformMaterialCount = await prisma.material.count({ where: { tenantId: platformTenant.id } });
+  assert(platformMaterialCount >= 10, "zhengmu-platform 资料包不足 10 条。");
+
+  const platformTaskTemplateCount = await prisma.taskTemplate.count({ where: { tenantId: platformTenant.id, isActive: true } });
+  assert(platformTaskTemplateCount >= 12, "zhengmu-platform 任务模板不足 12 条。");
+  const platformBusinessLineCount = await prisma.businessLine.count({ where: { tenantId: platformTenant.id, status: "ACTIVE" } });
+  assert(platformBusinessLineCount >= 8, "zhengmu-platform 启用业务线不足 8 条。");
 
   const leadCountBefore = await prisma.lead.count({ where: { tenantId: tenant.id } });
   assert(leadCountBefore >= 16, "zhengmu-demo 样板线索不足 16 条。");
+  const platformLeadCount = await prisma.lead.count({ where: { tenantId: platformTenant.id } });
+  assert(platformLeadCount >= 30, "zhengmu-platform 样板线索不足 30 条。");
 
   const leadCountsByType = await Promise.all(
     demoCustomerTypes.map(async (customerType) => ({
@@ -81,11 +121,25 @@ async function main() {
   );
   leadCountsByType.forEach((item) => assert(item.count >= 4, `${item.customerType} 的样板线索不足 4 条。`));
 
+  const platformLeadCountsByType = await Promise.all(
+    platformCustomerTypes.map(async (customerType) => ({
+      customerType,
+      count: await prisma.lead.count({ where: { tenantId: platformTenant.id, customerType } })
+    }))
+  );
+  platformLeadCountsByType.forEach((item) => assert(item.count >= 3, `${item.customerType} 的平台样板线索不足 3 条。`));
+
   const sourceGroups = await prisma.lead.groupBy({ by: ["source"], where: { tenantId: tenant.id }, _count: true });
   requiredSources.forEach((source) => assert(sourceGroups.some((item) => item.source === source), `样板线索缺少来源 ${source}。`));
 
   const stageGroups = await prisma.lead.groupBy({ by: ["stage"], where: { tenantId: tenant.id }, _count: true });
   requiredStages.forEach((stage) => assert(stageGroups.some((item) => item.stage === stage), `样板线索缺少阶段 ${stage}。`));
+
+  const platformSourceGroups = await prisma.lead.groupBy({ by: ["source"], where: { tenantId: platformTenant.id }, _count: true });
+  requiredSources.forEach((source) => assert(platformSourceGroups.some((item) => item.source === source), `平台样板线索缺少来源 ${source}。`));
+
+  const platformStageGroups = await prisma.lead.groupBy({ by: ["stage"], where: { tenantId: platformTenant.id }, _count: true });
+  requiredStages.forEach((stage) => assert(platformStageGroups.some((item) => item.stage === stage), `平台样板线索缺少阶段 ${stage}。`));
 
   const isolationLeadCount = await prisma.lead.count({ where: { tenantId: isolationTenant.id } });
   assert(isolationLeadCount >= 2, "第二租户隔离验证线索不足。");
@@ -94,6 +148,9 @@ async function main() {
   const allTenantLeadCount = await prisma.lead.count({ where: { tenantId: tenant.id } });
   assert(salesVisibleCount < allTenantLeadCount, "销售可见范围没有形成 ownerId 子集，无法验证销售隔离。");
   assert(salesVisibleCount >= 6, "销售账号可见样板客户过少，不足以演示工作台。");
+
+  const platformSalesVisibleCount = await prisma.lead.count({ where: { tenantId: platformTenant.id, ownerId: platformSales.id } });
+  assert(platformSalesVisibleCount >= 10, "platform-sales 可见样板客户不足 10 条。");
 
   const followUpCountsByType = await Promise.all(
     demoCustomerTypes.map(async (customerType) => ({
@@ -116,6 +173,11 @@ async function main() {
   });
   assert(salesPendingTaskCount >= 1, "销售账号没有待办任务。");
 
+  const platformSalesPendingTaskCount = await prisma.followTask.count({
+    where: { tenantId: platformTenant.id, ownerId: platformSales.id, status: { in: ["PENDING", "DELAYED"] } }
+  });
+  assert(platformSalesPendingTaskCount >= 1, "platform-sales 没有待办任务。");
+
   const todayTaskCount = await prisma.followTask.count({
     where: { tenantId: tenant.id, dueAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)), lt: new Date(new Date().setHours(24, 0, 0, 0)) } }
   });
@@ -137,6 +199,34 @@ async function main() {
   assert(demoMaterials >= 1, "演示客户缺少可展示资料。");
   assert(demoTemplates >= 1, "演示客户缺少可选任务模板。");
   assert(demoTasks >= 1, "演示客户缺少当前任务。");
+
+  const platformDemoLead = assertDefined(
+    await prisma.lead.findUnique({ where: { id: "platform-lead-001" } }),
+    "平台演示客户 platform-lead-001 不存在。"
+  );
+  const platformDemoMaterials = await prisma.material.count({ where: { tenantId: platformTenant.id, customerType: platformDemoLead.customerType } });
+  const platformDemoTemplates = await prisma.taskTemplate.count({
+    where: {
+      tenantId: platformTenant.id,
+      isActive: true,
+      OR: [{ customerType: platformDemoLead.customerType }, { customerType: null }]
+    }
+  });
+  const platformDemoTasks = await prisma.followTask.count({ where: { tenantId: platformTenant.id, leadId: platformDemoLead.id } });
+  assert(platformDemoMaterials >= 1, "平台演示客户缺少可展示资料。");
+  assert(platformDemoTemplates >= 1, "平台演示客户缺少可选任务模板。");
+  assert(platformDemoTasks >= 1, "平台演示客户缺少当前任务。");
+
+  const businessTagCount = await prisma.leadTag.count({
+    where: {
+      tenantId: platformTenant.id,
+      tagGroup: "CUSTOM",
+      tagName: {
+        in: ["会员服务", "GEO 推广", "乌镇设计周", "培训课程", "集采供应链", "一清一护", "品牌增信", "待续费"]
+      }
+    }
+  });
+  assert(businessTagCount >= 8, "zhengmu-platform 业务线标签样板不足 8 条。");
 
   const createdLead = await prisma.lead.create({
     data: {
@@ -216,18 +306,29 @@ async function main() {
         ok: true,
         platformAdmin: platformAdmin.email,
         tenant: tenant.slug,
+        platformTenant: platformTenant.slug,
         isolationTenant: isolationTenant.slug,
         strategyCount,
+        platformStrategyCount,
         materialCounts,
+        platformMaterialCount,
         taskTemplateCounts,
+        platformTaskTemplateCount,
+        demoBusinessLineCount,
+        platformBusinessLineCount,
         leadCountBefore,
+        platformLeadCount,
         leadCountAfter,
         leadCountsByType,
+        platformLeadCountsByType,
         salesVisibleCount,
+        platformSalesVisibleCount,
         salesPendingTaskCount,
+        platformSalesPendingTaskCount,
         isolationLeadCount,
         followUpCountsByType,
         followTaskCountsByType,
+        businessTagCount,
         todayTaskCount,
         overdueTaskCount,
         doneTaskCount,

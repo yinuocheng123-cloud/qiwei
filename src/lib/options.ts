@@ -31,6 +31,14 @@ export const customerTypeOptions: Option[] = [
   { value: "FACTORY_CLIENT", label: "工厂客户" },
   { value: "CHANNEL_PARTNER", label: "渠道伙伴" },
   { value: "OLD_CLIENT", label: "老客户" },
+  { value: "PLATFORM_FACTORY_OWNER", label: "整木工厂老板" },
+  { value: "PLATFORM_MEMBERSHIP_CLIENT", label: "会员意向客户" },
+  { value: "PLATFORM_GEO_AI_CLIENT", label: "GEO／AI 推广客户" },
+  { value: "PLATFORM_TRAINING_CLIENT", label: "培训课程客户" },
+  { value: "PLATFORM_EVENT_RESOURCE_CLIENT", label: "活动／乌镇资源客户" },
+  { value: "PLATFORM_SUPPLY_CHAIN_CLIENT", label: "供应链／集采客户" },
+  { value: "PLATFORM_AFTERMARKET_CLIENT", label: "一清一护后市场客户" },
+  { value: "PLATFORM_PARTNER_CLIENT", label: "合作伙伴客户" },
   { value: "OTHER", label: "其他" }
 ];
 
@@ -78,6 +86,23 @@ export const materialTypeOptions: Option[] = [
   { value: "image", label: "图片" },
   { value: "video", label: "视频" },
   { value: "document", label: "文档" }
+];
+
+export const businessLineStatusOptions: Option[] = [
+  { value: "ACTIVE", label: "启用中" },
+  { value: "PAUSED", label: "已暂停" },
+  { value: "ARCHIVED", label: "已归档" }
+];
+
+export const businessLineCategoryOptions: Option[] = [
+  { value: "SERVICE", label: "服务" },
+  { value: "PRODUCT", label: "产品" },
+  { value: "ACTIVITY", label: "活动" },
+  { value: "COURSE", label: "课程" },
+  { value: "SUPPLY_CHAIN", label: "供应链" },
+  { value: "MEMBERSHIP", label: "会员" },
+  { value: "PARTNERSHIP", label: "合作" },
+  { value: "OTHER", label: "其他" }
 ];
 
 export const taskTypeOptions: Option[] = [

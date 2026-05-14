@@ -100,8 +100,11 @@ npm run dev
 - 登录页：`http://localhost:3000/login`
 - 平台总后台：`http://localhost:3000/admin`
 - 企业看板：`http://localhost:3000/app/zhengmu-demo/dashboard`
+- 整木网业务工作台：`http://localhost:3000/app/zhengmu-platform/dashboard`
 - 演示说明页：`http://localhost:3000/app/zhengmu-demo/demo-guide`
+- 整木网自用说明页：`http://localhost:3000/app/zhengmu-platform/demo-guide`
 - 客户列表：`http://localhost:3000/app/zhengmu-demo/leads`
+- 整木网客户列表：`http://localhost:3000/app/zhengmu-platform/leads`
 - 客户类型策略库：`http://localhost:3000/app/zhengmu-demo/strategies`
 - 资料包管理：`http://localhost:3000/app/zhengmu-demo/materials`
 - 企业微信配置预留：`http://localhost:3000/app/zhengmu-demo/wecom`
@@ -117,6 +120,9 @@ seed 后可使用以下账号，密码均为 `123456`：
 - 企业管理员：`boss@zhengmu.local`
 - 运营人员：`operator@zhengmu.local`
 - 销售顾问：`sales@zhengmu.local`
+- 整木网平台业务管理员：`platform-boss@zhengmu.local`
+- 整木网平台运营：`platform-operator@zhengmu.local`
+- 整木网平台销售顾问：`platform-sales@zhengmu.local`
 - 第二租户管理员：`boss@isolation.local`
 - 第二租户运营：`operator@isolation.local`
 - 第二租户销售：`sales@isolation.local`
@@ -147,6 +153,29 @@ V1.4.1 新增系统内演示说明页 `/app/zhengmu-demo/demo-guide`，适合给
 - 经销商客户：关注利润、政策、区域保护、总部支持、样板门店、风险。
 - 设计师客户：关注审美、落地、工艺、材料、案例、项目配合。
 - 工厂客户：关注获客、招商、品牌、成交、企业微信、AI 推广、GEO。
+
+## 中华整木网自用业务工作台
+
+V1.6 新增 `zhengmu-platform` 租户，用于“中华整木网自己先把系统用起来”，不是给外部客户看的企业样板。
+
+- `zhengmu-demo`：整木企业样板演示租户，适合对外讲客户增长中台。
+- `zhengmu-platform`：整木网自用业务工作台样板，适合内部管理会员、GEO／AI 推广、乌镇设计周、培训课程、集采供应链、一清一护、品牌增信和联盟合作等机会。
+
+推荐体验账号：
+
+- 平台业务管理员：`platform-boss@zhengmu.local`
+- 平台销售顾问：`platform-sales@zhengmu.local`
+
+推荐演示顺序：
+
+1. 先进入 `/app/zhengmu-platform/demo-guide`，看“中华整木网自用说明”。
+2. 再进入 `/app/zhengmu-platform/dashboard`，看业务线分布、客户数量和任务概览。
+3. 打开 `/app/zhengmu-platform/leads`，重点看整木工厂老板、会员意向、GEO／AI 推广、活动／乌镇资源四类客户详情。
+4. 在客户详情页演示推荐资料、当前任务、智能跟进助手和智能标签建议。
+5. 切换到 `platform-sales@zhengmu.local`，进入 `/app/zhengmu-platform/todos`，看今日任务、逾期任务和高优先级任务。
+6. 如需追动作，可进入 `/app/zhengmu-platform/audit-logs` 查看建议生成和标签确认记录。
+
+V1.5／V1.5.1 的“智能跟进助手”和“智能标签建议”在 `zhengmu-platform` 中同样可直接使用，但仍然只做销售辅助，不自动回复客户，也不自动打标签。
 
 ## 权限说明
 
@@ -490,3 +519,30 @@ V1.4 不新增复杂技术功能，重点把 `zhengmu-demo` 打造成一套可�
 ```bash
 npx playwright test tests/v14-demo-dataset-e2e.spec.ts --workers=1 --reporter=list
 ```
+
+## V1.7 业务线／产品管理
+
+V1.7 新增租户级“业务线／产品管理”，入口为：
+
+- `/app/[tenantSlug]/business-lines`
+
+定位说明：
+
+- 它用于管理企业当前对外推广、销售和服务的业务线、产品或项目。
+- 它不等于计费产品，不是电商商品，也不是公开 SaaS 套餐。
+- 它更像企业内部的业务机会和产品方向管理入口。
+
+权限边界：
+
+- `TENANT_ADMIN`：可新增、编辑、启用、暂停、归档本租户业务线。
+- `OPERATOR`：可新增、编辑、启用、暂停、归档本租户业务线。
+- `SALES`：只能查看启用中的业务线，不可编辑。
+- `PLATFORM_ADMIN`：本轮不直接管理租户业务线。
+
+和现有模块的关系：
+
+- 业务线可关联资料包，用于在客户详情页和智能跟进助手里优先推荐相关资料。
+- 业务线可关联任务模板，用于统一沉淀后续销售动作。
+- 业务线可配置推荐标签，这些标签会进入“智能标签建议”的优先来源之一。
+- 当客户问题命中某条启用业务线时，系统会优先读取该业务线的推荐标签、绑定资料包和默认下一步动作。
+- 如果没有命中启用业务线，仍保留原有规则型智能跟进助手和智能标签建议作为兜底。

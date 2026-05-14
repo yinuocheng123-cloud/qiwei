@@ -1,11 +1,11 @@
 /*
- * 文件说明：该文件提供后台通用页面壳。
- * 功能说明：统一企业后台导航和内容宽度，避免每个页面重复布局。
+ * 文件说明：该文件提供企业后台通用页面壳。
+ * 功能说明：统一租户后台导航与内容布局，避免每个页面重复编写结构。
  *
  * 结构概览：
  *   第一部分：导入依赖
  *   第二部分：企业后台导航组件
- *   第三部分：后台页面壳组件
+ *   第三部分：页面壳组件
  */
 import Link from "next/link";
 import type { Tenant } from "@prisma/client";
@@ -15,10 +15,11 @@ export function TenantNav({ tenant }: { tenant: Tenant }) {
   const items = [
     ["看板", `${base}/dashboard`],
     ["演示说明", `${base}/demo-guide`],
-    ["工作台", `${base}/todos`],
+    ["销售工作台", `${base}/todos`],
     ["客户线索", `${base}/leads`],
-    ["策略库", `${base}/strategies`],
+    ["业务线／产品", `${base}/business-lines`],
     ["资料包", `${base}/materials`],
+    ["策略库", `${base}/strategies`],
     ["任务模板", `${base}/task-templates`],
     ["审计日志", `${base}/audit-logs`],
     ["企微配置", `${base}/wecom`],

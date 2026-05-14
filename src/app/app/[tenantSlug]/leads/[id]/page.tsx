@@ -44,12 +44,16 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
 
   if (!lead) notFound();
 
-  const [strategy, materials, owners, taskTemplates, currentTasks, replySuggestions] = await Promise.all([
+  const [strategy, materials, assistantMaterials, owners, taskTemplates, currentTasks, replySuggestions] = await Promise.all([
     prisma.customerTypeStrategy.findUnique({
       where: { tenantId_customerType: { tenantId: tenant.id, customerType: lead.customerType } }
     }),
     prisma.material.findMany({
       where: { tenantId: tenant.id, OR: [{ customerType: lead.customerType }, { customerType: null }] },
+      orderBy: { createdAt: "desc" }
+    }),
+    prisma.material.findMany({
+      where: { tenantId: tenant.id },
       orderBy: { createdAt: "desc" }
     }),
     prisma.user.findMany({
@@ -197,7 +201,7 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
             customerType={lead.customerType}
             stage={lead.stage}
             suggestions={replySuggestions}
-            materials={materials.map((material) => ({ id: material.id, title: material.title }))}
+            materials={assistantMaterials.map((material) => ({ id: material.id, title: material.title }))}
             existingTags={lead.tags.map((tag) => ({ id: tag.id, tagName: tag.tagName }))}
           />
 

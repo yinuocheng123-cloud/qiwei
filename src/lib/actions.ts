@@ -11,6 +11,8 @@
  *   第四部分：策略、资料和企业微信动作
  */
 import {
+  BusinessLineCategory,
+  BusinessLineStatus,
   CustomerType,
   FormType,
   FollowTaskPriority,
@@ -29,6 +31,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { safeWriteAuditLog } from "@/lib/audit";
 import { requireLeadAccess, requirePlatformAdmin, requireTenantAccess } from "@/lib/auth";
+import { buildBusinessLineSlug, parseBusinessLineRecommendedTagText } from "@/lib/business-lines";
 import { prisma } from "@/lib/prisma";
 import {
   detectQuestionType,
@@ -70,6 +73,11 @@ function splitLines(value?: string) {
         .map((item) => item.trim())
         .filter(Boolean)
     : [];
+}
+
+function parseNumber(value: string | undefined, fallback: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function truncateAuditQuestion(question: string, maxLength = 100) {
@@ -655,16 +663,20 @@ export async function generateReplySuggestionsForLead(tenantSlug: string, leadId
   const customerQuestion = text(formData, "customerQuestion");
   if (!customerQuestion) return;
 
-  const [strategy, materials] = await Promise.all([
+  const [strategy, materials, businessLines] = await Promise.all([
     prisma.customerTypeStrategy.findUnique({
       where: { tenantId_customerType: { tenantId: tenant.id, customerType: lead.customerType } }
     }),
     prisma.material.findMany({
+      where: { tenantId: tenant.id },
+      orderBy: { createdAt: "desc" }
+    }),
+    prisma.businessLine.findMany({
       where: {
         tenantId: tenant.id,
-        OR: [{ customerType: lead.customerType }, { customerType: null }]
+        status: "ACTIVE"
       },
-      orderBy: { createdAt: "desc" }
+      orderBy: [{ priority: "asc" }, { updatedAt: "desc" }]
     })
   ]);
 
@@ -678,6 +690,7 @@ export async function generateReplySuggestionsForLead(tenantSlug: string, leadId
     },
     strategy,
     materials,
+    businessLines,
     customerQuestion
   });
 
@@ -970,6 +983,125 @@ export async function updateMaterial(tenantSlug: string, materialId: string, for
 
   revalidatePath(`/app/${tenantSlug}/materials`);
   revalidatePath(`/app/${tenantSlug}/strategies`);
+}
+
+function parseBusinessLineCustomerTypes(formData: FormData) {
+  const allowed = new Set(Object.values(CustomerType));
+  return formData
+    .getAll("targetCustomerTypes")
+    .map((value) => (typeof value === "string" ? value : ""))
+    .filter((value): value is CustomerType => allowed.has(value as CustomerType));
+}
+
+function parseBusinessLineIds(formData: FormData, key: "recommendedMaterialIds" | "recommendedTaskTemplateIds") {
+  return formData
+    .getAll(key)
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .filter(Boolean);
+}
+
+function getBusinessLinePayload(formData: FormData) {
+  const name = text(formData, "name");
+  if (!name) return null;
+
+  const targetCustomerTypes = parseBusinessLineCustomerTypes(formData);
+  const recommendedTags = parseBusinessLineRecommendedTagText(text(formData, "recommendedTags"));
+  const recommendedMaterialIds = parseBusinessLineIds(formData, "recommendedMaterialIds");
+  const recommendedTaskTemplateIds = parseBusinessLineIds(formData, "recommendedTaskTemplateIds");
+
+  return {
+    name,
+    slug: buildBusinessLineSlug(name, text(formData, "slug")),
+    description: text(formData, "description"),
+    status: enumValue(BusinessLineStatus, text(formData, "status"), BusinessLineStatus.ACTIVE),
+    category: enumValue(BusinessLineCategory, text(formData, "category"), BusinessLineCategory.OTHER),
+    priority: parseNumber(text(formData, "priority"), 100),
+    targetCustomerTypes: targetCustomerTypes.length ? targetCustomerTypes : [],
+    recommendedTagNames: recommendedTags.length ? recommendedTags : [],
+    recommendedMaterialIds: recommendedMaterialIds.length ? recommendedMaterialIds : [],
+    recommendedTaskTemplateIds: recommendedTaskTemplateIds.length ? recommendedTaskTemplateIds : [],
+    defaultNextAction: text(formData, "defaultNextAction"),
+    notes: text(formData, "notes")
+  };
+}
+
+export async function createBusinessLine(tenantSlug: string, formData: FormData) {
+  const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
+  const payload = getBusinessLinePayload(formData);
+  if (!payload) return;
+
+  const businessLine = await prisma.businessLine.create({
+    data: {
+      tenantId: tenant.id,
+      ...payload
+    }
+  });
+
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "business_line_created",
+    entityType: "BusinessLine",
+    entityId: businessLine.id,
+    metadata: {
+      name: businessLine.name,
+      slug: businessLine.slug,
+      status: businessLine.status,
+      category: businessLine.category
+    }
+  });
+
+  revalidatePath(`/app/${tenantSlug}/business-lines`);
+}
+
+export async function updateBusinessLine(tenantSlug: string, businessLineId: string, formData: FormData) {
+  const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
+  const payload = getBusinessLinePayload(formData);
+  if (!payload) return;
+
+  const businessLine = await prisma.businessLine.update({
+    where: { id: businessLineId, tenantId: tenant.id },
+    data: payload
+  });
+
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "business_line_updated",
+    entityType: "BusinessLine",
+    entityId: businessLine.id,
+    metadata: {
+      name: businessLine.name,
+      slug: businessLine.slug,
+      status: businessLine.status,
+      category: businessLine.category
+    }
+  });
+
+  revalidatePath(`/app/${tenantSlug}/business-lines`);
+}
+
+export async function updateBusinessLineStatus(tenantSlug: string, businessLineId: string, status: BusinessLineStatus) {
+  const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
+  const businessLine = await prisma.businessLine.update({
+    where: { id: businessLineId, tenantId: tenant.id },
+    data: { status }
+  });
+
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "business_line_status_updated",
+    entityType: "BusinessLine",
+    entityId: businessLine.id,
+    metadata: {
+      name: businessLine.name,
+      slug: businessLine.slug,
+      status: businessLine.status
+    }
+  });
+
+  revalidatePath(`/app/${tenantSlug}/business-lines`);
 }
 
 export async function upsertWeComConfig(tenantSlug: string, formData: FormData) {

@@ -64,31 +64,98 @@ const customerPaths = [
   }
 ];
 
+const platformGuideSteps = [
+  "第一步：看 dashboard，看今天有哪些客户、主要业务线和顾问任务分布。",
+  "第二步：看客户列表，看会员、GEO、乌镇、培训、集采、一清一护等样板客户。",
+  "第三步：看整木工厂老板客户详情，看增长诊断、品牌增信、企微中台和下一步动作。",
+  "第四步：看会员意向客户详情，看会员权益、增信资料和续费／激活标签。",
+  "第五步：看 GEO／AI 推广客户详情，看智能跟进助手、标签建议和诊断资料。",
+  "第六步：看活动／乌镇资源客户详情，看活动资源、露出权益和合作路径。",
+  "第七步：看销售工作台，看平台销售顾问今天该跟谁、哪些任务逾期。",
+  "第八步：看审计日志，看建议生成、标签确认和任务动作都有记录。"
+];
+
+const platformCustomerPaths = [
+  {
+    title: "整木工厂老板客户",
+    concerns: "获客、招商、品牌、成交、行业背书、AI 推广、企业微信承接",
+    materials: "整木企业增长诊断表、品牌增信方案、企业微信业务增长中台说明、GEO 推广服务说明、增长联盟说明",
+    scripts: "先讲客户现在卡在哪，再讲增长诊断、品牌增信和企微承接怎么接上。",
+    nextAction: "安排一次增长诊断",
+    sampleName: "顾总",
+    sampleHref: "/app/zhengmu-platform/leads/platform-lead-001"
+  },
+  {
+    title: "会员意向客户",
+    concerns: "加入整木网有什么用、能否增信、有没有露出和客户转化、和普通广告有什么区别",
+    materials: "整木网会员服务说明、基础增信服务清单、声望增长服务清单、会员权益说明",
+    scripts: "先讲客户当前最缺什么，再讲会员权益和适合的服务层级。",
+    nextAction: "发送会员说明并推进会员沟通",
+    sampleName: "罗总",
+    sampleHref: "/app/zhengmu-platform/leads/platform-lead-005"
+  },
+  {
+    title: "GEO／AI 推广客户",
+    concerns: "什么是 GEO、AI 搜索为什么重要、能不能被推荐、和 SEO／代运营有什么区别",
+    materials: "GEO 推广服务说明、AI 搜索可见性自查表、关键词与内容底座建设说明",
+    scripts: "先讲搜索可见性和品牌信任，再讲诊断、关键词和内容底座。",
+    nextAction: "先做 AI 可见性诊断",
+    sampleName: "姚总",
+    sampleHref: "/app/zhengmu-platform/leads/platform-lead-009"
+  },
+  {
+    title: "活动／乌镇资源客户",
+    concerns: "活动有什么价值、有没有峰会榜单白皮书、能否提升影响力、能否链接客户和资源",
+    materials: "乌镇设计周合作说明、行业峰会资源说明、榜单与趋势发布说明、品牌露出权益说明",
+    scripts: "先讲想拿什么资源，再讲适合的露出、背书和后续承接方式。",
+    nextAction: "发送资源包并安排活动合作沟通",
+    sampleName: "覃总",
+    sampleHref: "/app/zhengmu-platform/leads/platform-lead-017"
+  }
+];
+
 export default async function DemoGuidePage({ params }: { params: { tenantSlug: string } }) {
   const { tenant } = await requireDemoGuideAccess(params.tenantSlug);
   const sampleBase = `/app/${tenant.slug}`;
+  const isPlatformWorkbench = tenant.slug === "zhengmu-platform";
+  const pageTitle = isPlatformWorkbench ? "中华整木网自用说明" : "整木行业演示说明";
+  const pageDescription = isPlatformWorkbench
+    ? "这是整木网自己的业务中台，用于管理会员、GEO、乌镇、培训、集采、一清一护等业务机会。"
+    : "这不是普通 CRM，而是一套按客户类型驱动跟进策略的企业微信业务增长中台。";
+  const steps = isPlatformWorkbench ? platformGuideSteps : guideSteps;
+  const paths = isPlatformWorkbench ? platformCustomerPaths : customerPaths;
 
   return (
     <PageShell
       tenant={tenant}
-      title="整木行业演示说明"
-      description="这不是普通 CRM，而是一套按客户类型驱动跟进策略的企业微信业务增长中台。"
+      title={pageTitle}
+      description={pageDescription}
     >
       <div className="space-y-6">
         <Card>
           <h2 className="text-base font-semibold text-slate-950">系统一句话说明</h2>
           <div className="mt-4 space-y-2 text-sm leading-7 text-slate-700">
-            <p>客户从哪里来，系统知道；</p>
-            <p>客户属于哪一类，系统识别；</p>
-            <p>客户该怎么跟，系统提醒；</p>
-            <p>销售跟到哪一步，老板看得清。</p>
+            {isPlatformWorkbench ? (
+              <>
+                <p>这是整木网自己的业务工作台，不是对外客户样板。</p>
+                <p>会员、GEO／AI 推广、乌镇、培训、集采、一清一护、品牌增信和联盟合作，都可以放到一套中台里跟进。</p>
+                <p>客户从哪里来、适合推哪条业务线、顾问该发什么资料、老板当天该盯什么，都能看清楚。</p>
+              </>
+            ) : (
+              <>
+                <p>客户从哪里来，系统知道；</p>
+                <p>客户属于哪一类，系统识别；</p>
+                <p>客户该怎么跟，系统提醒；</p>
+                <p>销售跟到哪一步，老板看得清。</p>
+              </>
+            )}
           </div>
         </Card>
 
         <Card>
           <h2 className="text-base font-semibold text-slate-950">推荐演示顺序</h2>
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
-            {guideSteps.map((step) => (
+            {steps.map((step) => (
               <div key={step} className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
                 {step}
               </div>
@@ -103,7 +170,7 @@ export default async function DemoGuidePage({ params }: { params: { tenantSlug: 
         </Card>
 
         <div className="grid gap-4 xl:grid-cols-2">
-          {customerPaths.map((path) => (
+          {paths.map((path) => (
             <Card key={path.title}>
               <h2 className="text-base font-semibold text-slate-950">{path.title}</h2>
               <div className="mt-4 space-y-3 text-sm text-slate-700">
@@ -126,27 +193,54 @@ export default async function DemoGuidePage({ params }: { params: { tenantSlug: 
           <Card>
             <h2 className="text-base font-semibold text-slate-950">老板视角</h2>
             <div className="mt-4 space-y-2 text-sm leading-7 text-slate-700">
-              <p>老板关心的不是系统有多少功能，而是：</p>
-              <p>客户从哪里来；</p>
-              <p>谁在跟；</p>
-              <p>跟到哪一步；</p>
-              <p>哪些客户高意向；</p>
-              <p>哪些客户要马上处理；</p>
-              <p>哪些销售有逾期任务；</p>
-              <p>哪些客户可以激活。</p>
+              {isPlatformWorkbench ? (
+                <>
+                  <p>老板每天要看的不是功能，而是：</p>
+                  <p>今天有哪些客户要跟；</p>
+                  <p>哪些客户适合推会员；</p>
+                  <p>哪些客户适合推 GEO；</p>
+                  <p>哪些客户适合推乌镇资源；</p>
+                  <p>哪些客户已经高意向；</p>
+                  <p>哪些客户该激活。</p>
+                </>
+              ) : (
+                <>
+                  <p>老板关心的不是系统有多少功能，而是：</p>
+                  <p>客户从哪里来；</p>
+                  <p>谁在跟；</p>
+                  <p>跟到哪一步；</p>
+                  <p>哪些客户高意向；</p>
+                  <p>哪些客户要马上处理；</p>
+                  <p>哪些销售有逾期任务；</p>
+                  <p>哪些客户可以激活。</p>
+                </>
+              )}
             </div>
           </Card>
 
           <Card>
-            <h2 className="text-base font-semibold text-slate-950">销售视角</h2>
+            <h2 className="text-base font-semibold text-slate-950">{isPlatformWorkbench ? "顾问视角" : "销售视角"}</h2>
             <div className="mt-4 space-y-2 text-sm leading-7 text-slate-700">
-              <p>销售每天进系统，不是看一堆客户，而是看：</p>
-              <p>今天该跟谁；</p>
-              <p>哪些客户逾期；</p>
-              <p>哪些客户高意向；</p>
-              <p>下一句话怎么说；</p>
-              <p>下一份资料发什么；</p>
-              <p>下一步动作是什么。</p>
+              {isPlatformWorkbench ? (
+                <>
+                  <p>顾问每天进系统，不是背产品，而是看：</p>
+                  <p>今天该跟谁；</p>
+                  <p>该发什么资料；</p>
+                  <p>该说什么话；</p>
+                  <p>该加什么标签；</p>
+                  <p>下一步该安排什么任务。</p>
+                </>
+              ) : (
+                <>
+                  <p>销售每天进系统，不是看一堆客户，而是看：</p>
+                  <p>今天该跟谁；</p>
+                  <p>哪些客户逾期；</p>
+                  <p>哪些客户高意向；</p>
+                  <p>下一句话怎么说；</p>
+                  <p>下一份资料发什么；</p>
+                  <p>下一步动作是什么。</p>
+                </>
+              )}
             </div>
           </Card>
         </div>
