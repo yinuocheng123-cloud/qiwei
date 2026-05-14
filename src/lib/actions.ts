@@ -1029,6 +1029,9 @@ export async function createBusinessLine(tenantSlug: string, formData: FormData)
   const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
   const payload = getBusinessLinePayload(formData);
   if (!payload) return;
+  if (payload.status === "ARCHIVED" && user.role !== "TENANT_ADMIN") {
+    redirect("/forbidden");
+  }
 
   const businessLine = await prisma.businessLine.create({
     data: {
@@ -1058,6 +1061,9 @@ export async function updateBusinessLine(tenantSlug: string, businessLineId: str
   const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
   const payload = getBusinessLinePayload(formData);
   if (!payload) return;
+  if (payload.status === "ARCHIVED" && user.role !== "TENANT_ADMIN") {
+    redirect("/forbidden");
+  }
 
   const businessLine = await prisma.businessLine.update({
     where: { id: businessLineId, tenantId: tenant.id },
@@ -1083,6 +1089,9 @@ export async function updateBusinessLine(tenantSlug: string, businessLineId: str
 
 export async function updateBusinessLineStatus(tenantSlug: string, businessLineId: string, status: BusinessLineStatus) {
   const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
+  if (status === "ARCHIVED" && user.role !== "TENANT_ADMIN") {
+    redirect("/forbidden");
+  }
   const businessLine = await prisma.businessLine.update({
     where: { id: businessLineId, tenantId: tenant.id },
     data: { status }
@@ -1105,7 +1114,7 @@ export async function updateBusinessLineStatus(tenantSlug: string, businessLineI
 }
 
 export async function upsertWeComConfig(tenantSlug: string, formData: FormData) {
-  const { tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
+  const { tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN"]);
 
   await prisma.weComConfig.upsert({
     where: { tenantId: tenant.id },

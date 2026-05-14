@@ -174,6 +174,30 @@ export function canManageTenantGrowthContent(role: UserRole) {
   return role === "TENANT_ADMIN" || role === "OPERATOR";
 }
 
+export function canAccessTenantBusinessLines(role: UserRole) {
+  return role === "TENANT_ADMIN" || role === "OPERATOR" || role === "SALES";
+}
+
+export function canManageTenantBusinessLines(role: UserRole) {
+  return role === "TENANT_ADMIN" || role === "OPERATOR";
+}
+
+export function canArchiveTenantBusinessLines(role: UserRole) {
+  return role === "TENANT_ADMIN";
+}
+
+export function canAccessTenantAuditLogs(role: UserRole) {
+  return role === "TENANT_ADMIN";
+}
+
+export function canAccessTenantWeCom(role: UserRole) {
+  return role === "TENANT_ADMIN";
+}
+
+export function canExportTenantLeads(role: UserRole) {
+  return role === "TENANT_ADMIN";
+}
+
 export async function requireLeadAccess(tenantSlug: string, leadId: string) {
   const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR", "SALES"]);
   const lead = await prisma.lead.findFirst({

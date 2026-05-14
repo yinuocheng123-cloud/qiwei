@@ -24,15 +24,7 @@ export default async function AdminPage() {
   });
 
   return (
-    <PageShell title="平台总后台" description="平台管理员视角：创建企业、停用企业、查看项目到期状态和导出入口。">
-      <div className="mb-4 flex justify-end">
-        <Link className="mr-2 rounded-md border border-slate-300 px-3 py-2 text-sm font-medium" href="/admin/audit-logs">
-          平台审计日志
-        </Link>
-        <Link className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium" href="/logout">
-          退出登录
-        </Link>
-      </div>
+    <PageShell title="平台总后台" description="平台管理员视角：创建企业、维护租户状态，并从演示说明入口进入租户样板查看。">
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
         <Card>
           <h2 className="mb-4 text-base font-semibold">新建企业</h2>
@@ -74,11 +66,8 @@ export default async function AdminPage() {
                     </td>
                     <td className="px-3 py-3">
                       <div className="flex flex-wrap gap-2">
-                        <Link className="rounded-md border border-slate-300 px-3 py-1" href={`/app/${tenant.slug}/dashboard`}>
-                          进入后台
-                        </Link>
-                        <Link className="rounded-md border border-slate-300 px-3 py-1" href={`/app/${tenant.slug}/export`}>
-                          导出
+                        <Link className="rounded-md border border-slate-300 px-3 py-1" href={`/app/${tenant.slug}/demo-guide`}>
+                          查看演示说明
                         </Link>
                       </div>
                       <form action={updateTenantStatus} className="mt-2 grid grid-cols-[1fr_1fr_auto] gap-2">

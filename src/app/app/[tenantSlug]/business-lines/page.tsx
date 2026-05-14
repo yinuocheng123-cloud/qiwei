@@ -101,13 +101,15 @@ function BusinessLineForm({
   submitText,
   materials,
   taskTemplates,
-  businessLine
+  businessLine,
+  canArchive
 }: {
   action: (formData: FormData) => Promise<void>;
   submitText: string;
   materials: MaterialItem[];
   taskTemplates: TaskTemplateItem[];
   businessLine?: BusinessLineItem;
+  canArchive: boolean;
 }) {
   const selectedCustomerTypes = businessLine ? parseBusinessLineCustomerTypes(businessLine.targetCustomerTypes) : [];
   const selectedMaterialIds = businessLine ? parseBusinessLineIdList(businessLine.recommendedMaterialIds) : [];
@@ -115,6 +117,9 @@ function BusinessLineForm({
   const recommendedTagText = businessLine
     ? stringifyBusinessLineRecommendedTags(parseBusinessLineRecommendedTags(businessLine.recommendedTagNames))
     : "";
+  const availableStatusOptions = canArchive
+    ? businessLineStatusOptions
+    : businessLineStatusOptions.filter((option) => option.value !== "ARCHIVED");
 
   return (
     <form action={action} className="space-y-4">
@@ -122,7 +127,7 @@ function BusinessLineForm({
         <Input label="名称" name="name" defaultValue={businessLine?.name} required />
         <Input label="Slug" name="slug" defaultValue={businessLine?.slug} />
         <Select label="分类" name="category" options={businessLineCategoryOptions} defaultValue={businessLine?.category ?? "OTHER"} />
-        <Select label="状态" name="status" options={businessLineStatusOptions} defaultValue={businessLine?.status ?? "ACTIVE"} />
+        <Select label="状态" name="status" options={availableStatusOptions} defaultValue={businessLine?.status ?? "ACTIVE"} />
         <Input label="优先级" name="priority" type="number" defaultValue={String(businessLine?.priority ?? 100)} />
         <Input label="默认下一步动作" name="defaultNextAction" defaultValue={businessLine?.defaultNextAction ?? ""} />
       </div>
@@ -172,7 +177,15 @@ function BusinessLineForm({
   );
 }
 
-function StatusActionButtons({ tenantSlug, businessLine }: { tenantSlug: string; businessLine: BusinessLineItem }) {
+function StatusActionButtons({
+  tenantSlug,
+  businessLine,
+  canArchive
+}: {
+  tenantSlug: string;
+  businessLine: BusinessLineItem;
+  canArchive: boolean;
+}) {
   return (
     <div className="flex flex-wrap gap-2">
       {businessLine.status !== "ACTIVE" ? (
@@ -185,7 +198,7 @@ function StatusActionButtons({ tenantSlug, businessLine }: { tenantSlug: string;
           <button className="rounded-md border border-amber-200 px-3 py-2 text-sm text-amber-700">暂停</button>
         </form>
       ) : null}
-      {businessLine.status !== "ARCHIVED" ? (
+      {canArchive && businessLine.status !== "ARCHIVED" ? (
         <form action={updateBusinessLineStatus.bind(null, tenantSlug, businessLine.id, "ARCHIVED")}>
           <button className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700">归档</button>
         </form>
@@ -271,6 +284,7 @@ function BusinessLineReadonlyCard({
 export default async function BusinessLinesPage({ params }: { params: { tenantSlug: string } }) {
   const { user, tenant } = await requireTenantAccess(params.tenantSlug, ["TENANT_ADMIN", "OPERATOR", "SALES"]);
   const canEdit = user.role === "TENANT_ADMIN" || user.role === "OPERATOR";
+  const canArchive = user.role === "TENANT_ADMIN";
 
   const [businessLines, materials, taskTemplates] = await Promise.all([
     prisma.businessLine.findMany({
@@ -298,13 +312,17 @@ export default async function BusinessLinesPage({ params }: { params: { tenantSl
     <PageShell
       tenant={tenant}
       title="业务线／产品管理"
-      description="用于管理企业当前对外推广、销售和服务的业务线、产品或项目。每条业务线可以关联客户类型、资料包、任务模板和推荐标签，方便销售跟进和运营管理。"
+      description={
+        canEdit
+          ? "用于管理企业当前对外推广、销售和服务的业务线、产品或项目。每条业务线可以关联客户类型、资料包、任务模板和推荐标签，方便销售跟进和运营管理。"
+          : "销售仅查看启用中的业务线推荐，用于跟进时参考，不提供新增、编辑、暂停或归档入口。"
+      }
     >
       <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
         {canEdit ? (
           <Card>
             <h2 className="mb-4 text-base font-semibold text-slate-950">新增业务线／产品</h2>
-            <BusinessLineForm action={createAction} submitText="新增业务线" materials={materials} taskTemplates={taskTemplates} />
+            <BusinessLineForm action={createAction} submitText="新增业务线" materials={materials} taskTemplates={taskTemplates} canArchive={canArchive} />
           </Card>
         ) : null}
 
@@ -323,9 +341,16 @@ export default async function BusinessLinesPage({ params }: { params: { tenantSl
                         {labelOf(businessLineStatusOptions, businessLine.status)} ／ 适合客户类型 {parseBusinessLineCustomerTypes(businessLine.targetCustomerTypes).length || 0} 类 ／ 推荐标签 {countBusinessLineTags(businessLine)} 个 ／ 资料包 {countBusinessLineMaterials(businessLine)} 个 ／ 任务模板 {countBusinessLineTaskTemplates(businessLine)} 个
                       </p>
                     </div>
-                    <StatusActionButtons tenantSlug={tenant.slug} businessLine={businessLine} />
+                    <StatusActionButtons tenantSlug={tenant.slug} businessLine={businessLine} canArchive={canArchive} />
                   </div>
-                  <BusinessLineForm action={updateAction} submitText="保存业务线" materials={materials} taskTemplates={taskTemplates} businessLine={businessLine} />
+                  <BusinessLineForm
+                    action={updateAction}
+                    submitText="保存业务线"
+                    materials={materials}
+                    taskTemplates={taskTemplates}
+                    businessLine={businessLine}
+                    canArchive={canArchive}
+                  />
                 </Card>
               ) : (
                 <BusinessLineReadonlyCard key={businessLine.id} businessLine={businessLine} materialsById={materialsById} taskTemplatesById={taskTemplatesById} />

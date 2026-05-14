@@ -115,7 +115,7 @@ const platformCustomerPaths = [
 ];
 
 export default async function DemoGuidePage({ params }: { params: { tenantSlug: string } }) {
-  const { tenant } = await requireDemoGuideAccess(params.tenantSlug);
+  const { user, tenant } = await requireDemoGuideAccess(params.tenantSlug);
   const sampleBase = `/app/${tenant.slug}`;
   const isPlatformWorkbench = tenant.slug === "zhengmu-platform";
   const pageTitle = isPlatformWorkbench ? "中华整木网自用说明" : "整木行业演示说明";
@@ -124,6 +124,70 @@ export default async function DemoGuidePage({ params }: { params: { tenantSlug: 
     : "这不是普通 CRM，而是一套按客户类型驱动跟进策略的企业微信业务增长中台。";
   const steps = isPlatformWorkbench ? platformGuideSteps : guideSteps;
   const paths = isPlatformWorkbench ? platformCustomerPaths : customerPaths;
+  const quickLinks =
+    user.role === "PLATFORM_ADMIN"
+      ? [
+          { href: "/admin", label: "返回平台后台" },
+          { href: "/admin/audit-logs", label: "打开平台审计日志" }
+        ]
+      : user.role === "TENANT_ADMIN"
+        ? [
+            { href: `${sampleBase}/dashboard`, label: "打开 dashboard" },
+            { href: `${sampleBase}/leads`, label: "打开客户列表" },
+            { href: `${sampleBase}/business-lines`, label: "打开业务线／产品" },
+            { href: `${sampleBase}/todos`, label: "打开销售工作台" },
+            { href: `${sampleBase}/audit-logs`, label: "打开审计日志" }
+          ]
+        : user.role === "OPERATOR"
+          ? [
+              { href: `${sampleBase}/dashboard`, label: "打开 dashboard" },
+              { href: `${sampleBase}/leads`, label: "打开客户列表" },
+              { href: `${sampleBase}/business-lines`, label: "打开业务线／产品" },
+              { href: `${sampleBase}/materials`, label: "打开资料包" },
+              { href: `${sampleBase}/strategies`, label: "打开策略库" },
+              { href: `${sampleBase}/task-templates`, label: "打开任务模板" }
+            ]
+          : [
+              { href: `${sampleBase}/dashboard`, label: "打开 dashboard" },
+              { href: `${sampleBase}/leads`, label: "打开我的客户" },
+              { href: `${sampleBase}/todos`, label: "打开销售工作台" }
+            ];
+  const roleGuide =
+    user.role === "PLATFORM_ADMIN"
+      ? {
+          title: "平台维护提示",
+          lines: [
+            "当前访问主要用于演示查看，不参与租户日常业务跟进。",
+            "平台管理员主要负责租户、配置、安全和审计。",
+            "租户业务线、客户资料和顾问任务仍由企业角色维护。"
+          ]
+        }
+      : user.role === "TENANT_ADMIN"
+        ? {
+            title: "老板／企业管理员视角",
+            lines: [
+              "重点看客户从哪里来、哪些业务线在跑、哪些客户高意向。",
+              "重点盯销售是否有逾期任务、哪些客户该激活、哪些业务需要调整。",
+              "如果要改业务方向，优先去业务线／产品、资料包、策略库和任务模板页面统一调整。"
+            ]
+          }
+        : user.role === "OPERATOR"
+          ? {
+              title: "运营视角",
+              lines: [
+                "重点维护业务线、资料包、策略库和任务模板，让顾问拿到一致的跟进资产。",
+                "重点配合内容、私域和活动运营，检查客户分类、推荐资料和标签建议是否合理。",
+                "运营不处理平台审计和敏感企微配置，避免越权进入高风险入口。"
+              ]
+            }
+          : {
+              title: "销售视角",
+              lines: [
+                "每天先看销售工作台和自己负责的客户，明确今天该跟谁。",
+                "进入客户详情后，用智能跟进助手复制建议回复，再人工修改后发送。",
+                "看到智能标签建议后手动确认，再保存跟进记录和下一步任务。"
+              ]
+            };
 
   return (
     <PageShell
@@ -153,6 +217,15 @@ export default async function DemoGuidePage({ params }: { params: { tenantSlug: 
         </Card>
 
         <Card>
+          <h2 className="text-base font-semibold text-slate-950">{roleGuide.title}</h2>
+          <div className="mt-4 space-y-2 text-sm leading-7 text-slate-700">
+            {roleGuide.lines.map((line) => (
+              <p key={line}>{line}</p>
+            ))}
+          </div>
+        </Card>
+
+        <Card>
           <h2 className="text-base font-semibold text-slate-950">推荐演示顺序</h2>
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
             {steps.map((step) => (
@@ -162,10 +235,9 @@ export default async function DemoGuidePage({ params }: { params: { tenantSlug: 
             ))}
           </div>
           <div className="mt-4 flex flex-wrap gap-2 text-sm">
-            <QuickLink href={`${sampleBase}/dashboard`} label="打开 dashboard" />
-            <QuickLink href={`${sampleBase}/leads`} label="打开客户列表" />
-            <QuickLink href={`${sampleBase}/todos`} label="打开销售工作台" />
-            <QuickLink href={`${sampleBase}/audit-logs`} label="打开审计日志" />
+            {quickLinks.map((item) => (
+              <QuickLink key={item.href} href={item.href} label={item.label} />
+            ))}
           </div>
         </Card>
 

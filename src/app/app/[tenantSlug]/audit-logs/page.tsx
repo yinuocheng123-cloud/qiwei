@@ -1,6 +1,6 @@
 /*
  * 文件说明：该文件实现租户内审计日志查询页面。
- * 功能说明：企业管理员与运营可查看本租户关键动作，销售仅能查看自己的操作日志。
+ * 功能说明：仅允许企业管理员查看本租户关键动作，避免敏感审计信息外泄。
  *
  * 结构概览：
  *   第一部分：导入依赖与筛选选项
@@ -29,6 +29,9 @@ const actionOptions = [
   { value: "strategy_updated", label: "更新策略库" },
   { value: "material_created", label: "新增资料包" },
   { value: "material_updated", label: "更新资料包" },
+  { value: "business_line_created", label: "新增业务线" },
+  { value: "business_line_updated", label: "编辑业务线" },
+  { value: "business_line_status_updated", label: "更新业务线状态" },
   { value: "reply_suggestion_generated", label: "生成建议回复" },
   { value: "reply_tag_suggested", label: "生成标签建议" },
   { value: "reply_tag_confirmed", label: "确认添加标签" },
@@ -64,6 +67,7 @@ const entityTypeOptions = [
   { value: "ReminderQueue", label: "提醒队列" },
   { value: "CustomerTypeStrategy", label: "客户策略" },
   { value: "Material", label: "资料包" },
+  { value: "BusinessLine", label: "业务线" },
   { value: "Tenant", label: "企业租户" }
 ];
 
@@ -80,14 +84,11 @@ export default async function AuditLogsPage({
   params: { tenantSlug: string };
   searchParams: Record<string, string | string[] | undefined>;
 }) {
-  const { user, tenant } = await requireTenantAccess(params.tenantSlug, ["TENANT_ADMIN", "OPERATOR", "SALES"]);
-  const canViewAll = user.role === "TENANT_ADMIN" || user.role === "OPERATOR";
-  const users = canViewAll
-    ? await prisma.user.findMany({
-        where: { tenantId: tenant.id },
-        orderBy: [{ role: "asc" }, { createdAt: "asc" }]
-      })
-    : [];
+  const { tenant } = await requireTenantAccess(params.tenantSlug, ["TENANT_ADMIN"]);
+  const users = await prisma.user.findMany({
+    where: { tenantId: tenant.id },
+    orderBy: [{ role: "asc" }, { createdAt: "asc" }]
+  });
 
   const action = typeof searchParams.action === "string" ? searchParams.action : "";
   const entityType = typeof searchParams.entityType === "string" ? searchParams.entityType : "";
@@ -96,12 +97,11 @@ export default async function AuditLogsPage({
   const end = typeof searchParams.end === "string" ? searchParams.end : "";
 
   const where: Prisma.AuditLogWhereInput = {
-    tenantId: tenant.id,
-    ...(canViewAll ? {} : { userId: user.id })
+    tenantId: tenant.id
   };
   if (action) where.action = action;
   if (entityType) where.entityType = entityType;
-  if (canViewAll && userId) where.userId = userId;
+  if (userId) where.userId = userId;
   if (start || end) {
     where.createdAt = {};
     if (start) where.createdAt.gte = new Date(start);
@@ -119,20 +119,18 @@ export default async function AuditLogsPage({
     <PageShell
       tenant={tenant}
       title="审计日志"
-      description={canViewAll ? "查看本企业关键业务动作和权限动作。" : "查看你自己的操作记录。"}
+      description="查看本企业关键业务动作和权限动作。"
     >
       <Card>
         <form className="grid gap-4 md:grid-cols-5">
           <Select label="动作" name="action" options={actionOptions} defaultValue={action} />
           <Select label="对象类型" name="entityType" options={entityTypeOptions} defaultValue={entityType} />
-          {canViewAll ? (
-            <Select
-              label="用户"
-              name="userId"
-              options={[{ value: "", label: "全部用户" }, ...users.map((item) => ({ value: item.id, label: `${item.name} / ${item.role}` }))]}
-              defaultValue={userId}
-            />
-          ) : null}
+          <Select
+            label="用户"
+            name="userId"
+            options={[{ value: "", label: "全部用户" }, ...users.map((item) => ({ value: item.id, label: `${item.name} / ${item.role}` }))]}
+            defaultValue={userId}
+          />
           <Input label="开始时间" name="start" type="datetime-local" defaultValue={start} />
           <Input label="结束时间" name="end" type="datetime-local" defaultValue={end} />
           <div className="flex items-end">
