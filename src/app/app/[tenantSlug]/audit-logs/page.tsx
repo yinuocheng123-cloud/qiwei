@@ -52,7 +52,10 @@ const actionOptions = [
   { value: "lead_bulk_assigned", label: "批量分配客户" },
   { value: "lead_bulk_stage_updated", label: "批量更新阶段" },
   { value: "lead_bulk_tag_added", label: "批量添加标签" },
-  { value: "lead_bulk_next_follow_set", label: "批量设置下次跟进" }
+  { value: "lead_bulk_next_follow_set", label: "批量设置下次跟进" },
+  { value: "import_batch_created", label: "创建导入预览批次" },
+  { value: "import_batch_completed", label: "完成客户导入" },
+  { value: "import_batch_failed", label: "客户导入失败" }
 ];
 
 const entityTypeOptions = [
@@ -68,6 +71,8 @@ const entityTypeOptions = [
   { value: "CustomerTypeStrategy", label: "客户策略" },
   { value: "Material", label: "资料包" },
   { value: "BusinessLine", label: "业务线" },
+  { value: "ImportBatch", label: "导入批次" },
+  { value: "ImportRow", label: "导入明细" },
   { value: "Tenant", label: "企业租户" }
 ];
 

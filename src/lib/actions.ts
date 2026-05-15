@@ -30,8 +30,19 @@ import {
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { safeWriteAuditLog } from "@/lib/audit";
-import { requireLeadAccess, requirePlatformAdmin, requireTenantAccess } from "@/lib/auth";
+import { canImportTenantLeads, requireLeadAccess, requirePlatformAdmin, requireTenantAccess } from "@/lib/auth";
 import { buildBusinessLineSlug, parseBusinessLineRecommendedTagText } from "@/lib/business-lines";
+import {
+  buildAutoImportFieldMapping,
+  buildImportBatchPreview,
+  buildImportDefaultsFromForm,
+  buildImportMappingFromForm,
+  completeImportBatch,
+  parseImportDefaultSettings,
+  parseCsvText,
+  readUploadedImportText,
+  rebuildImportBatchPreview
+} from "@/lib/imports";
 import { prisma } from "@/lib/prisma";
 import {
   detectQuestionType,
@@ -82,6 +93,10 @@ function parseNumber(value: string | undefined, fallback: number) {
 
 function truncateAuditQuestion(question: string, maxLength = 100) {
   return question.length <= maxLength ? question : `${question.slice(0, Math.max(0, maxLength - 3))}...`;
+}
+
+function truncateFileName(fileName: string, maxLength = 120) {
+  return fileName.length <= maxLength ? fileName : `${fileName.slice(0, Math.max(0, maxLength - 3))}...`;
 }
 
 export async function createTenant(formData: FormData) {
@@ -656,6 +671,138 @@ export async function bulkUpdateLeads(tenantSlug: string, formData: FormData) {
   revalidatePath(`/app/${tenantSlug}/leads`);
   revalidatePath(`/app/${tenantSlug}/todos`);
   revalidatePath(`/app/${tenantSlug}/dashboard`);
+}
+
+export async function previewLeadImportBatch(tenantSlug: string, formData: FormData) {
+  const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
+  if (!canImportTenantLeads(user.role)) {
+    redirect("/forbidden");
+  }
+
+  const uploaded = await readUploadedImportText(formData);
+  const { headers, rawRows } = parseCsvText(uploaded.content);
+  if (!headers.length) {
+    throw new Error("CSV 表头不能为空。");
+  }
+
+  const mapping = buildImportMappingFromForm(headers, formData, buildAutoImportFieldMapping(headers));
+  const defaults = buildImportDefaultsFromForm(formData);
+  const result = await buildImportBatchPreview({
+    prisma,
+    tenantId: tenant.id,
+    createdById: user.id,
+    fileName: truncateFileName(uploaded.fileName),
+    fileType: uploaded.fileType || "text/csv",
+    rawRows,
+    headers,
+    mapping,
+    defaults
+  });
+
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "import_batch_created",
+    entityType: "ImportBatch",
+    entityId: result.batch.id,
+    metadata: {
+      batchId: result.batch.id,
+      fileName: result.batch.fileName,
+      totalRows: result.summary.totalRows,
+      successRows: result.summary.successRows,
+      failedRows: result.summary.failedRows,
+      duplicateRows: result.summary.duplicateRows,
+      autoCreateFirstTask: defaults.autoCreateFirstTask,
+      defaultOwnerId: defaults.defaultOwnerId,
+      defaultTags: defaults.defaultTags,
+      defaultBusinessLineIds: defaults.defaultBusinessLineIds
+    }
+  });
+
+  revalidatePath(`/app/${tenantSlug}/imports`);
+}
+
+export async function refreshLeadImportBatchPreview(tenantSlug: string, formData: FormData) {
+  const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
+  if (!canImportTenantLeads(user.role)) {
+    redirect("/forbidden");
+  }
+
+  const batchId = text(formData, "batchId");
+  if (!batchId) {
+    throw new Error("缺少导入批次。");
+  }
+
+  await rebuildImportBatchPreview({
+    prisma,
+    tenantId: tenant.id,
+    batchId,
+    formData
+  });
+
+  revalidatePath(`/app/${tenantSlug}/imports`);
+}
+
+export async function completeLeadImportBatch(tenantSlug: string, formData: FormData) {
+  const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
+  if (!canImportTenantLeads(user.role)) {
+    redirect("/forbidden");
+  }
+
+  const batchId = text(formData, "batchId");
+  if (!batchId) {
+    throw new Error("缺少导入批次。");
+  }
+
+  try {
+    const batch = await completeImportBatch({
+      prisma,
+      tenantId: tenant.id,
+      batchId,
+      createdById: user.id
+    });
+    const defaults = parseImportDefaultSettings(batch);
+
+    await safeWriteAuditLog({
+      tenantId: tenant.id,
+      userId: user.id,
+      action: "import_batch_completed",
+      entityType: "ImportBatch",
+      entityId: batch.id,
+      metadata: {
+        batchId: batch.id,
+        fileName: batch.fileName,
+        totalRows: batch.totalRows,
+        successRows: batch.successRows,
+        failedRows: batch.failedRows,
+        duplicateRows: batch.duplicateRows,
+        autoCreateFirstTask: batch.autoCreateFirstTask,
+        defaultOwnerId: defaults.defaultOwnerId,
+        defaultTags: defaults.defaultTags,
+        defaultBusinessLineIds: defaults.defaultBusinessLineIds
+      }
+    });
+  } catch (error) {
+    const batchIdForAudit = batchId;
+    await safeWriteAuditLog({
+      tenantId: tenant.id,
+      userId: user.id,
+      action: "import_batch_failed",
+      entityType: "ImportBatch",
+      entityId: batchIdForAudit,
+      metadata: {
+        batchId: batchIdForAudit,
+        message: error instanceof Error ? error.message : "unknown_error"
+      }
+    });
+    throw error;
+  }
+
+  revalidatePath(`/app/${tenantSlug}/imports`);
+  revalidatePath(`/app/${tenantSlug}/leads`);
+  revalidatePath(`/app/${tenantSlug}/todos`);
+  revalidatePath(`/app/${tenantSlug}/dashboard`);
+  revalidatePath(`/app/${tenantSlug}/audit-logs`);
 }
 
 export async function generateReplySuggestionsForLead(tenantSlug: string, leadId: string, formData: FormData) {

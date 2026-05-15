@@ -48,6 +48,7 @@ enum LeadSource {
   friend_circle
   offline_event
   referral
+  imported
   other
 }
 
@@ -113,6 +114,8 @@ enum TagGroup {
   NEED
   INTENTION
   STAGE
+  BUSINESS_LINE
+  IMPORTED
   CUSTOM
 }
 
@@ -200,6 +203,22 @@ enum BusinessLineCategory {
   OTHER
 }
 
+enum ImportBatchStatus {
+  PENDING
+  PREVIEWED
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum ImportRowStatus {
+  PENDING
+  IMPORTED
+  FAILED
+  DUPLICATE
+  SKIPPED
+}
+
 model Tenant {
   id          String                 @id @default(cuid())
   name        String
@@ -225,6 +244,8 @@ model Tenant {
   reminderQueues ReminderQueue[]
   replySuggestions ReplySuggestion[]
   businessLines BusinessLine[]
+  importBatches  ImportBatch[]
+  importRows     ImportRow[]
 }
 
 model User {
@@ -247,6 +268,7 @@ model User {
   createdTasks FollowTask[] @relation("TaskCreator")
   reminderQueues ReminderQueue[]
   replySuggestions ReplySuggestion[]
+  importBatches  ImportBatch[]
 
   @@index([tenantId, role])
 }
@@ -293,6 +315,7 @@ model Lead {
   followTasks    FollowTask[]
   reminderQueues ReminderQueue[]
   replySuggestions ReplySuggestion[]
+  importRows        ImportRow[]
 
   @@index([tenantId, createdAt])
   @@index([tenantId, source])
@@ -409,6 +432,57 @@ model BusinessLine {
 
   @@unique([tenantId, slug])
   @@index([tenantId, status, priority])
+}
+
+model ImportBatch {
+  id                     String            @id @default(cuid())
+  tenantId               String
+  tenant                 Tenant            @relation(fields: [tenantId], references: [id])
+  createdById            String
+  createdBy              User              @relation(fields: [createdById], references: [id])
+  fileName               String
+  fileType               String
+  status                 ImportBatchStatus @default(PENDING)
+  totalRows              Int               @default(0)
+  successRows            Int               @default(0)
+  failedRows             Int               @default(0)
+  duplicateRows          Int               @default(0)
+  skippedRows            Int               @default(0)
+  generatedTaskRows      Int               @default(0)
+  mapping                Json?
+  defaultOwnerId         String?
+  defaultTags            Json?
+  defaultBusinessLineIds Json?
+  autoCreateFirstTask    Boolean           @default(false)
+  skipDuplicates         Boolean           @default(true)
+  errorSummary           Json?
+  completedAt            DateTime?
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+  rows                   ImportRow[]
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, status, createdAt])
+}
+
+model ImportRow {
+  id              String          @id @default(cuid())
+  tenantId        String
+  tenant          Tenant          @relation(fields: [tenantId], references: [id])
+  batchId         String
+  batch           ImportBatch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  rowIndex        Int
+  rawData         Json
+  normalizedData  Json?
+  status          ImportRowStatus @default(PENDING)
+  leadId          String?
+  lead            Lead?           @relation(fields: [leadId], references: [id])
+  errorMessage    String?
+  duplicateLeadId String?
+  createdAt       DateTime        @default(now())
+
+  @@index([tenantId, batchId, rowIndex])
+  @@index([tenantId, status, createdAt])
 }
 
 model IntakeForm {

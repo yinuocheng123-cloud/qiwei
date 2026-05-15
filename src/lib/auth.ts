@@ -198,6 +198,10 @@ export function canExportTenantLeads(role: UserRole) {
   return role === "TENANT_ADMIN";
 }
 
+export function canImportTenantLeads(role: UserRole) {
+  return role === "TENANT_ADMIN" || role === "OPERATOR";
+}
+
 export async function requireLeadAccess(tenantSlug: string, leadId: string) {
   const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR", "SALES"]);
   const lead = await prisma.lead.findFirst({

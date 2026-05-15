@@ -21,6 +21,7 @@ export const sourceOptions: Option[] = [
   { value: "friend_circle", label: "朋友圈" },
   { value: "offline_event", label: "线下活动" },
   { value: "referral", label: "转介绍" },
+  { value: "imported", label: "导入" },
   { value: "other", label: "其他" }
 ];
 

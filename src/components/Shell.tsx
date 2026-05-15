@@ -40,6 +40,7 @@ function buildTenantNavItems(tenant: Tenant, role: UserRole): NavItem[] {
     return [
       { label: "Dashboard", href: `${base}/dashboard` },
       { label: "客户列表", href: `${base}/leads` },
+      { label: "客户导入", href: `${base}/imports` },
       { label: "业务线／产品", href: `${base}/business-lines` },
       { label: "销售工作台", href: `${base}/todos` },
       { label: "资料包", href: `${base}/materials` },
@@ -57,6 +58,7 @@ function buildTenantNavItems(tenant: Tenant, role: UserRole): NavItem[] {
     return [
       { label: "Dashboard", href: `${base}/dashboard` },
       { label: "客户列表", href: `${base}/leads` },
+      { label: "客户导入", href: `${base}/imports` },
       { label: "业务线／产品", href: `${base}/business-lines` },
       { label: "销售工作台", href: `${base}/todos` },
       { label: "资料包", href: `${base}/materials` },
