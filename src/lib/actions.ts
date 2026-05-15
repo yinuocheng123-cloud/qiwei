@@ -25,13 +25,27 @@ import {
   NeedType,
   TenantStatus,
   UserRole,
-  WeComConfigStatus
+  WeComConfigStatus,
+  type Prisma
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { safeWriteAuditLog } from "@/lib/audit";
 import { canImportTenantLeads, requireLeadAccess, requirePlatformAdmin, requireTenantAccess } from "@/lib/auth";
 import { buildBusinessLineSlug, parseBusinessLineRecommendedTagText } from "@/lib/business-lines";
+import {
+  CNAS_BUSINESS_LINE_NAME,
+  CNAS_BUSINESS_LINE_SLUG,
+  CNAS_SOURCE_PAGE,
+  CNAS_TARGET_TENANT_SLUG,
+  addMinutes,
+  buildCnasExtraData,
+  buildCnasLeadMessage,
+  getCnasDiagnosisResult,
+  getCnasResultHref,
+  getCnasStructuredTags,
+  type CnasFormValues
+} from "@/lib/cnas";
 import {
   buildAutoImportFieldMapping,
   buildImportBatchPreview,
@@ -89,6 +103,38 @@ function splitLines(value?: string) {
 function parseNumber(value: string | undefined, fallback: number) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function stageRank(stage: LeadStage) {
+  const ranks: Record<LeadStage, number> = {
+    NEW: 0,
+    MATERIAL_SENT: 1,
+    CONTACTED: 2,
+    DIAGNOSED: 3,
+    QUOTED: 4,
+    PENDING_DEAL: 5,
+    DEAL_DONE: 6,
+    LOST: 6,
+    TO_REACTIVATE: 2
+  };
+  return ranks[stage];
+}
+
+function intentionRank(level: IntentionLevel) {
+  const ranks: Record<IntentionLevel, number> = {
+    LOW: 0,
+    MEDIUM: 1,
+    HIGH: 2,
+    STRONG: 3
+  };
+  return ranks[level];
+}
+
+function mergeJsonRecord(existing: unknown, next: Record<string, unknown>): Prisma.InputJsonValue {
+  if (!existing || typeof existing !== "object" || Array.isArray(existing)) {
+    return next as Prisma.InputJsonValue;
+  }
+  return { ...(existing as Record<string, unknown>), ...next } as Prisma.InputJsonValue;
 }
 
 function truncateAuditQuestion(question: string, maxLength = 100) {
@@ -230,6 +276,195 @@ export async function submitIntakeForm(tenantSlug: string, formType: FormType, f
   await createHighIntentTask(lead);
 
   redirect(`/t/${tenantSlug}/thanks?lead=${lead.id}`);
+}
+
+export async function submitCnasPathCheckForm(formData: FormData) {
+  const tenant = await prisma.tenant.findUnique({ where: { slug: CNAS_TARGET_TENANT_SLUG } });
+  if (!tenant || tenant.status !== "active") {
+    throw new Error("当前 CNAS 项目租户不可用。");
+  }
+
+  const contactName = text(formData, "contactName");
+  const company = text(formData, "company");
+  const phone = text(formData, "phone");
+  const labType = text(formData, "labType");
+  const currentStage = text(formData, "currentStage");
+  const scopeClarity = text(formData, "scopeClarity");
+  const readiness = text(formData, "readiness");
+  const primaryConcern = text(formData, "primaryConcern");
+  const startPlan = text(formData, "startPlan");
+  const wecomAdded = text(formData, "wecomAdded");
+
+  if (!contactName || !company || !phone || !labType || !currentStage || !scopeClarity || !readiness || !primaryConcern || !startPlan || !wecomAdded) {
+    throw new Error("请完整填写 CNAS 路径判断问卷。");
+  }
+
+  const values: CnasFormValues = {
+    company,
+    contactName,
+    phone,
+    labType,
+    currentStage,
+    scopeClarity,
+    readiness,
+    primaryConcern,
+    startPlan,
+    wecomAdded,
+    note: text(formData, "note"),
+    sourcePage: text(formData, "sourcePage") ?? CNAS_SOURCE_PAGE,
+    utmSource: text(formData, "utm_source"),
+    utmMedium: text(formData, "utm_medium"),
+    utmCampaign: text(formData, "utm_campaign"),
+    utmContent: text(formData, "utm_content"),
+    utmTerm: text(formData, "utm_term"),
+    submittedAt: new Date().toISOString()
+  };
+
+  const result = getCnasDiagnosisResult(values);
+  const owner = await getDefaultTenantUser(tenant.id);
+  const businessLine = await prisma.businessLine.findFirst({
+    where: {
+      tenantId: tenant.id,
+      slug: CNAS_BUSINESS_LINE_SLUG,
+      status: "ACTIVE"
+    }
+  });
+
+  const existingLead = await prisma.lead.findFirst({
+    where: {
+      tenantId: tenant.id,
+      OR: [{ phone }, { name: contactName, company }]
+    },
+    orderBy: { updatedAt: "desc" }
+  });
+
+  const dueAt = owner?.id ? addMinutes(new Date(), result.dueInMinutes) : null;
+  const nextExtraData = buildCnasExtraData(values, result);
+  const leadPayload = {
+    tenantId: tenant.id,
+    name: contactName,
+    phone,
+    company,
+    source: result.leadSource,
+    customerType: CustomerType.OTHER,
+    needType: NeedType.BOOK_CONSULTATION,
+    intentionLevel:
+      existingLead && intentionRank(existingLead.intentionLevel) > intentionRank(result.intentionLevel)
+        ? existingLead.intentionLevel
+        : result.intentionLevel,
+    stage: existingLead && stageRank(existingLead.stage) > stageRank(LeadStage.DIAGNOSED) ? existingLead.stage : LeadStage.DIAGNOSED,
+    message: buildCnasLeadMessage(values, result),
+    ownerId: existingLead?.ownerId ?? owner?.id ?? null,
+    nextFollowAt: dueAt,
+    extraData: mergeJsonRecord(existingLead?.extraData, nextExtraData)
+  };
+
+  const lead = existingLead
+    ? await prisma.lead.update({
+        where: { id: existingLead.id },
+        data: leadPayload
+      })
+    : await prisma.lead.create({
+        data: leadPayload
+      });
+
+  const intakeForm = await prisma.intakeForm.create({
+    data: {
+      tenantId: tenant.id,
+      formType: FormType.cnas_path_check,
+      source: result.leadSource,
+      name: contactName,
+      phone,
+      company,
+      customerType: CustomerType.OTHER,
+      needType: NeedType.BOOK_CONSULTATION,
+      message: buildCnasLeadMessage(values, result),
+      extraData: nextExtraData,
+      createdLeadId: lead.id
+    }
+  });
+
+  const existingTags = await prisma.leadTag.findMany({
+    where: {
+      tenantId: tenant.id,
+      leadId: lead.id
+    }
+  });
+  const existingTagKeys = new Set(existingTags.map((tag) => `${tag.tagGroup}::${tag.tagName}`));
+  const tagsToCreate = getCnasStructuredTags(result).filter((tag) => !existingTagKeys.has(`${tag.tagGroup}::${tag.tagName}`));
+
+  if (tagsToCreate.length) {
+    await prisma.leadTag.createMany({
+      data: tagsToCreate.map((tag) => ({
+        tenantId: tenant.id,
+        leadId: lead.id,
+        tagName: tag.tagName,
+        tagGroup: tag.tagGroup
+      }))
+    });
+  }
+
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    action: "cnas_form_submitted",
+    entityType: "Lead",
+    entityId: lead.id,
+    metadata: {
+      leadId: lead.id,
+      businessLine: businessLine?.name ?? CNAS_BUSINESS_LINE_NAME,
+      diagnosisType: result.diagnosisType,
+      intentionLevel: result.intentionLevel,
+      labType: values.labType,
+      currentStage: values.currentStage,
+      sourcePage: values.sourcePage,
+      utm_source: values.utmSource ?? null,
+      utm_medium: values.utmMedium ?? null,
+      utm_campaign: values.utmCampaign ?? null,
+      ownerId: lead.ownerId ?? null
+    }
+  });
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    action: "cnas_diagnosis_created",
+    entityType: "IntakeForm",
+    entityId: intakeForm.id,
+    metadata: {
+      leadId: lead.id,
+      businessLine: businessLine?.name ?? CNAS_BUSINESS_LINE_NAME,
+      diagnosisType: result.diagnosisType,
+      intentionLevel: result.intentionLevel,
+      labType: values.labType,
+      currentStage: values.currentStage,
+      sourcePage: values.sourcePage
+    }
+  });
+
+  if (lead.ownerId && dueAt) {
+    await createTaskWithAudit({
+      tenantId: tenant.id,
+      leadId: lead.id,
+      ownerId: lead.ownerId,
+      title: result.taskTitle,
+      description: result.taskDescription,
+      type:
+        result.diagnosisType === "A"
+          ? FollowTaskType.PHONE_CALL
+          : result.diagnosisType === "B"
+            ? FollowTaskType.SEND_MATERIAL
+            : FollowTaskType.WECHAT_FOLLOW,
+      priority: result.taskPriority,
+      dueAt,
+      auditAction: "cnas_follow_task_created",
+      auditMetadata: {
+        businessLine: businessLine?.name ?? CNAS_BUSINESS_LINE_NAME,
+        diagnosisType: result.diagnosisType,
+        intentionLevel: result.intentionLevel,
+        sourcePage: values.sourcePage
+      }
+    });
+  }
+
+  redirect(getCnasResultHref(result));
 }
 
 export async function addFollowUp(tenantSlug: string, leadId: string, formData: FormData) {

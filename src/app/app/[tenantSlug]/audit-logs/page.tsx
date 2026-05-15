@@ -22,6 +22,9 @@ const actionOptions = [
   { value: "login_failed", label: "登录失败" },
   { value: "logout", label: "退出登录" },
   { value: "public_form_lead_created", label: "公开表单创建线索" },
+  { value: "cnas_form_submitted", label: "提交 CNAS 问卷" },
+  { value: "cnas_diagnosis_created", label: "生成 CNAS 诊断" },
+  { value: "cnas_follow_task_created", label: "生成 CNAS 跟进任务" },
   { value: "followup_created", label: "新增跟进" },
   { value: "lead_stage_updated", label: "更新客户阶段" },
   { value: "lead_owner_assigned", label: "分配负责人" },
@@ -73,6 +76,7 @@ const entityTypeOptions = [
   { value: "BusinessLine", label: "业务线" },
   { value: "ImportBatch", label: "导入批次" },
   { value: "ImportRow", label: "导入明细" },
+  { value: "IntakeForm", label: "公开表单" },
   { value: "Tenant", label: "企业租户" }
 ];
 

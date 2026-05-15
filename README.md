@@ -111,6 +111,7 @@ npm run dev
 - 客户导出：`http://localhost:3000/app/zhengmu-demo/export`
 - 诊断表单：`http://localhost:3000/t/zhengmu-demo/diagnosis?source=douyin`
 - 资料领取表单：`http://localhost:3000/t/zhengmu-demo/material?source=xiaohongshu`
+- CNAS 路径判断问卷：`http://localhost:3000/forms/cnas-path-check`
 
 ## 登录账号
 
@@ -176,6 +177,16 @@ V1.6 新增 `zhengmu-platform` 租户，用于“中华整木网自己先把系�
 6. 如需追动作，可进入 `/app/zhengmu-platform/audit-logs` 查看建议生成和标签确认记录。
 
 V1.5／V1.5.1 的“智能跟进助手”和“智能标签建议”在 `zhengmu-platform` 中同样可直接使用，但仍然只做销售辅助，不自动回复客户，也不自动打标签。
+
+## CNAS认可指南项目接入
+
+CNAS 认可指南不是独立新系统，而是接入现有《企业微信业务增长中台》的一个业务项目。
+- 业务承接继续复用 `BusinessLine`、`Lead`、`LeadTag`、公开表单、任务和资料包。
+- 当前接入租户为 `zhengmu-platform`，业务线为 `CNAS认可指南`。
+- 公开入口为 `/forms/cnas-path-check`，用于收集实验室类型、当前阶段、主要担心问题、启动时间和 UTM 来源参数。
+- 表单提交后会生成或更新线索，写入 CNAS 项目标签、实验室类型标签、阶段标签、风险标签和意向标签。
+- 系统会按 A / B / C 三类规则生成初步诊断，并为已分配负责人创建对应的顾问跟进任务。
+- 企业微信承接当前只提供欢迎语模板和内部表单路径占位，不接企业微信 API，不自动发送消息，不自动回复客户。
 
 ## 权限说明
 

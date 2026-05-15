@@ -124,6 +124,7 @@ enum FormType {
   diagnosis
   booking
   event_signup
+  cnas_path_check
 }
 
 enum MaterialType {
@@ -302,6 +303,7 @@ model Lead {
   intentionLevel IntentionLevel  @default(MEDIUM)
   stage          LeadStage       @default(NEW)
   message        String?
+  extraData      Json?
   ownerId        String?
   owner          User?           @relation("LeadOwner", fields: [ownerId], references: [id])
   nextFollowAt   DateTime?
@@ -500,6 +502,7 @@ model IntakeForm {
   customerType  CustomerType  @default(OTHER)
   needType      NeedType      @default(OTHER)
   message       String?
+  extraData     Json?
   createdLeadId String?
   createdLead   Lead?         @relation(fields: [createdLeadId], references: [id])
   createdAt     DateTime      @default(now())

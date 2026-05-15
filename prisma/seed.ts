@@ -461,6 +461,48 @@ const platformBusinessLineSeeds: BusinessLineSeed[] = [
     recommendedTaskTemplateNames: ["乌镇资源跟进", "沉默客户激活"],
     defaultNextAction: "安排合作沟通并明确双方资源边界",
     notes: "适合平台合作伙伴与资源共创场景。"
+  },
+  {
+    name: "CNAS认可指南",
+    slug: "cnas-guide",
+    description: "用于承接 CNAS 认可相关咨询线索，通过路径判断问卷识别实验室类型、当前阶段、风险点和启动意向，帮助顾问进行初步分层和跟进。",
+    category: "SERVICE",
+    priority: 90,
+    targetCustomerTypes: ["OTHER"],
+    recommendedTags: [
+      { tagName: "CNAS认可指南", tagGroup: "业务标签" },
+      { tagName: "检测实验室", tagGroup: "客户类型标签" },
+      { tagName: "校准实验室", tagGroup: "客户类型标签" },
+      { tagName: "企业内检实验室", tagGroup: "客户类型标签" },
+      { tagName: "第三方实验室", tagGroup: "客户类型标签" },
+      { tagName: "阶段了解", tagGroup: "阶段标签" },
+      { tagName: "阶段建设", tagGroup: "阶段标签" },
+      { tagName: "阶段体系文件", tagGroup: "阶段标签" },
+      { tagName: "阶段准备申请", tagGroup: "阶段标签" },
+      { tagName: "阶段评审整改", tagGroup: "阶段标签" },
+      { tagName: "风险周期", tagGroup: "风险标签" },
+      { tagName: "风险费用", tagGroup: "风险标签" },
+      { tagName: "风险材料", tagGroup: "风险标签" },
+      { tagName: "风险人员设备", tagGroup: "风险标签" },
+      { tagName: "风险评审", tagGroup: "风险标签" },
+      { tagName: "风险返工", tagGroup: "风险标签" },
+      { tagName: "高意向", tagGroup: "业务标签" },
+      { tagName: "中意向", tagGroup: "业务标签" },
+      { tagName: "低意向", tagGroup: "业务标签" }
+    ],
+    recommendedMaterialTitles: [
+      "CNAS认可基础认知手册",
+      "CNAS认可和CNAS认证有什么区别",
+      "CNAS认可启动前自查清单",
+      "实验室建设准备重点表",
+      "CNAS体系文件与真实运行检查表",
+      "CNAS评审前风险检查清单",
+      "CNAS整改闭环问题清单",
+      "CNAS企业微信欢迎语模板"
+    ],
+    recommendedTaskTemplateNames: ["CNAS高意向路径梳理", "CNAS基础条件核对", "CNAS内容培育跟进"],
+    defaultNextAction: "根据问卷结果判断是否适合进入 30 分钟认可路径梳理。",
+    notes: "用于在整木网自用租户中承接 CNAS 专业服务线索，不单独新开系统。"
   }
 ];
 
@@ -1116,7 +1158,15 @@ const platformMaterialTemplates: MaterialTemplate[] = [
   { customerType: "PLATFORM_PARTNER_CLIENT", title: "合作伙伴说明", description: "说明合作伙伴类型、适合边界和基本原则。", url: "https://example.com/platform-partner-overview" },
   { customerType: "PLATFORM_PARTNER_CLIENT", title: "资源共创方案", description: "说明资源互换、内容共创和客户协同思路。", url: "https://example.com/platform-partner-cocreate" },
   { customerType: "PLATFORM_PARTNER_CLIENT", title: "活动共建说明", description: "说明联合活动、共同露出和执行分工。", url: "https://example.com/platform-partner-event" },
-  { customerType: "PLATFORM_PARTNER_CLIENT", title: "合作边界说明", description: "明确合作过程中的资源、分工和边界要求。", url: "https://example.com/platform-partner-boundary" }
+  { customerType: "PLATFORM_PARTNER_CLIENT", title: "合作边界说明", description: "明确合作过程中的资源、分工和边界要求。", url: "https://example.com/platform-partner-boundary" },
+  { customerType: "OTHER", title: "CNAS认可基础认知手册", description: "帮助客户先建立 CNAS 认可的基础认知，理解适用场景、推进节奏和常见误区。", url: "https://example.com/cnas-basic-guide" },
+  { customerType: "OTHER", title: "CNAS认可和CNAS认证有什么区别", description: "用于解释认可与认证的区别，避免客户一开始就走偏方向。", url: "https://example.com/cnas-vs-certification" },
+  { customerType: "OTHER", title: "CNAS认可启动前自查清单", description: "适合处于准备建设阶段的客户先核对认可目标、人员设备和准备边界。", url: "https://example.com/cnas-start-checklist" },
+  { customerType: "OTHER", title: "实验室建设准备重点表", description: "围绕实验室建设阶段梳理人员、设备、环境、方法标准与运行记录重点。", url: "https://example.com/cnas-lab-preparation" },
+  { customerType: "OTHER", title: "CNAS体系文件与真实运行检查表", description: "用于判断体系文件和真实运行是否一致，避免只做文档不做运行。", url: "https://example.com/cnas-system-operation-check" },
+  { customerType: "OTHER", title: "CNAS评审前风险检查清单", description: "适合进入准备申请阶段的客户提前排查评审重点和返工风险。", url: "https://example.com/cnas-pre-assessment-risk-check" },
+  { customerType: "OTHER", title: "CNAS整改闭环问题清单", description: "帮助评审后整改客户梳理常见问题、闭环路径和优先级。", url: "https://example.com/cnas-rectification-checklist" },
+  { customerType: "OTHER", title: "CNAS企业微信欢迎语模板", description: "你好，我是CNAS认可指南的顾问。你可以先填写《CNAS认可路径判断问卷》，系统会根据你的实验室类型、当前阶段和主要担心问题给出一份初步判断结果。填写入口：/forms/cnas-path-check", url: "/forms/cnas-path-check" }
 ];
 
 const platformTaskTemplateSeeds: TaskTemplateSeed[] = [
@@ -1131,7 +1181,10 @@ const platformTaskTemplateSeeds: TaskTemplateSeed[] = [
   { name: "集采合作跟进", title: "集采合作跟进", description: "跟进品类、标准、质量保障和合作流程。", type: "DEAL_PUSH", priority: "HIGH", defaultDueDays: 2, customerType: "PLATFORM_SUPPLY_CHAIN_CLIENT" },
   { name: "一清一护项目沟通", title: "一清一护项目沟通", description: "判断门店基础、服务能力和项目合作方式。", type: "PHONE_CALL", priority: "HIGH", defaultDueDays: 2, customerType: "PLATFORM_AFTERMARKET_CLIENT" },
   { name: "续费提醒", title: "续费提醒", description: "用于会员、合作伙伴或年度服务续费前提醒。", type: "REACTIVATE", priority: "NORMAL", defaultDueDays: 3, customerType: "PLATFORM_MEMBERSHIP_CLIENT" },
-  { name: "沉默客户激活", title: "沉默客户激活", description: "对沉默客户做轻量激活，重新确认真实需求。", type: "REACTIVATE", priority: "NORMAL", defaultDueDays: 0, customerType: null, stage: "TO_REACTIVATE" }
+  { name: "沉默客户激活", title: "沉默客户激活", description: "对沉默客户做轻量激活，重新确认真实需求。", type: "REACTIVATE", priority: "NORMAL", defaultDueDays: 0, customerType: null, stage: "TO_REACTIVATE" },
+  { name: "CNAS高意向路径梳理", title: "CNAS高意向路径梳理", description: "客户适合进入认可路径设计阶段，建议 15 分钟内联系，目标是约 30 分钟路径梳理。", type: "PHONE_CALL", priority: "URGENT", defaultDueDays: 0, customerType: "OTHER" },
+  { name: "CNAS基础条件核对", title: "CNAS基础条件核对", description: "客户适合先准备基础条件，建议 24 小时内发送资料并判断是否可转高意向。", type: "SEND_MATERIAL", priority: "HIGH", defaultDueDays: 1, customerType: "OTHER" },
+  { name: "CNAS内容培育跟进", title: "CNAS内容培育跟进", description: "客户暂不适合直接启动申请，建议进入内容培育池，后续推送流程、费用、周期和准备清单等内容。", type: "WECHAT_FOLLOW", priority: "NORMAL", defaultDueDays: 3, customerType: "OTHER" }
 ];
 
 type PlatformProfile = {

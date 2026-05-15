@@ -14,6 +14,7 @@ import { PageShell } from "@/components/Shell";
 import { Card, Input, Select, SubmitButton, Textarea } from "@/components/Ui";
 import { addFollowUp, assignLeadOwner, createManualTask } from "@/lib/actions";
 import { requireLeadAccess } from "@/lib/auth";
+import { readCnasExtraData } from "@/lib/cnas";
 import {
   customerTypeOptions,
   formatDate,
@@ -43,6 +44,7 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
   });
 
   if (!lead) notFound();
+  const cnasData = readCnasExtraData(lead.extraData);
 
   const [strategy, materials, assistantMaterials, owners, taskTemplates, currentTasks, replySuggestions] = await Promise.all([
     prisma.customerTypeStrategy.findUnique({
@@ -118,6 +120,27 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
             </div>
             {lead.message ? <p className="mt-4 rounded-md bg-slate-50 p-3 text-sm text-slate-700">{lead.message}</p> : null}
           </Card>
+
+          {cnasData ? (
+            <Card>
+              <h2 className="mb-4 text-base font-semibold">CNAS 初步判断</h2>
+              <div className="grid gap-3 text-sm md:grid-cols-2">
+                <Info label="判断类型" value={`${cnasData.diagnosisType} 类`} />
+                <Info label="建议下一步" value={cnasData.nextAction} />
+                <Info label="实验室类型" value={cnasData.questionnaire.labType} />
+                <Info label="当前阶段" value={cnasData.questionnaire.currentStage} />
+                <Info label="认可范围" value={cnasData.questionnaire.scopeClarity} />
+                <Info label="人员设备" value={cnasData.questionnaire.readiness} />
+                <Info label="主要担心问题" value={cnasData.questionnaire.primaryConcern} />
+                <Info label="启动计划" value={cnasData.questionnaire.startPlan} />
+                <Info label="来源页面" value={cnasData.sourcePage} />
+                <Info label="UTM Source" value={cnasData.utm.utm_source} />
+                <Info label="UTM Medium" value={cnasData.utm.utm_medium} />
+                <Info label="UTM Campaign" value={cnasData.utm.utm_campaign} />
+              </div>
+              <p className="mt-4 rounded-md bg-slate-50 p-3 text-sm leading-6 text-slate-700">{cnasData.diagnosisSummary}</p>
+            </Card>
+          ) : null}
 
           {canAssign ? (
             <Card>
