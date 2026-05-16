@@ -22,6 +22,7 @@ export default async function LeadsPage({ params, searchParams }: { params: { te
   const { user, tenant } = await requireTenantAccess(params.tenantSlug, ["TENANT_ADMIN", "OPERATOR", "SALES"]);
   const canViewAll = canViewAllTenantLeads(user.role);
   const where: Prisma.LeadWhereInput = { tenantId: tenant.id };
+  const sourceAttributionFilter: Prisma.LeadSourceAttributionWhereInput = {};
 
   if (!canViewAll) {
     where.ownerId = user.id;
@@ -36,6 +37,18 @@ export default async function LeadsPage({ params, searchParams }: { params: { te
   if (searchParams.needType) where.needType = searchParams.needType as Prisma.EnumNeedTypeFilter["equals"];
   if (searchParams.intentionLevel) where.intentionLevel = searchParams.intentionLevel as Prisma.EnumIntentionLevelFilter["equals"];
   if (searchParams.stage) where.stage = searchParams.stage as Prisma.EnumLeadStageFilter["equals"];
+  if (searchParams.sourceProject) {
+    sourceAttributionFilter.sourceProject = { contains: searchParams.sourceProject, mode: "insensitive" };
+  }
+  if (searchParams.sourceCampaign) {
+    sourceAttributionFilter.sourceCampaign = { contains: searchParams.sourceCampaign, mode: "insensitive" };
+  }
+  if (searchParams.sourceScene) {
+    sourceAttributionFilter.sourceScene = { contains: searchParams.sourceScene, mode: "insensitive" };
+  }
+  if (Object.keys(sourceAttributionFilter).length) {
+    where.sourceAttribution = { is: sourceAttributionFilter };
+  }
 
   const [leads, owners] = await Promise.all([
     prisma.lead.findMany({
@@ -64,12 +77,15 @@ export default async function LeadsPage({ params, searchParams }: { params: { te
   return (
     <PageShell tenant={tenant} title="客户线索" description="销售只能看到自己负责的客户；企业管理员和运营可以按负责人或未分配状态筛选。">
       <Card className="mb-5">
-        <form className="grid gap-3 md:grid-cols-3 lg:grid-cols-7">
+        <form className="grid gap-3 md:grid-cols-3 lg:grid-cols-9">
           <Select label="来源" name="source" options={[{ value: "", label: "全部" }, ...sourceOptions]} defaultValue={searchParams.source} />
           <Select label="客户类型" name="customerType" options={[{ value: "", label: "全部" }, ...customerTypeOptions]} defaultValue={searchParams.customerType} />
           <Select label="需求类型" name="needType" options={[{ value: "", label: "全部" }, ...needTypeOptions]} defaultValue={searchParams.needType} />
           <Select label="意向等级" name="intentionLevel" options={[{ value: "", label: "全部" }, ...intentionOptions]} defaultValue={searchParams.intentionLevel} />
           <Select label="客户阶段" name="stage" options={[{ value: "", label: "全部" }, ...stageOptions]} defaultValue={searchParams.stage} />
+          <Input label="来源项目" name="sourceProject" defaultValue={searchParams.sourceProject} />
+          <Input label="来源活动" name="sourceCampaign" defaultValue={searchParams.sourceCampaign} />
+          <Input label="来源场景" name="sourceScene" defaultValue={searchParams.sourceScene} />
           {canViewAll ? <Select label="负责人" name="ownerId" options={ownerOptions} defaultValue={searchParams.ownerId} /> : null}
           <div className="pt-6">
             <SubmitButton>筛选</SubmitButton>

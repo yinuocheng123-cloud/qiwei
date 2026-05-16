@@ -38,6 +38,7 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
     where: { id: params.id, tenantId: tenant.id },
     include: {
       owner: true,
+      sourceAttribution: true,
       tags: true,
       followUps: { include: { user: true }, orderBy: { createdAt: "desc" } }
     }
@@ -120,6 +121,33 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
             </div>
             {lead.message ? <p className="mt-4 rounded-md bg-slate-50 p-3 text-sm text-slate-700">{lead.message}</p> : null}
           </Card>
+
+          {lead.sourceAttribution ? (
+            <Card>
+              <h2 className="mb-2 text-base font-semibold">来源归因</h2>
+              <p className="mb-4 text-sm leading-6 text-slate-600">
+                来源归因用于判断客户到底从哪个入口进入系统，帮助后续复盘哪个活动、哪个页面、哪个二维码、哪个业务员带来的线索质量更高。
+              </p>
+              <div className="grid gap-3 text-sm md:grid-cols-2">
+                <Info label="来源渠道" value={lead.sourceAttribution.sourceChannel ?? labelOf(sourceOptions, lead.source)} />
+                <Info label="来源项目" value={lead.sourceAttribution.sourceProject} />
+                <Info label="来源活动" value={lead.sourceAttribution.sourceCampaign} />
+                <Info label="来源场景" value={lead.sourceAttribution.sourceScene} />
+                <Info label="来源触点" value={lead.sourceAttribution.sourceTouchpoint} />
+                <Info label="来源二维码" value={lead.sourceAttribution.sourceQrCode} />
+                <Info label="来源人员" value={lead.sourceAttribution.sourceStaffName} />
+                <Info label="来源页面" value={lead.sourceAttribution.sourcePage} />
+                <Info label="来源内容" value={lead.sourceAttribution.sourceContent} />
+                <Info label="UTM Source" value={lead.sourceAttribution.utmSource} />
+                <Info label="UTM Medium" value={lead.sourceAttribution.utmMedium} />
+                <Info label="UTM Campaign" value={lead.sourceAttribution.utmCampaign} />
+                <Info label="UTM Content" value={lead.sourceAttribution.utmContent} />
+                <Info label="UTM Term" value={lead.sourceAttribution.utmTerm} />
+                <Info label="首次来源时间" value={formatDate(lead.sourceAttribution.firstSeenAt)} />
+                <Info label="提交时间" value={formatDate(lead.sourceAttribution.submittedAt)} />
+              </div>
+            </Card>
+          ) : null}
 
           {cnasData ? (
             <Card>

@@ -270,6 +270,7 @@ model Tenant {
   importBatches  ImportBatch[]
   importRows     ImportRow[]
   communicationComplianceConfigs CommunicationComplianceConfig[]
+  leadSourceAttributions         LeadSourceAttribution[]
 }
 
 model User {
@@ -294,6 +295,7 @@ model User {
   replySuggestions ReplySuggestion[]
   importBatches  ImportBatch[]
   confirmedCommunicationComplianceConfigs CommunicationComplianceConfig[] @relation("CommunicationComplianceConfirmedBy")
+  sourceAttributedLeads                 LeadSourceAttribution[]          @relation("LeadSourceAttributionStaff")
 
   @@index([tenantId, role])
 }
@@ -342,6 +344,7 @@ model Lead {
   reminderQueues ReminderQueue[]
   replySuggestions ReplySuggestion[]
   importRows        ImportRow[]
+  sourceAttribution LeadSourceAttribution?
 
   @@index([tenantId, createdAt])
   @@index([tenantId, source])
@@ -568,6 +571,40 @@ model CommunicationComplianceConfig {
 
   @@unique([tenantId, channel])
   @@index([tenantId, status, updatedAt])
+}
+
+model LeadSourceAttribution {
+  id               String   @id @default(cuid())
+  tenantId         String
+  tenant           Tenant   @relation(fields: [tenantId], references: [id])
+  leadId           String   @unique
+  lead             Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  sourceChannel    String?
+  sourceProject    String?
+  sourceCampaign   String?
+  sourceScene      String?
+  sourceTouchpoint String?
+  sourceQrCode     String?
+  sourceStaffName  String?
+  sourceStaffId    String?
+  sourceStaff      User?    @relation("LeadSourceAttributionStaff", fields: [sourceStaffId], references: [id])
+  sourcePage       String?
+  sourceContent    String?
+  utmSource        String?
+  utmMedium        String?
+  utmCampaign      String?
+  utmContent       String?
+  utmTerm          String?
+  firstSeenAt      DateTime?
+  submittedAt      DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([tenantId, sourceChannel, createdAt])
+  @@index([tenantId, sourceProject, createdAt])
+  @@index([tenantId, sourceCampaign, createdAt])
+  @@index([tenantId, sourceScene, createdAt])
+  @@index([tenantId, sourceStaffId, createdAt])
 }
 
 model AuditLog {

@@ -67,6 +67,7 @@ import {
   rebuildImportBatchPreview
 } from "@/lib/imports";
 import { prisma } from "@/lib/prisma";
+import { parseSourceAttributionFromFormData, upsertLeadSourceAttribution } from "@/lib/source-attribution";
 import {
   detectQuestionType,
   detectTagSuggestionTopic,
@@ -334,7 +335,7 @@ export async function submitCnasPathCheckForm(formData: FormData) {
     startPlan,
     wecomAdded,
     note: text(formData, "note"),
-    sourcePage: text(formData, "sourcePage") ?? CNAS_SOURCE_PAGE,
+    sourcePage: text(formData, "sourcePage") ?? text(formData, "source_page") ?? CNAS_SOURCE_PAGE,
     utmSource: text(formData, "utm_source"),
     utmMedium: text(formData, "utm_medium"),
     utmCampaign: text(formData, "utm_campaign"),
@@ -405,6 +406,19 @@ export async function submitCnasPathCheckForm(formData: FormData) {
       extraData: nextExtraData,
       createdLeadId: lead.id
     }
+  });
+
+  await upsertLeadSourceAttribution({
+    db: prisma,
+    tenantId: tenant.id,
+    leadId: lead.id,
+    attribution: parseSourceAttributionFromFormData(formData, {
+      sourceChannel: "CNAS问卷",
+      sourceProject: CNAS_BUSINESS_LINE_NAME,
+      sourcePage: values.sourcePage,
+      firstSeenAt: new Date(),
+      submittedAt: new Date()
+    })
   });
 
   const existingTags = await prisma.leadTag.findMany({

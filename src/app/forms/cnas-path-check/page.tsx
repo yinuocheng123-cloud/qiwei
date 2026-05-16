@@ -43,6 +43,15 @@ export default function CnasPathCheckPage({
       <Card className="mt-6">
         <form action={submitCnasPathCheckForm} className="space-y-4">
           <input type="hidden" name="sourcePage" value={CNAS_SOURCE_PAGE} />
+          <input type="hidden" name="source_channel" value={pick("source_channel") || "CNAS问卷"} />
+          <input type="hidden" name="source_project" value={pick("source_project") || "CNAS认可指南"} />
+          <input type="hidden" name="source_campaign" value={pick("source_campaign")} />
+          <input type="hidden" name="source_scene" value={pick("source_scene")} />
+          <input type="hidden" name="source_touchpoint" value={pick("source_touchpoint")} />
+          <input type="hidden" name="source_qr" value={pick("source_qr")} />
+          <input type="hidden" name="source_staff" value={pick("source_staff")} />
+          <input type="hidden" name="source_page" value={pick("source_page") || CNAS_SOURCE_PAGE} />
+          <input type="hidden" name="source_content" value={pick("source_content")} />
           <input type="hidden" name="utm_source" value={pick("utm_source")} />
           <input type="hidden" name="utm_medium" value={pick("utm_medium")} />
           <input type="hidden" name="utm_campaign" value={pick("utm_campaign")} />

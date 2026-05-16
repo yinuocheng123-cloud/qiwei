@@ -17,11 +17,13 @@ import {
   IntentionLevel,
   LeadSource,
   LeadStage,
+  LeadSourceAttribution,
   Prisma,
   UserRole,
   type ImportBatch,
   type ImportRow
 } from "@prisma/client";
+import { upsertLeadSourceAttribution, type LeadSourceAttributionInput } from "@/lib/source-attribution";
 import { createTaskWithAudit } from "@/lib/tasks";
 
 export const importTemplateHeaders = [
@@ -31,6 +33,19 @@ export const importTemplateHeaders = [
   "公司名称",
   "客户类型",
   "来源渠道",
+  "来源项目",
+  "来源活动",
+  "来源场景",
+  "来源触点",
+  "来源二维码",
+  "来源人员",
+  "来源页面",
+  "来源内容",
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_content",
+  "utm_term",
   "需求说明",
   "意向等级",
   "当前阶段",
@@ -48,6 +63,19 @@ export const importTemplateSampleRow = [
   "整木增长工厂",
   "整木工厂老板",
   "会议活动",
+  "GEO／AI推广",
+  "2026整木企业GEO增长会",
+  "会场入口",
+  "签到台二维码",
+  "event-geo-2026-door-01",
+  "张老师",
+  "/landing/geo-growth",
+  "整木企业GEO增长会海报",
+  "offline",
+  "qrcode",
+  "geo_growth_2026",
+  "door_poster",
+  "zhengmu_factory_owner",
   "想了解 GEO 服务怎么做，预算大概多少",
   "HIGH",
   "NEW",
@@ -65,6 +93,19 @@ export type ImportFieldKey =
   | "company"
   | "customerType"
   | "source"
+  | "sourceProject"
+  | "sourceCampaign"
+  | "sourceScene"
+  | "sourceTouchpoint"
+  | "sourceQrCode"
+  | "sourceStaffName"
+  | "sourcePage"
+  | "sourceContent"
+  | "utmSource"
+  | "utmMedium"
+  | "utmCampaign"
+  | "utmContent"
+  | "utmTerm"
   | "needDescription"
   | "intentionLevel"
   | "stage"
@@ -105,6 +146,7 @@ export type NormalizedImportRowData = {
   company: string;
   customerType: CustomerType;
   source: LeadSource;
+  sourceAttribution: LeadSourceAttributionInput;
   needDescription: string;
   intentionLevel: IntentionLevel;
   stage: LeadStage;
@@ -140,6 +182,19 @@ export const importFieldDefinitions: { key: ImportFieldKey; label: string }[] = 
   { key: "company", label: "公司名称" },
   { key: "customerType", label: "客户类型" },
   { key: "source", label: "来源渠道" },
+  { key: "sourceProject", label: "来源项目" },
+  { key: "sourceCampaign", label: "来源活动" },
+  { key: "sourceScene", label: "来源场景" },
+  { key: "sourceTouchpoint", label: "来源触点" },
+  { key: "sourceQrCode", label: "来源二维码" },
+  { key: "sourceStaffName", label: "来源人员" },
+  { key: "sourcePage", label: "来源页面" },
+  { key: "sourceContent", label: "来源内容" },
+  { key: "utmSource", label: "utm_source" },
+  { key: "utmMedium", label: "utm_medium" },
+  { key: "utmCampaign", label: "utm_campaign" },
+  { key: "utmContent", label: "utm_content" },
+  { key: "utmTerm", label: "utm_term" },
   { key: "needDescription", label: "需求说明" },
   { key: "intentionLevel", label: "意向等级" },
   { key: "stage", label: "当前阶段" },
@@ -157,6 +212,19 @@ const headerAliases: Record<ImportFieldKey, string[]> = {
   company: ["公司名称", "公司", "企业名称", "company"],
   customerType: ["客户类型", "类型", "customerType"],
   source: ["来源渠道", "来源", "渠道", "source"],
+  sourceProject: ["来源项目", "项目", "sourceProject"],
+  sourceCampaign: ["来源活动", "来源campaign", "活动", "campaign", "sourceCampaign"],
+  sourceScene: ["来源场景", "场景", "sourceScene"],
+  sourceTouchpoint: ["来源触点", "触点", "sourceTouchpoint"],
+  sourceQrCode: ["来源二维码", "二维码", "二维码编号", "sourceQrCode", "sourceQr"],
+  sourceStaffName: ["来源人员", "来源业务员", "承接人员", "sourceStaff", "sourceStaffName"],
+  sourcePage: ["来源页面", "页面", "sourcePage"],
+  sourceContent: ["来源内容", "内容标题", "sourceContent"],
+  utmSource: ["utm_source", "UTM Source", "utmSource"],
+  utmMedium: ["utm_medium", "UTM Medium", "utmMedium"],
+  utmCampaign: ["utm_campaign", "UTM Campaign", "utmCampaign"],
+  utmContent: ["utm_content", "UTM Content", "utmContent"],
+  utmTerm: ["utm_term", "UTM Term", "utmTerm"],
   needDescription: ["需求说明", "需求", "咨询内容", "message", "needDescription"],
   intentionLevel: ["意向等级", "意向", "intentionLevel"],
   stage: ["当前阶段", "阶段", "stage"],
@@ -271,6 +339,8 @@ type ImportReferenceData = {
     company: string | null;
   }[];
   ownerMap: Map<string, { id: string; role: UserRole }>;
+  sourceStaffByEmail: Map<string, { id: string; name: string }>;
+  sourceStaffByName: Map<string, { id: string; name: string }>;
   activeBusinessLineByName: Map<string, { id: string; name: string }>;
   activeBusinessLineBySlug: Map<string, { id: string; name: string }>;
   defaultBusinessLinesById: Map<string, { id: string; name: string }>;
@@ -311,6 +381,19 @@ function createEmptyFieldMapping(): ImportFieldMapping {
     company: null,
     customerType: null,
     source: null,
+    sourceProject: null,
+    sourceCampaign: null,
+    sourceScene: null,
+    sourceTouchpoint: null,
+    sourceQrCode: null,
+    sourceStaffName: null,
+    sourcePage: null,
+    sourceContent: null,
+    utmSource: null,
+    utmMedium: null,
+    utmCampaign: null,
+    utmContent: null,
+    utmTerm: null,
     needDescription: null,
     intentionLevel: null,
     stage: null,
@@ -453,7 +536,7 @@ export async function readUploadedImportText(formData: FormData) {
 
 export async function loadImportReferenceData(prisma: {
   lead: { findMany: (args: Prisma.LeadFindManyArgs) => Promise<ImportReferenceData["existingLeads"]> };
-  user: { findMany: (args: Prisma.UserFindManyArgs) => Promise<{ id: string; email: string; role: UserRole }[]> };
+  user: { findMany: (args: Prisma.UserFindManyArgs) => Promise<{ id: string; email: string; name: string; role: UserRole }[]> };
   businessLine: {
     findMany: (args: Prisma.BusinessLineFindManyArgs) => Promise<{ id: string; name: string; slug: string; status: string }[]>;
   };
@@ -469,7 +552,7 @@ export async function loadImportReferenceData(prisma: {
         status: "active",
         role: { in: [UserRole.SALES, UserRole.OPERATOR, UserRole.TENANT_ADMIN] }
       },
-      select: { id: true, email: true, role: true }
+      select: { id: true, email: true, name: true, role: true }
     }),
     prisma.businessLine.findMany({
       where: { tenantId, status: "ACTIVE" },
@@ -478,6 +561,8 @@ export async function loadImportReferenceData(prisma: {
   ]);
 
   const ownerMap = new Map(owners.map((owner) => [owner.email.trim().toLowerCase(), { id: owner.id, role: owner.role }]));
+  const sourceStaffByEmail = new Map(owners.map((owner) => [owner.email.trim().toLowerCase(), { id: owner.id, name: owner.name }]));
+  const sourceStaffByName = new Map(owners.map((owner) => [normalizeLooseText(owner.name), { id: owner.id, name: owner.name }]));
   const activeBusinessLineByName = new Map(activeBusinessLines.map((line) => [normalizeLooseText(line.name), { id: line.id, name: line.name }]));
   const activeBusinessLineBySlug = new Map(activeBusinessLines.map((line) => [normalizeLooseText(line.slug), { id: line.id, name: line.name }]));
   const defaultBusinessLinesById = new Map(activeBusinessLines.map((line) => [line.id, { id: line.id, name: line.name }]));
@@ -485,6 +570,8 @@ export async function loadImportReferenceData(prisma: {
   return {
     existingLeads,
     ownerMap,
+    sourceStaffByEmail,
+    sourceStaffByName,
     activeBusinessLineByName,
     activeBusinessLineBySlug,
     defaultBusinessLinesById
@@ -521,9 +608,49 @@ function parseFlexibleDate(value: string) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function resolveSourceStaff(
+  value: string,
+  references: Pick<ImportReferenceData, "sourceStaffByEmail" | "sourceStaffByName">
+) {
+  if (!value.trim()) {
+    return null;
+  }
+
+  const byEmail = references.sourceStaffByEmail.get(value.trim().toLowerCase());
+  if (byEmail) {
+    return byEmail;
+  }
+
+  return references.sourceStaffByName.get(normalizeLooseText(value)) ?? null;
+}
+
 function buildLeadMessage(needDescription: string, note: string) {
   const lines = [needDescription.trim(), note.trim()].filter(Boolean);
   return lines.length ? lines.join("\n\n备注：") : null;
+}
+
+function buildSourceAttributionInputFromNormalizedData(
+  normalizedData: NormalizedImportRowData
+): LeadSourceAttributionInput | null {
+  const attribution = {
+    ...normalizedData.sourceAttribution,
+    sourceChannel: normalizedData.sourceAttribution.sourceChannel || normalizedData.sourceAttribution.sourceProject || normalizedData.sourceAttribution.sourceCampaign
+      ? normalizedData.sourceAttribution.sourceChannel || "客户导入"
+      : normalizedData.source !== LeadSource.imported
+        ? normalizedData.sourceAttribution.sourceChannel || normalizedData.source
+        : normalizedData.sourceAttribution.sourceChannel,
+    firstSeenAt: new Date(),
+    submittedAt: new Date()
+  } satisfies LeadSourceAttributionInput;
+
+  const hasValue = Object.entries(attribution).some(([key, value]) => {
+    if (key === "firstSeenAt" || key === "submittedAt") {
+      return false;
+    }
+    return typeof value === "string" ? Boolean(value.trim()) : Boolean(value);
+  });
+
+  return hasValue ? attribution : null;
 }
 
 function getDuplicateIdentityKeys(normalizedData: NormalizedImportRowData) {
@@ -617,15 +744,30 @@ function buildPreviewRows(
     const phone = normalizeMappedValue(rawData, mapping, "phone");
     const wechat = normalizeMappedValue(rawData, mapping, "wechat");
     const company = normalizeMappedValue(rawData, mapping, "company");
+    const sourceChannelValue = normalizeMappedValue(rawData, mapping, "source");
+    const sourceProject = normalizeMappedValue(rawData, mapping, "sourceProject");
+    const sourceCampaign = normalizeMappedValue(rawData, mapping, "sourceCampaign");
+    const sourceScene = normalizeMappedValue(rawData, mapping, "sourceScene");
+    const sourceTouchpoint = normalizeMappedValue(rawData, mapping, "sourceTouchpoint");
+    const sourceQrCode = normalizeMappedValue(rawData, mapping, "sourceQrCode");
+    const sourceStaffName = normalizeMappedValue(rawData, mapping, "sourceStaffName");
+    const sourcePage = normalizeMappedValue(rawData, mapping, "sourcePage");
+    const sourceContent = normalizeMappedValue(rawData, mapping, "sourceContent");
+    const utmSource = normalizeMappedValue(rawData, mapping, "utmSource");
+    const utmMedium = normalizeMappedValue(rawData, mapping, "utmMedium");
+    const utmCampaign = normalizeMappedValue(rawData, mapping, "utmCampaign");
+    const utmContent = normalizeMappedValue(rawData, mapping, "utmContent");
+    const utmTerm = normalizeMappedValue(rawData, mapping, "utmTerm");
     const needDescription = normalizeMappedValue(rawData, mapping, "needDescription");
     const note = normalizeMappedValue(rawData, mapping, "note");
     const ownerEmail = normalizeMappedValue(rawData, mapping, "ownerEmail").toLowerCase();
     const customerType = parseCustomerTypeValue(normalizeMappedValue(rawData, mapping, "customerType"));
-    const source = parseLeadSourceValue(normalizeMappedValue(rawData, mapping, "source"));
+    const source = parseLeadSourceValue(sourceChannelValue);
     const intentionLevel = parseIntentionLevelValue(normalizeMappedValue(rawData, mapping, "intentionLevel"));
     const stage = parseLeadStageValue(normalizeMappedValue(rawData, mapping, "stage"));
     const nextFollowAtValue = normalizeMappedValue(rawData, mapping, "nextFollowAt");
     const nextFollowAt = parseFlexibleDate(nextFollowAtValue);
+    const resolvedSourceStaff = resolveSourceStaff(sourceStaffName, references);
 
     if (!name && !phone && !wechat) {
       errors.push("客户姓名、手机号、微信号至少填写一项。");
@@ -671,6 +813,23 @@ function buildPreviewRows(
       company,
       customerType,
       source,
+      sourceAttribution: {
+        sourceChannel: sourceChannelValue,
+        sourceProject,
+        sourceCampaign,
+        sourceScene,
+        sourceTouchpoint,
+        sourceQrCode,
+        sourceStaffName,
+        sourceStaffId: resolvedSourceStaff?.id ?? null,
+        sourcePage,
+        sourceContent,
+        utmSource,
+        utmMedium,
+        utmCampaign,
+        utmContent,
+        utmTerm
+      },
       needDescription,
       intentionLevel,
       stage,
@@ -769,7 +928,7 @@ export async function buildImportBatchPreview(input: {
       update: (args: Prisma.ImportRowUpdateArgs) => Promise<ImportRow>;
     };
     lead: { findMany: (args: Prisma.LeadFindManyArgs) => Promise<ImportReferenceData["existingLeads"]> };
-    user: { findMany: (args: Prisma.UserFindManyArgs) => Promise<{ id: string; email: string; role: UserRole }[]> };
+    user: { findMany: (args: Prisma.UserFindManyArgs) => Promise<{ id: string; email: string; name: string; role: UserRole }[]> };
     businessLine: {
       findMany: (args: Prisma.BusinessLineFindManyArgs) => Promise<{ id: string; name: string; slug: string; status: string }[]>;
     };
@@ -870,7 +1029,7 @@ export async function rebuildImportBatchPreview(input: {
       update: (args: Prisma.ImportRowUpdateArgs) => Promise<ImportRow>;
     };
     lead: { findMany: (args: Prisma.LeadFindManyArgs) => Promise<ImportReferenceData["existingLeads"]> };
-    user: { findMany: (args: Prisma.UserFindManyArgs) => Promise<{ id: string; email: string; role: UserRole }[]> };
+    user: { findMany: (args: Prisma.UserFindManyArgs) => Promise<{ id: string; email: string; name: string; role: UserRole }[]> };
     businessLine: {
       findMany: (args: Prisma.BusinessLineFindManyArgs) => Promise<{ id: string; name: string; slug: string; status: string }[]>;
     };
@@ -918,6 +1077,7 @@ export async function rebuildImportBatchPreview(input: {
 function parseNormalizedRowData(value: Prisma.JsonValue | null): NormalizedImportRowData | null {
   const record = toRecord(value);
   if (!record) return null;
+  const sourceAttributionRecord = toRecord(record.sourceAttribution as Prisma.JsonValue | undefined);
 
   return {
     name: typeof record.name === "string" ? record.name : "",
@@ -932,6 +1092,23 @@ function parseNormalizedRowData(value: Prisma.JsonValue | null): NormalizedImpor
       typeof record.source === "string" && Object.values(LeadSource).includes(record.source as LeadSource)
         ? (record.source as LeadSource)
         : LeadSource.imported,
+    sourceAttribution: {
+      sourceChannel: typeof sourceAttributionRecord?.sourceChannel === "string" ? sourceAttributionRecord.sourceChannel : "",
+      sourceProject: typeof sourceAttributionRecord?.sourceProject === "string" ? sourceAttributionRecord.sourceProject : "",
+      sourceCampaign: typeof sourceAttributionRecord?.sourceCampaign === "string" ? sourceAttributionRecord.sourceCampaign : "",
+      sourceScene: typeof sourceAttributionRecord?.sourceScene === "string" ? sourceAttributionRecord.sourceScene : "",
+      sourceTouchpoint: typeof sourceAttributionRecord?.sourceTouchpoint === "string" ? sourceAttributionRecord.sourceTouchpoint : "",
+      sourceQrCode: typeof sourceAttributionRecord?.sourceQrCode === "string" ? sourceAttributionRecord.sourceQrCode : "",
+      sourceStaffName: typeof sourceAttributionRecord?.sourceStaffName === "string" ? sourceAttributionRecord.sourceStaffName : "",
+      sourceStaffId: typeof sourceAttributionRecord?.sourceStaffId === "string" ? sourceAttributionRecord.sourceStaffId : null,
+      sourcePage: typeof sourceAttributionRecord?.sourcePage === "string" ? sourceAttributionRecord.sourcePage : "",
+      sourceContent: typeof sourceAttributionRecord?.sourceContent === "string" ? sourceAttributionRecord.sourceContent : "",
+      utmSource: typeof sourceAttributionRecord?.utmSource === "string" ? sourceAttributionRecord.utmSource : "",
+      utmMedium: typeof sourceAttributionRecord?.utmMedium === "string" ? sourceAttributionRecord.utmMedium : "",
+      utmCampaign: typeof sourceAttributionRecord?.utmCampaign === "string" ? sourceAttributionRecord.utmCampaign : "",
+      utmContent: typeof sourceAttributionRecord?.utmContent === "string" ? sourceAttributionRecord.utmContent : "",
+      utmTerm: typeof sourceAttributionRecord?.utmTerm === "string" ? sourceAttributionRecord.utmTerm : ""
+    },
     needDescription: typeof record.needDescription === "string" ? record.needDescription : "",
     intentionLevel:
       typeof record.intentionLevel === "string" && Object.values(IntentionLevel).includes(record.intentionLevel as IntentionLevel)
@@ -1011,7 +1188,15 @@ export async function completeImportBatch(input: {
       findMany: (args: Prisma.LeadTagFindManyArgs) => Promise<{ tagName: string; tagGroup: string }[]>;
       createMany: (args: Prisma.LeadTagCreateManyArgs) => Promise<Prisma.BatchPayload>;
     };
-    user: { findMany: (args: Prisma.UserFindManyArgs) => Promise<{ id: string; email: string; role: UserRole }[]> };
+    user: {
+      findMany: (args: Prisma.UserFindManyArgs) => Promise<{ id: string; email: string; name: string; role: UserRole }[]>;
+      findFirst: (args: Prisma.UserFindFirstArgs) => Promise<{ id: string } | null>;
+    };
+    leadSourceAttribution: {
+      findUnique: (args: Prisma.LeadSourceAttributionFindUniqueArgs) => Promise<LeadSourceAttribution | null>;
+      create: (args: Prisma.LeadSourceAttributionCreateArgs) => Promise<LeadSourceAttribution>;
+      update: (args: Prisma.LeadSourceAttributionUpdateArgs) => Promise<LeadSourceAttribution>;
+    };
     businessLine: {
       findMany: (args: Prisma.BusinessLineFindManyArgs) => Promise<{ id: string; name: string; slug: string; status: string }[]>;
     };
@@ -1126,6 +1311,17 @@ export async function completeImportBatch(input: {
         leadId: lead.id,
         normalizedData
       });
+
+      const sourceAttribution = buildSourceAttributionInputFromNormalizedData(normalizedData);
+      if (sourceAttribution) {
+        await upsertLeadSourceAttribution({
+          db: input.prisma,
+          tenantId: input.tenantId,
+          leadId: lead.id,
+          userId: input.createdById,
+          attribution: sourceAttribution
+        });
+      }
 
       if (defaults.autoCreateFirstTask && normalizedData.ownerId) {
         const dueAt = new Date();

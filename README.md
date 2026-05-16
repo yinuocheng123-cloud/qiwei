@@ -737,3 +737,40 @@ AI 使用边界：
 - `communication_compliance_config_updated`
 - `communication_compliance_config_enabled`
 - `communication_compliance_config_paused`
+
+## V1.9.2 客户来源归因细化
+
+V1.9.2 在现有线索体系上补齐“客户到底从哪里来”的细粒度记录能力，不再只停留在“抖音、小红书、会议、公众号”这类大渠道。
+
+当前归因结构支持记录：
+
+- 来源渠道
+- 来源项目
+- 来源活动
+- 来源场景
+- 来源触点
+- 来源二维码
+- 来源人员
+- 来源页面
+- 来源内容
+- `utm_source`
+- `utm_medium`
+- `utm_campaign`
+- `utm_content`
+- `utm_term`
+
+当前落地范围：
+
+- CNAS 公开问卷 `/forms/cnas-path-check` 会从 URL query 和隐藏字段读取来源归因参数。
+- 客户导入模板新增来源项目、活动、场景、触点、二维码、人员、页面、内容和 UTM 字段。
+- 客户详情页新增“来源归因”卡片，方便顾问和管理层回看客户首来源。
+- 客户列表支持按来源项目、来源活动、来源场景做基础筛选。
+- 审计日志新增 `lead_source_attribution_created` 和 `lead_source_attribution_updated`。
+
+设计边界：
+
+- 当前只做归因记录、展示和基础筛选，不做完整 BI 报表。
+- 当前只保留单条首来源记录，不做多触点归因模型。
+- 不接企业微信 API。
+- 不生成真实企业微信二维码。
+- 不接投放平台 API。
