@@ -23,7 +23,7 @@ import { businessLineCategoryOptions, businessLineStatusOptions, customerTypeOpt
 import { prisma } from "@/lib/prisma";
 import { BusinessLineForm, StatusActionButtons } from "@/components/BusinessLineEditor";
 import { PageShell } from "@/components/Shell";
-import { Card, StatCard } from "@/components/Ui";
+import { Callout, Card, SectionTabs, StatCard } from "@/components/Ui";
 
 export const dynamic = "force-dynamic";
 
@@ -155,6 +155,11 @@ export default async function BusinessLineDetailPage({
     <PageShell
       tenant={tenant}
       title={`产品详情：${businessLine.name}`}
+      breadcrumbs={[
+        { label: "业务配置", href: `/app/${tenant.slug}/business-lines` },
+        { label: "产品总览", href: `/app/${tenant.slug}/business-lines#product-overview` },
+        { label: businessLine.name }
+      ]}
       description="从产品总览进入后，再在详情页里维护适合客户、推荐标签、关联资料、任务模板和 Market Claw 相关信息。"
     >
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -183,17 +188,7 @@ export default async function BusinessLineDetailPage({
           ) : null}
         </div>
 
-        <div className="mt-5 flex flex-wrap gap-2">
-          {tabs.map((tab) => (
-            <Link
-              key={tab.key}
-              className={`rounded-md px-3 py-2 text-sm font-medium ${activeTab === tab.key ? "bg-slate-950 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
-              href={tabHref(tab.key)}
-            >
-              {tab.label}
-            </Link>
-          ))}
-        </div>
+        <SectionTabs items={tabs.map((tab) => ({ key: tab.key, label: tab.label, href: tabHref(tab.key) }))} current={activeTab} className="mt-5" />
       </Card>
 
       {activeTab === "overview" ? (
@@ -208,6 +203,9 @@ export default async function BusinessLineDetailPage({
               <InfoLine label="默认下一步动作" value={businessLine.defaultNextAction || "-"} />
               <InfoLine label="适合客户类型数" value={selectedCustomerTypes.length ? `${selectedCustomerTypes.length} 类` : "未限制"} />
             </div>
+            <Callout className="mt-4" title="风险边界提醒" tone="amber">
+              不做物理删除，不因为产品暂停或归档打断历史客户、标签、任务和 Market Claw 回复记录。涉及价格、效果、周期和名额承诺时，优先回看风险边界与知识条目。
+            </Callout>
             {canEdit ? (
               <div className="mt-6">
                 <BusinessLineForm
@@ -223,8 +221,10 @@ export default async function BusinessLineDetailPage({
           </Card>
 
           <Card>
-            <SectionTitle title="详情摘要" description="总览页只看结果，详情页再展开可维护信息。" />
+            <SectionTitle title="详情摘要" description="先看核心状态，再决定继续维护客户适配、标签、资料、任务模板还是 Market Claw 知识。" />
             <div className="mt-4 space-y-4 text-sm text-slate-700">
+              <p>当前状态：{labelOf(businessLineStatusOptions, businessLine.status)}</p>
+              <p>适合客户：{selectedCustomerTypes.length ? selectedCustomerTypes.map((item) => labelOf(customerTypeOptions, item)).join("、") : "未限制"}</p>
               <p>推荐标签：{countBusinessLineTags(businessLine)} 个</p>
               <p>关联资料：{countBusinessLineMaterials(businessLine)} 份</p>
               <p>关联任务模板：{countBusinessLineTaskTemplates(businessLine)} 个</p>
@@ -406,6 +406,9 @@ export default async function BusinessLineDetailPage({
         <div className="mt-6">
           <Card>
             <SectionTitle title="风险边界" description="继续坚持不做物理删除，历史客户、标签、任务和回复记录不因产品归档而断裂。" />
+            <Callout title="不能承诺事项" tone="amber">
+              销售不能直接承诺价格锁定、效果保证、评审结果、交付时长和资源名额。涉及这些内容时，要回到知识库、训练场或人工确认后再回复客户。
+            </Callout>
             <div className="mt-4 space-y-3 text-sm leading-6 text-slate-700">
               <p>1. 销售只查看启用产品，不承担产品维护职责。</p>
               <p>2. 运营可以启用和暂停产品，但不能归档。</p>

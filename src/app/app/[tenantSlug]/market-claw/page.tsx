@@ -9,7 +9,7 @@
  */
 import Link from "next/link";
 import { PageShell } from "@/components/Shell";
-import { Card, StatCard } from "@/components/Ui";
+import { Callout, Card, SectionTabs, StatCard } from "@/components/Ui";
 import {
   canAccessMarketClawKnowledge,
   canAccessMarketClawReplies,
@@ -42,6 +42,19 @@ function EntryCard({
 
 export default async function MarketClawPage({ params }: { params: { tenantSlug: string } }) {
   const { user, tenant } = await requireTenantAccess(params.tenantSlug, ["TENANT_ADMIN", "OPERATOR", "SALES"]);
+  const overviewTabs =
+    user.role === "SALES"
+      ? [
+          { key: "overview", label: "总览", href: `/app/${tenant.slug}/market-claw` },
+          { key: "replies", label: "我的回复记录", href: `/app/${tenant.slug}/market-claw/replies` },
+          { key: "leads", label: "去客户列表", href: `/app/${tenant.slug}/leads` }
+        ]
+      : [
+          { key: "overview", label: "总览", href: `/app/${tenant.slug}/market-claw` },
+          { key: "knowledge", label: "知识库", href: `/app/${tenant.slug}/market-claw/knowledge` },
+          { key: "training", label: "回复训练场", href: `/app/${tenant.slug}/market-claw/training` },
+          { key: "replies", label: "回复记录", href: `/app/${tenant.slug}/market-claw/replies` }
+        ];
 
   const [knowledgeCount, trainingCount, replyDraftCount, feedbackCount, recentDrafts] = await Promise.all([
     canAccessMarketClawKnowledge(user.role)
@@ -92,6 +105,11 @@ export default async function MarketClawPage({ params }: { params: { tenantSlug:
         ]
       : [
           {
+            title: "去客户列表使用 Market Claw",
+            description: "管理角色也可以从客户详情页实际体验回复生成链路，再回到知识和训练侧继续优化。",
+            href: `/app/${tenant.slug}/leads`
+          },
+          {
             title: "知识库",
             description: "把产品、FAQ、案例、价格边界和不能承诺事项沉淀成可复用知识。",
             href: `/app/${tenant.slug}/market-claw/knowledge`
@@ -117,14 +135,27 @@ export default async function MarketClawPage({ params }: { params: { tenantSlug:
     <PageShell
       tenant={tenant}
       title="Market Claw"
+      breadcrumbs={[
+        { label: "Market Claw", href: `/app/${tenant.slug}/market-claw` },
+        { label: "总览" }
+      ]}
       description="把企业知识训练成销售会用的话。当前版本不接企业微信上下文，不自动发送客户消息，只做知识投喂、回复训练、回复草稿和跟进建议闭环。"
     >
       <Card className="bg-slate-950 text-white">
-        <h2 className="text-xl font-semibold">Market Claw 总览</h2>
+        <p className="text-sm font-medium uppercase tracking-[0.18em] text-slate-300">Market Claw</p>
+        <h2 className="mt-3 text-2xl font-semibold">Market Claw 不是 AI 客服，是懂业务的销售智能助手。</h2>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-200">
           它不是自动客服，而是销售侧的回复辅助模块。运营和管理员维护知识与训练，销售在客户详情页里实际使用，所有输出仍由人工确认。
         </p>
       </Card>
+
+      <SectionTabs items={overviewTabs} current="overview" className="mt-4" />
+
+      <Callout className="mt-4" title={user.role === "SALES" ? "销售使用路径" : "管理与运营使用路径"} tone={user.role === "SALES" ? "emerald" : "slate"}>
+        {user.role === "SALES"
+          ? "先去客户列表找到今天要回复的客户，再在客户详情页中使用 Market Claw 生成回复，回复后回到这里复盘自己的使用记录。"
+          : "先维护知识和训练样本，再去客户详情页体验真实回复链路，最后通过回复记录和使用反馈继续修正知识边界。"}
+      </Callout>
 
       <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="知识库数量" value={knowledgeCount} />
@@ -136,7 +167,7 @@ export default async function MarketClawPage({ params }: { params: { tenantSlug:
       <section className="mt-6">
         <h2 className="text-lg font-semibold text-slate-950">快捷入口</h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">不同角色看到的入口不同，销售看到的是工作入口，运营和管理员看到的是维护入口。</p>
-        <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className={`mt-4 grid gap-4 md:grid-cols-2 ${roleCards.length >= 4 ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
           {roleCards.map((card) => (
             <EntryCard key={card.title} title={card.title} description={card.description} href={card.href} />
           ))}

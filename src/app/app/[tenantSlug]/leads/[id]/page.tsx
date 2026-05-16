@@ -12,7 +12,7 @@ import { notFound } from "next/navigation";
 import { LeadReplyAssistant } from "@/components/LeadReplyAssistant";
 import { MarketClawAssistant } from "@/components/MarketClawAssistant";
 import { PageShell } from "@/components/Shell";
-import { Card, Input, Select, SubmitButton, Textarea } from "@/components/Ui";
+import { Callout, Card, Input, Select, SubmitButton, Textarea } from "@/components/Ui";
 import { addFollowUp, assignLeadOwner, createManualTask } from "@/lib/actions";
 import { requireLeadAccess } from "@/lib/auth";
 import { readCnasExtraData } from "@/lib/cnas";
@@ -126,7 +126,16 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
   const manualTaskPriorityOptions = [{ value: "", label: "沿用模板默认优先级" }, ...taskPriorityOptions];
 
   return (
-    <PageShell tenant={tenant} title={`客户详情：${lead.name}`} description="客户详情页基于客户类型策略库驱动资料、话术、下一步动作、任务和智能跟进助手。">
+    <PageShell
+      tenant={tenant}
+      title={`客户详情：${lead.name}`}
+      breadcrumbs={[
+        { label: "客户管理", href: `/app/${tenant.slug}/leads` },
+        { label: "客户详情", href: `/app/${tenant.slug}/leads/${lead.id}` },
+        { label: lead.name }
+      ]}
+      description="客户详情页基于客户类型策略库驱动资料、话术、下一步动作、任务和智能跟进助手。"
+    >
       <div className="grid gap-6 lg:grid-cols-[1fr_440px]">
         <div className="space-y-6">
           <Card>
@@ -271,6 +280,12 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
         </div>
 
         <aside className="space-y-6">
+          <Callout title={user.role === "SALES" ? "销售使用路径" : "当前页面路径"} tone={user.role === "SALES" ? "emerald" : "slate"}>
+            {user.role === "SALES"
+              ? "先看客户当前阶段和任务，再在这里使用 Market Claw 生成回复，回复后补一条跟进记录并确认下一步动作。"
+              : "这里是客户管理和 Market Claw 的交汇点，既能看客户状态，也能直接验证回复、资料和跟进建议是否匹配。"}
+          </Callout>
+
           <MarketClawAssistant
             tenantSlug={tenant.slug}
             leadId={lead.id}

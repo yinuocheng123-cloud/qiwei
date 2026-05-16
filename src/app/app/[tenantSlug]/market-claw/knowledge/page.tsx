@@ -13,7 +13,7 @@ import { marketClawKnowledgeStatusOptions, marketClawKnowledgeTypeOptions } from
 import { customerTypeOptions, stageOptions } from "@/lib/options";
 import { prisma } from "@/lib/prisma";
 import { PageShell } from "@/components/Shell";
-import { Card, Input, Select, SubmitButton, Textarea } from "@/components/Ui";
+import { Card, Input, SectionTabs, Select, SubmitButton, Textarea } from "@/components/Ui";
 
 export const dynamic = "force-dynamic";
 
@@ -172,8 +172,23 @@ export default async function MarketClawKnowledgePage({
     <PageShell
       tenant={tenant}
       title="Market Claw 知识库"
+      breadcrumbs={[
+        { label: "Market Claw", href: `/app/${tenant.slug}/market-claw` },
+        { label: "知识库" }
+      ]}
       description="把企业的产品、服务、案例、FAQ、价格边界、交付流程和不能承诺事项投喂进来。Market Claw 会基于这些知识生成销售回复草稿，避免销售乱说、漏说、说过头。"
     >
+      <SectionTabs
+        current="knowledge"
+        items={[
+          { key: "overview", label: "总览", href: `/app/${tenant.slug}/market-claw` },
+          { key: "knowledge", label: "知识库", href: `/app/${tenant.slug}/market-claw/knowledge` },
+          { key: "training", label: "回复训练场", href: `/app/${tenant.slug}/market-claw/training` },
+          { key: "replies", label: "回复记录", href: `/app/${tenant.slug}/market-claw/replies` }
+        ]}
+        className="mb-6"
+      />
+
       <Card className="mb-6 bg-amber-50 border-amber-200">
         <h2 className="text-base font-semibold text-slate-950">投喂原则</h2>
         <p className="mt-2 text-sm leading-6 text-slate-700">

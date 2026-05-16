@@ -12,7 +12,7 @@ import { canAccessMarketClawTraining, requireTenantAccess } from "@/lib/auth";
 import { customerTypeOptions, stageOptions } from "@/lib/options";
 import { prisma } from "@/lib/prisma";
 import { PageShell } from "@/components/Shell";
-import { Card, Input, Select, SubmitButton, Textarea } from "@/components/Ui";
+import { Card, Input, SectionTabs, Select, SubmitButton, Textarea } from "@/components/Ui";
 
 export const dynamic = "force-dynamic";
 
@@ -53,8 +53,23 @@ export default async function MarketClawTrainingPage({ params }: { params: { ten
     <PageShell
       tenant={tenant}
       title="Market Claw 回复训练场"
+      breadcrumbs={[
+        { label: "Market Claw", href: `/app/${tenant.slug}/market-claw` },
+        { label: "回复训练场" }
+      ]}
       description="在这里模拟客户问题，测试 Market Claw 生成的回复是否准确、像人话、有边界。可用回复可以沉淀为标准话术，不可用回复要记录问题，持续训练。"
     >
+      <SectionTabs
+        current="training"
+        items={[
+          { key: "overview", label: "总览", href: `/app/${tenant.slug}/market-claw` },
+          { key: "knowledge", label: "知识库", href: `/app/${tenant.slug}/market-claw/knowledge` },
+          { key: "training", label: "回复训练场", href: `/app/${tenant.slug}/market-claw/training` },
+          { key: "replies", label: "回复记录", href: `/app/${tenant.slug}/market-claw/replies` }
+        ]}
+        className="mb-6"
+      />
+
       <div className="grid gap-6 xl:grid-cols-[380px_1fr]">
         <Card>
           <h2 className="mb-4 text-base font-semibold text-slate-950">测试条件</h2>

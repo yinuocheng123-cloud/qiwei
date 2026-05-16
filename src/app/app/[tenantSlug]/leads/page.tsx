@@ -14,7 +14,7 @@ import { canImportTenantLeads, canViewAllTenantLeads, requireTenantAccess } from
 import { customerTypeOptions, formatDate, intentionOptions, labelOf, needTypeOptions, sourceOptions, stageOptions } from "@/lib/options";
 import { prisma } from "@/lib/prisma";
 import { PageShell } from "@/components/Shell";
-import { Card, Input, Select, StatCard, SubmitButton } from "@/components/Ui";
+import { Callout, Card, Input, SectionTabs, Select, StatCard, SubmitButton } from "@/components/Ui";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +58,10 @@ export default async function LeadsPage({
   const { user, tenant } = await requireTenantAccess(params.tenantSlug, ["TENANT_ADMIN", "OPERATOR", "SALES"]);
   const canViewAll = canViewAllTenantLeads(user.role);
   const canImport = canImportTenantLeads(user.role);
+  const currentView =
+    searchParams.view === "source" || searchParams.view === "tags" || searchParams.view === "forms" || searchParams.view === "imports"
+      ? searchParams.view
+      : "list";
   const where: Prisma.LeadWhereInput = { tenantId: tenant.id };
   const sourceAttributionFilter: Prisma.LeadSourceAttributionWhereInput = {};
 
@@ -159,6 +163,10 @@ export default async function LeadsPage({
     <PageShell
       tenant={tenant}
       title="客户管理"
+      breadcrumbs={[
+        { label: "客户管理", href: `/app/${tenant.slug}/leads` },
+        { label: currentView === "list" ? "客户列表" : currentView === "imports" ? "客户导入" : currentView === "source" ? "来源归因" : currentView === "tags" ? "标签视图" : "表单线索" }
+      ]}
       description={
         canViewAll
           ? "把客户列表、客户导入、来源归因、标签视图和表单线索收口到同一入口，不再分散成多条一级导航。"
@@ -171,6 +179,24 @@ export default async function LeadsPage({
         <StatCard label="逾期跟进" value={overdueCount} />
         <StatCard label="未分配客户" value={canViewAll ? unassignedCount : 0} />
       </div>
+
+      <SectionTabs
+        current={currentView}
+        items={[
+          { key: "list", label: "客户列表", href: `/app/${tenant.slug}/leads?view=list#lead-table` },
+          ...(canImport ? [{ key: "imports", label: "客户导入", href: `/app/${tenant.slug}/imports` }] : []),
+          ...(canViewAll ? [{ key: "source", label: "来源归因", href: `/app/${tenant.slug}/leads?view=source#source-attribution` }] : []),
+          ...(canViewAll ? [{ key: "tags", label: "标签视图", href: `/app/${tenant.slug}/leads?view=tags#tag-view` }] : []),
+          ...(canViewAll ? [{ key: "forms", label: "表单线索", href: `/app/${tenant.slug}/leads?view=forms#form-leads` }] : [])
+        ]}
+        className="mt-4"
+      />
+
+      <Callout className="mt-4" title={canViewAll ? "页面使用方式" : "销售使用方式"} tone={canViewAll ? "slate" : "emerald"}>
+        {canViewAll
+          ? "默认先看客户列表；导入、来源归因、标签和表单线索放在页内入口里，避免一打开就被大量筛选项和维护入口淹没。"
+          : "先从客户列表找到今天要跟进的客户，再进入客户详情页处理回复、跟进记录和下一步任务。"}
+      </Callout>
 
       <section className="mt-6">
         <h2 className="text-lg font-semibold text-slate-950">客户管理入口</h2>
@@ -193,22 +219,27 @@ export default async function LeadsPage({
       </section>
 
       <section id="lead-table" className="mt-6">
-        <Card>
-          <form className="grid gap-3 md:grid-cols-3 lg:grid-cols-9">
-            <Select label="来源" name="source" options={[{ value: "", label: "全部" }, ...sourceOptions]} defaultValue={searchParams.source} />
-            <Select label="客户类型" name="customerType" options={[{ value: "", label: "全部" }, ...customerTypeOptions]} defaultValue={searchParams.customerType} />
-            <Select label="需求类型" name="needType" options={[{ value: "", label: "全部" }, ...needTypeOptions]} defaultValue={searchParams.needType} />
-            <Select label="意向等级" name="intentionLevel" options={[{ value: "", label: "全部" }, ...intentionOptions]} defaultValue={searchParams.intentionLevel} />
-            <Select label="客户阶段" name="stage" options={[{ value: "", label: "全部" }, ...stageOptions]} defaultValue={searchParams.stage} />
-            <Input label="来源项目" name="sourceProject" defaultValue={searchParams.sourceProject} />
-            <Input label="来源活动" name="sourceCampaign" defaultValue={searchParams.sourceCampaign} />
-            <Input label="来源场景" name="sourceScene" defaultValue={searchParams.sourceScene} />
-            {canViewAll ? <Select label="负责人" name="ownerId" options={ownerOptions} defaultValue={searchParams.ownerId} /> : null}
-            <div className="pt-6">
-              <SubmitButton>筛选</SubmitButton>
-            </div>
-          </form>
-        </Card>
+        <details open={Boolean(searchParams.source || searchParams.customerType || searchParams.needType || searchParams.intentionLevel || searchParams.stage || searchParams.sourceProject || searchParams.sourceCampaign || searchParams.sourceScene || searchParams.ownerId)}>
+          <summary className="cursor-pointer rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 shadow-sm">
+            筛选客户
+          </summary>
+          <Card className="mt-3">
+            <form className="grid gap-3 md:grid-cols-3 lg:grid-cols-9">
+              <Select label="来源" name="source" options={[{ value: "", label: "全部" }, ...sourceOptions]} defaultValue={searchParams.source} />
+              <Select label="客户类型" name="customerType" options={[{ value: "", label: "全部" }, ...customerTypeOptions]} defaultValue={searchParams.customerType} />
+              <Select label="需求类型" name="needType" options={[{ value: "", label: "全部" }, ...needTypeOptions]} defaultValue={searchParams.needType} />
+              <Select label="意向等级" name="intentionLevel" options={[{ value: "", label: "全部" }, ...intentionOptions]} defaultValue={searchParams.intentionLevel} />
+              <Select label="客户阶段" name="stage" options={[{ value: "", label: "全部" }, ...stageOptions]} defaultValue={searchParams.stage} />
+              <Input label="来源项目" name="sourceProject" defaultValue={searchParams.sourceProject} />
+              <Input label="来源活动" name="sourceCampaign" defaultValue={searchParams.sourceCampaign} />
+              <Input label="来源场景" name="sourceScene" defaultValue={searchParams.sourceScene} />
+              {canViewAll ? <Select label="负责人" name="ownerId" options={ownerOptions} defaultValue={searchParams.ownerId} /> : null}
+              <div className="pt-6">
+                <SubmitButton>筛选</SubmitButton>
+              </div>
+            </form>
+          </Card>
+        </details>
       </section>
 
       <Card className="mt-5">

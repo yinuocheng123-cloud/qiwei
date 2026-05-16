@@ -20,7 +20,7 @@ import { businessLineCategoryOptions, businessLineStatusOptions, customerTypeOpt
 import { prisma } from "@/lib/prisma";
 import { PageShell } from "@/components/Shell";
 import { BusinessLineForm, StatusActionButtons } from "@/components/BusinessLineEditor";
-import { Card, StatCard } from "@/components/Ui";
+import { Callout, Card, SectionTabs, StatCard } from "@/components/Ui";
 
 export const dynamic = "force-dynamic";
 
@@ -156,6 +156,10 @@ export default async function BusinessLinesPage({ params }: { params: { tenantSl
     <PageShell
       tenant={tenant}
       title="业务配置"
+      breadcrumbs={[
+        { label: "业务配置", href: `/app/${tenant.slug}/business-lines` },
+        { label: "产品总览" }
+      ]}
       description={
         canEdit
           ? "把产品总览、资料包、策略库、任务模板、企微配置和合规配置收口到同一条维护路径，避免后台入口继续平铺。"
@@ -168,6 +172,25 @@ export default async function BusinessLinesPage({ params }: { params: { tenantSl
         <StatCard label="暂停中" value={pausedCount} />
         <StatCard label="已归档" value={archivedCount} />
       </div>
+
+      <SectionTabs
+        current="overview"
+        items={[
+          { key: "overview", label: "产品总览", href: `/app/${tenant.slug}/business-lines#product-overview` },
+          { key: "materials", label: "资料包", href: `/app/${tenant.slug}/materials` },
+          { key: "strategies", label: "策略库", href: `/app/${tenant.slug}/strategies` },
+          { key: "tasks", label: "任务模板", href: `/app/${tenant.slug}/task-templates` },
+          ...(user.role === "TENANT_ADMIN" ? [{ key: "wecom", label: "企微配置", href: `/app/${tenant.slug}/wecom` }] : []),
+          ...(canEdit ? [{ key: "compliance", label: "合规配置", href: `/app/${tenant.slug}/communication-compliance` }] : [])
+        ]}
+        className="mt-4"
+      />
+
+      <Callout className="mt-4" title={canEdit ? "维护路径" : "查看路径"} tone={canEdit ? "slate" : "emerald"}>
+        {canEdit
+          ? "先在产品总览判断当前主推方向，再进入详情页维护客户适配、推荐标签、资料和任务模板，不把所有字段堆在同一页。"
+          : "销售先看产品总览确认当前主推产品，再进入客户详情页结合标签、资料和 Market Claw 实际使用。"}
+      </Callout>
 
       <section className="mt-6">
         <h2 className="text-lg font-semibold text-slate-950">配置导航</h2>

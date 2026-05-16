@@ -10,6 +10,7 @@
 import Link from "next/link";
 import type { Tenant, UserRole } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth";
+import { Breadcrumbs } from "@/components/Ui";
 
 type NavItem = {
   label: string;
@@ -230,11 +231,13 @@ export async function PageShell({
   tenant,
   title,
   description,
+  breadcrumbs,
   children
 }: {
   tenant?: Tenant;
   title: string;
   description?: string;
+  breadcrumbs?: { label: string; href?: string }[];
   children: React.ReactNode;
 }) {
   return (
@@ -242,6 +245,7 @@ export async function PageShell({
       <ShellNav tenant={tenant} />
       <section className="mx-auto max-w-7xl px-6 py-8">
         <div className="mb-6">
+          {breadcrumbs?.length ? <Breadcrumbs items={breadcrumbs} className="mb-3" /> : null}
           <h1 className="text-2xl font-bold text-slate-950">{title}</h1>
           {description ? <p className="mt-2 text-sm text-slate-600">{description}</p> : null}
         </div>

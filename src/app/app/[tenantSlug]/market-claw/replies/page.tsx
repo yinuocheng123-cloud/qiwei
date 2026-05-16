@@ -9,7 +9,7 @@
 import { canAccessMarketClawReplies, requireTenantAccess } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PageShell } from "@/components/Shell";
-import { Card, Select } from "@/components/Ui";
+import { Card, SectionTabs, Select } from "@/components/Ui";
 
 export const dynamic = "force-dynamic";
 
@@ -65,8 +65,31 @@ export default async function MarketClawRepliesPage({
     <PageShell
       tenant={tenant}
       title="Market Claw 回复记录"
+      breadcrumbs={[
+        { label: "Market Claw", href: `/app/${tenant.slug}/market-claw` },
+        { label: "回复记录" }
+      ]}
       description="用于企业管理员和运营复盘哪些回复好用、哪些问题频繁出现、哪些知识库需要优化。"
     >
+      <SectionTabs
+        current="replies"
+        items={
+          user.role === "SALES"
+            ? [
+                { key: "overview", label: "总览", href: `/app/${tenant.slug}/market-claw` },
+                { key: "replies", label: "我的回复记录", href: `/app/${tenant.slug}/market-claw/replies` },
+                { key: "leads", label: "去客户列表", href: `/app/${tenant.slug}/leads` }
+              ]
+            : [
+                { key: "overview", label: "总览", href: `/app/${tenant.slug}/market-claw` },
+                { key: "knowledge", label: "知识库", href: `/app/${tenant.slug}/market-claw/knowledge` },
+                { key: "training", label: "回复训练场", href: `/app/${tenant.slug}/market-claw/training` },
+                { key: "replies", label: "回复记录", href: `/app/${tenant.slug}/market-claw/replies` }
+              ]
+        }
+        className="mb-6"
+      />
+
       <Card>
         <form className="grid gap-4 md:grid-cols-3">
           <Select label="使用状态" name="useStatus" options={useStatusOptions} defaultValue={useStatus} />

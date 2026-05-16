@@ -16,7 +16,7 @@ import { customerTypeOptions, formatDate, intentionOptions, labelOf, stageOption
 import { prisma } from "@/lib/prisma";
 import { taskWhere } from "@/lib/tasks";
 import { PageShell } from "@/components/Shell";
-import { Card, StatCard } from "@/components/Ui";
+import { Callout, Card, SectionTabs, StatCard } from "@/components/Ui";
 
 export const dynamic = "force-dynamic";
 
@@ -69,10 +69,13 @@ export default async function TodosPage({
   searchParams
 }: {
   params: { tenantSlug: string };
-  searchParams?: { status?: string; type?: string; priority?: string; ownerId?: string };
+  searchParams?: { status?: string; type?: string; priority?: string; ownerId?: string; view?: string };
 }) {
   const { user, tenant } = await requireTenantAccess(params.tenantSlug, ["TENANT_ADMIN", "OPERATOR", "SALES"]);
   const canViewAll = canViewAllTenantLeads(user.role);
+  const requestedView = searchParams?.view;
+  const currentView =
+    requestedView === "overdue" || requestedView === "done" || requestedView === "priority" || requestedView === "filtered" ? requestedView : "today";
   const ownerId = canViewAll ? undefined : user.id;
   const taskRules = taskWhere(tenant.id, ownerId);
   const leadRules = todoWhere(tenant.id, ownerId);
@@ -132,7 +135,22 @@ export default async function TodosPage({
     <PageShell
       tenant={tenant}
       title="跟进工作台"
-      description="把今日待办、逾期任务、已完成记录和任务模板入口收口在一个工作台里。销售继续只看自己的任务。"
+      breadcrumbs={[
+        { label: "跟进工作台", href: `/app/${tenant.slug}/todos` },
+        {
+          label:
+            currentView === "done"
+              ? "已完成"
+              : currentView === "priority"
+                ? "高优先级任务"
+                : currentView === "filtered"
+                  ? "筛选结果"
+                  : "今日待办"
+        }
+      ]}
+      description={
+        canViewAll ? "把今日待办、逾期任务、已完成记录和任务模板入口收口在一个工作台里。" : "销售先看今天该跟谁，再处理逾期未跟进客户，最后回到客户详情页继续回复与推进。"
+      }
     >
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <StatCard label="今日待办" value={todayTasks.length} />
@@ -141,6 +159,24 @@ export default async function TodosPage({
         <StatCard label="本周待跟进" value={weekTasks.length} />
         <StatCard label="已完成任务" value={doneTasks.length} />
       </div>
+
+      <SectionTabs
+        current={currentView}
+        items={[
+          { key: "today", label: "今日待办", href: `/app/${tenant.slug}/todos?view=today#today-tasks` },
+          { key: "overdue", label: "逾期任务", href: `/app/${tenant.slug}/todos?view=overdue#overdue-tasks` },
+          { key: "done", label: "已完成", href: `/app/${tenant.slug}/todos?view=done#done-tasks` },
+          ...(canViewAll ? [{ key: "priority", label: "高优先级任务", href: `/app/${tenant.slug}/todos?view=priority#high-priority-tasks` }] : []),
+          ...(canViewAll ? [{ key: "templates", label: "任务模板", href: `/app/${tenant.slug}/task-templates` }] : [])
+        ]}
+        className="mt-4"
+      />
+
+      <Callout className="mt-4" title={canViewAll ? "管理视角" : "销售今日路径"} tone={canViewAll ? "slate" : "emerald"}>
+        {canViewAll
+          ? "先看今天和逾期任务，再用高优先级任务和任务模板校正团队跟进节奏，不把模板入口直接摊给销售。"
+          : "先处理今日待办和逾期任务，再进入客户详情页完成回复、记录跟进并确认下一步动作。"}
+      </Callout>
 
       <section className="mt-6">
         <h2 className="text-lg font-semibold text-slate-950">工作入口</h2>
@@ -155,54 +191,60 @@ export default async function TodosPage({
         </div>
       </section>
 
-      <Card className="mt-6">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-base font-semibold text-slate-950">任务筛选</h2>
-            <p className="mt-1 text-sm text-slate-500">手动创建任务请进入客户详情页，任务会自动进入提醒队列。</p>
+      <details className="mt-6" open={hasFilters}>
+        <summary className="cursor-pointer rounded-md border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 shadow-sm">
+          任务筛选
+        </summary>
+        <Card className="mt-3">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-slate-950">任务筛选</h2>
+              <p className="mt-1 text-sm text-slate-500">手动创建任务请进入客户详情页，任务会自动进入提醒队列。</p>
+            </div>
+            <Link className="rounded-md border border-slate-300 px-3 py-2 text-sm" href={`/app/${tenant.slug}/leads`}>
+              选择客户创建任务
+            </Link>
           </div>
-          <Link className="rounded-md border border-slate-300 px-3 py-2 text-sm" href={`/app/${tenant.slug}/leads`}>
-            选择客户创建任务
-          </Link>
-        </div>
-        <form className="grid gap-3 md:grid-cols-4 lg:grid-cols-5">
-          <select className="rounded-md border border-slate-300 px-3 py-2 text-sm" name="status" defaultValue={searchParams?.status ?? ""}>
-            <option value="">全部状态</option>
-            {taskStatusOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <select className="rounded-md border border-slate-300 px-3 py-2 text-sm" name="type" defaultValue={searchParams?.type ?? ""}>
-            <option value="">全部类型</option>
-            {taskTypeOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <select className="rounded-md border border-slate-300 px-3 py-2 text-sm" name="priority" defaultValue={searchParams?.priority ?? ""}>
-            <option value="">全部优先级</option>
-            {taskPriorityOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          {canViewAll ? (
-            <select className="rounded-md border border-slate-300 px-3 py-2 text-sm" name="ownerId" defaultValue={searchParams?.ownerId ?? ""}>
-              <option value="">全部负责人</option>
-              {owners.map((owner) => (
-                <option key={owner.id} value={owner.id}>
-                  {owner.name}（{owner.role}）
+          <form className="grid gap-3 md:grid-cols-4 lg:grid-cols-5">
+            <input type="hidden" name="view" value="filtered" />
+            <select className="rounded-md border border-slate-300 px-3 py-2 text-sm" name="status" defaultValue={searchParams?.status ?? ""}>
+              <option value="">全部状态</option>
+              {taskStatusOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>
-          ) : null}
-          <button className="rounded-md bg-slate-950 px-4 py-2 text-sm font-medium text-white">筛选</button>
-        </form>
-      </Card>
+            <select className="rounded-md border border-slate-300 px-3 py-2 text-sm" name="type" defaultValue={searchParams?.type ?? ""}>
+              <option value="">全部类型</option>
+              {taskTypeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <select className="rounded-md border border-slate-300 px-3 py-2 text-sm" name="priority" defaultValue={searchParams?.priority ?? ""}>
+              <option value="">全部优先级</option>
+              {taskPriorityOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            {canViewAll ? (
+              <select className="rounded-md border border-slate-300 px-3 py-2 text-sm" name="ownerId" defaultValue={searchParams?.ownerId ?? ""}>
+                <option value="">全部负责人</option>
+                {owners.map((owner) => (
+                  <option key={owner.id} value={owner.id}>
+                    {owner.name}（{owner.role}）
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            <button className="rounded-md bg-slate-950 px-4 py-2 text-sm font-medium text-white">筛选</button>
+          </form>
+        </Card>
+      </details>
 
       <div className="mt-6 grid gap-5 xl:grid-cols-2">
         {hasFilters ? <TaskSection tenantSlug={tenant.slug} sectionId="filtered-tasks" title="筛选结果" tasks={filteredTasks} /> : null}
