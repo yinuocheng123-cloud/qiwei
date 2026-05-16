@@ -1690,13 +1690,24 @@ async function seedTenant({
     }
   });
 
+  // 这里必须按“最下游子表 -> 上游主表”清理。
+  // V2.0 引入了 BusinessLine -> MarketClaw* 的新外键链，若仍按旧顺序直接删 BusinessLine，
+  // 在租户已经使用过麻虾知识库 / 训练场 / 回复草稿后会触发外键约束失败。
   await prisma.auditLog.deleteMany({ where: { tenantId: tenant.id } });
+  await prisma.communicationComplianceConfig.deleteMany({ where: { tenantId: tenant.id } });
   await prisma.reminderQueue.deleteMany({ where: { tenantId: tenant.id } });
+  await prisma.marketClawReplyFeedback.deleteMany({ where: { tenantId: tenant.id } });
   await prisma.replySuggestion.deleteMany({ where: { tenantId: tenant.id } });
   await prisma.followTask.deleteMany({ where: { tenantId: tenant.id } });
   await prisma.followUp.deleteMany({ where: { tenantId: tenant.id } });
   await prisma.leadTag.deleteMany({ where: { tenantId: tenant.id } });
+  await prisma.leadSourceAttribution.deleteMany({ where: { tenantId: tenant.id } });
   await prisma.intakeForm.deleteMany({ where: { tenantId: tenant.id } });
+  await prisma.importRow.deleteMany({ where: { tenantId: tenant.id } });
+  await prisma.importBatch.deleteMany({ where: { tenantId: tenant.id } });
+  await prisma.marketClawReplyDraft.deleteMany({ where: { tenantId: tenant.id } });
+  await prisma.marketClawTrainingCase.deleteMany({ where: { tenantId: tenant.id } });
+  await prisma.marketClawKnowledgeItem.deleteMany({ where: { tenantId: tenant.id } });
   await prisma.lead.deleteMany({ where: { tenantId: tenant.id } });
   await prisma.businessLine.deleteMany({ where: { tenantId: tenant.id } });
   await prisma.material.deleteMany({ where: { tenantId: tenant.id } });
