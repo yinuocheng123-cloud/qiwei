@@ -46,6 +46,7 @@ function buildTenantNavItems(tenant: Tenant, role: UserRole): NavItem[] {
       { label: "资料包", href: `${base}/materials` },
       { label: "策略库", href: `${base}/strategies` },
       { label: "任务模板", href: `${base}/task-templates` },
+      { label: "采集合规配置", href: `${base}/communication-compliance` },
       { label: "权限说明", href: `${base}/permissions` },
       { label: "审计日志", href: `${base}/audit-logs` },
       { label: "演示说明", href: `${base}/demo-guide` },
@@ -65,6 +66,7 @@ function buildTenantNavItems(tenant: Tenant, role: UserRole): NavItem[] {
       { label: "资料包", href: `${base}/materials` },
       { label: "策略库", href: `${base}/strategies` },
       { label: "任务模板", href: `${base}/task-templates` },
+      { label: "采集合规配置", href: `${base}/communication-compliance` },
       { label: "权限说明", href: `${base}/permissions` },
       { label: "演示说明", href: `${base}/demo-guide` },
       { label: "退出", href: "/logout" }

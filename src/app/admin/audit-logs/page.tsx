@@ -56,6 +56,10 @@ const actionOptions = [
   { value: "import_batch_created", label: "创建导入预览批次" },
   { value: "import_batch_completed", label: "完成客户导入" },
   { value: "import_batch_failed", label: "客户导入失败" },
+  { value: "communication_compliance_config_created", label: "创建采集合规配置" },
+  { value: "communication_compliance_config_updated", label: "更新采集合规配置" },
+  { value: "communication_compliance_config_enabled", label: "启用采集合规配置" },
+  { value: "communication_compliance_config_paused", label: "暂停采集合规配置" },
   { value: "tenant_created", label: "创建租户" },
   { value: "tenant_status_updated", label: "更新租户状态" }
 ];
@@ -72,6 +76,7 @@ const entityTypeOptions = [
   { value: "TaskTemplate", label: "任务模板" },
   { value: "ReminderQueue", label: "提醒队列" },
   { value: "Material", label: "资料包" },
+  { value: "CommunicationComplianceConfig", label: "采集合规配置" },
   { value: "CustomerTypeStrategy", label: "客户策略" },
   { value: "IntakeForm", label: "公开表单" },
   { value: "ImportBatch", label: "导入批次" },

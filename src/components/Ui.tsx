@@ -13,7 +13,21 @@ export function Card({ children, className = "" }: { children: React.ReactNode; 
   return <div className={`rounded-md border border-slate-200 bg-white p-5 shadow-sm ${className}`}>{children}</div>;
 }
 
-export function Input({ label, name, type = "text", defaultValue, required }: { label: string; name: string; type?: string; defaultValue?: string; required?: boolean }) {
+export function Input({
+  label,
+  name,
+  type = "text",
+  defaultValue,
+  required,
+  disabled
+}: {
+  label: string;
+  name: string;
+  type?: string;
+  defaultValue?: string;
+  required?: boolean;
+  disabled?: boolean;
+}) {
   return (
     <label className="block text-sm font-medium text-slate-700">
       {label}
@@ -23,25 +37,61 @@ export function Input({ label, name, type = "text", defaultValue, required }: { 
         type={type}
         defaultValue={defaultValue}
         required={required}
+        disabled={disabled}
       />
     </label>
   );
 }
 
-export function Textarea({ label, name, defaultValue, rows = 4 }: { label: string; name: string; defaultValue?: string; rows?: number }) {
+export function Textarea({
+  label,
+  name,
+  defaultValue,
+  rows = 4,
+  disabled
+}: {
+  label: string;
+  name: string;
+  defaultValue?: string;
+  rows?: number;
+  disabled?: boolean;
+}) {
   return (
     <label className="block text-sm font-medium text-slate-700">
       {label}
-      <textarea className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-600" name={name} rows={rows} defaultValue={defaultValue} />
+      <textarea
+        className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-600"
+        name={name}
+        rows={rows}
+        defaultValue={defaultValue}
+        disabled={disabled}
+      />
     </label>
   );
 }
 
-export function Select({ label, name, options, defaultValue }: { label: string; name: string; options: Option[]; defaultValue?: string }) {
+export function Select({
+  label,
+  name,
+  options,
+  defaultValue,
+  disabled
+}: {
+  label: string;
+  name: string;
+  options: Option[];
+  defaultValue?: string;
+  disabled?: boolean;
+}) {
   return (
     <label className="block text-sm font-medium text-slate-700">
       {label}
-      <select className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-600" name={name} defaultValue={defaultValue}>
+      <select
+        className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-600"
+        name={name}
+        defaultValue={defaultValue}
+        disabled={disabled}
+      >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}

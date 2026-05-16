@@ -13,6 +13,9 @@
 import {
   BusinessLineCategory,
   BusinessLineStatus,
+  CommunicationComplianceChannel,
+  CommunicationComplianceProvider,
+  CommunicationComplianceStatus,
   CustomerType,
   FormType,
   FollowTaskPriority,
@@ -31,7 +34,13 @@ import {
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { safeWriteAuditLog } from "@/lib/audit";
-import { canImportTenantLeads, requireLeadAccess, requirePlatformAdmin, requireTenantAccess } from "@/lib/auth";
+import {
+  canImportTenantLeads,
+  canManageCommunicationCompliance,
+  requireLeadAccess,
+  requirePlatformAdmin,
+  requireTenantAccess
+} from "@/lib/auth";
 import { buildBusinessLineSlug, parseBusinessLineRecommendedTagText } from "@/lib/business-lines";
 import {
   CNAS_BUSINESS_LINE_NAME,
@@ -143,6 +152,20 @@ function truncateAuditQuestion(question: string, maxLength = 100) {
 
 function truncateFileName(fileName: string, maxLength = 120) {
   return fileName.length <= maxLength ? fileName : `${fileName.slice(0, Math.max(0, maxLength - 3))}...`;
+}
+
+function buildCommunicationComplianceMessageUrl(
+  tenantSlug: string,
+  channel: CommunicationComplianceChannel,
+  type: "success" | "error",
+  message: string
+) {
+  const params = new URLSearchParams({
+    messageChannel: channel,
+    messageType: type,
+    message
+  });
+  return `/app/${tenantSlug}/communication-compliance?${params.toString()}`;
 }
 
 export async function createTenant(formData: FormData) {
@@ -1407,6 +1430,46 @@ function getBusinessLinePayload(formData: FormData) {
   };
 }
 
+function checkbox(formData: FormData, key: string) {
+  return formData.get(key) === "on";
+}
+
+function parseMultiValue(formData: FormData, key: string) {
+  return formData
+    .getAll(key)
+    .flatMap((value) =>
+      typeof value === "string"
+        ? value
+            .split(/\r?\n|,/)
+            .map((item) => item.trim())
+            .filter(Boolean)
+        : []
+    )
+    .filter(Boolean);
+}
+
+function summarizeCommunicationScope(scopeConfig: {
+  employeeScopeMode: string;
+  employeeScopeUsers: string[];
+  businessLineScopeMode: string;
+  businessLineScopeIds: string[];
+  customerScopeMode: string;
+  customerScopeTags: string[];
+  customerScopeBusinessLines: string[];
+  customerScopeSources: string[];
+}) {
+  return {
+    employeeScopeMode: scopeConfig.employeeScopeMode,
+    employeeScopeCount: scopeConfig.employeeScopeUsers.length,
+    businessLineScopeMode: scopeConfig.businessLineScopeMode,
+    businessLineScopeCount: scopeConfig.businessLineScopeIds.length,
+    customerScopeMode: scopeConfig.customerScopeMode,
+    customerTagCount: scopeConfig.customerScopeTags.length,
+    customerBusinessLineCount: scopeConfig.customerScopeBusinessLines.length,
+    customerSourceCount: scopeConfig.customerScopeSources.length
+  };
+}
+
 export async function createBusinessLine(tenantSlug: string, formData: FormData) {
   const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
   const payload = getBusinessLinePayload(formData);
@@ -1522,4 +1585,226 @@ export async function upsertWeComConfig(tenantSlug: string, formData: FormData) 
   });
 
   revalidatePath(`/app/${tenantSlug}/wecom`);
+}
+
+export async function upsertCommunicationComplianceConfig(
+  tenantSlug: string,
+  channel: CommunicationComplianceChannel,
+  formData: FormData
+) {
+  const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
+  if (!canManageCommunicationCompliance(user.role)) {
+    redirect("/forbidden");
+  }
+
+  const requestedStatus = enumValue(
+    CommunicationComplianceStatus,
+    text(formData, "status"),
+    CommunicationComplianceStatus.DISABLED
+  );
+  const provider = enumValue(
+    CommunicationComplianceProvider,
+    text(formData, "provider"),
+    CommunicationComplianceProvider.MANUAL
+  );
+  const featureApplicationRequired = true;
+  const featureApplicationSubmitted = checkbox(formData, "featureApplicationSubmitted");
+  const employeeScopeMode = text(formData, "employeeScopeMode") ?? "ALL";
+  const businessLineScopeMode = text(formData, "businessLineScopeMode") ?? "ALL_ACTIVE";
+  const customerScopeMode = text(formData, "customerScopeMode") ?? "ALL";
+  const employeeScopeUsers = parseMultiValue(formData, "employeeScopeUsers");
+  const businessLineScopeIds = parseMultiValue(formData, "businessLineScopeIds");
+  const customerScopeTags = parseMultiValue(formData, "customerScopeTags");
+  const customerScopeBusinessLines = parseMultiValue(formData, "customerScopeBusinessLines");
+  const customerScopeSources = parseMultiValue(formData, "customerScopeSources");
+  const dataRetentionDays = parseNumber(text(formData, "dataRetentionDays"), 180);
+  const allowAutoSend = false;
+  const confirmationItems = {
+    enterpriseAware: checkbox(formData, "enterpriseAware"),
+    employeeNoticeConfirmed: checkbox(formData, "employeeNoticeConfirmed"),
+    customerNoticeConfirmed: checkbox(formData, "customerNoticeConfirmed"),
+    usageScopeConfirmed: checkbox(formData, "usageScopeConfirmed"),
+    noUnauthorizedMonitoring: checkbox(formData, "noUnauthorizedMonitoring"),
+    aiAssistOnlyConfirmed: checkbox(formData, "aiAssistOnlyConfirmed")
+  };
+  const allConfirmed = Object.values(confirmationItems).every(Boolean);
+
+  if ((requestedStatus === CommunicationComplianceStatus.ENABLED || requestedStatus === CommunicationComplianceStatus.APPLYING) && !featureApplicationSubmitted) {
+    redirect(
+      buildCommunicationComplianceMessageUrl(
+        tenantSlug,
+        channel,
+        "error",
+        "该功能属于单独收费能力，必须先提交开通申请后才能进入申请中或启用状态。"
+      )
+    );
+  }
+
+  if (requestedStatus === CommunicationComplianceStatus.ENABLED && !allConfirmed) {
+    redirect(
+      buildCommunicationComplianceMessageUrl(
+        tenantSlug,
+        channel,
+        "error",
+        "未完成全部合规确认项前，不能启用自动采集通道。"
+      )
+    );
+  }
+
+  const existingConfig = await prisma.communicationComplianceConfig.findUnique({
+    where: {
+      tenantId_channel: {
+        tenantId: tenant.id,
+        channel
+      }
+    }
+  });
+
+  const status =
+    requestedStatus === CommunicationComplianceStatus.ENABLED && allConfirmed
+      ? CommunicationComplianceStatus.ENABLED
+      : requestedStatus;
+
+  const scopeConfig = {
+    employeeScopeMode,
+    employeeScopeUsers,
+    businessLineScopeMode,
+    businessLineScopeIds,
+    customerScopeMode,
+    customerScopeTags,
+    customerScopeBusinessLines,
+    customerScopeSources,
+    excludePausedOrArchivedBusinessLines: checkbox(formData, "excludePausedOrArchivedBusinessLines")
+  };
+
+  const noticeConfig = {
+    featureApplicationRequired,
+    featureApplicationSubmitted,
+    enterpriseAware: confirmationItems.enterpriseAware,
+    employeeNoticeConfirmed: confirmationItems.employeeNoticeConfirmed,
+    customerNoticeConfirmed: confirmationItems.customerNoticeConfirmed,
+    usageScopeConfirmed: confirmationItems.usageScopeConfirmed,
+    noUnauthorizedMonitoring: confirmationItems.noUnauthorizedMonitoring,
+    aiAssistOnlyConfirmed: confirmationItems.aiAssistOnlyConfirmed,
+    customerNoticeRequired: checkbox(formData, "customerNoticeRequired"),
+    recordingConsentConfirmed: checkbox(formData, "recordingConsentConfirmed"),
+    customerNoticeTemplate: text(formData, "customerNoticeTemplate"),
+    internalNoticeNotes: text(formData, "internalNoticeNotes")
+  };
+
+  const retentionConfig = {
+    dataRetentionDays,
+    keepRawText: checkbox(formData, "keepRawText"),
+    keepSummaryOnly: checkbox(formData, "keepSummaryOnly"),
+    keepAudioFile: checkbox(formData, "keepAudioFile"),
+    keepTranscriptOnly: checkbox(formData, "keepTranscriptOnly")
+  };
+
+  const aiConfig = {
+    allowAiSummary: checkbox(formData, "allowAiSummary"),
+    allowAiTagSuggestion: checkbox(formData, "allowAiTagSuggestion"),
+    allowAiTaskSuggestion: checkbox(formData, "allowAiTaskSuggestion"),
+    allowReplySuggestion: checkbox(formData, "allowReplySuggestion"),
+    allowAiAnalysis: checkbox(formData, "allowAiAnalysis"),
+    allowTranscription: checkbox(formData, "allowTranscription"),
+    allowAudioUpload: checkbox(formData, "allowAudioUpload"),
+    allowAutoTranscription: checkbox(formData, "allowAutoTranscription"),
+    allowAutoSend
+  };
+
+  const confirmedAt = status === CommunicationComplianceStatus.ENABLED ? new Date() : existingConfig?.confirmedAt ?? null;
+  const confirmedById = status === CommunicationComplianceStatus.ENABLED ? user.id : existingConfig?.confirmedById ?? null;
+
+  const savedConfig = await prisma.communicationComplianceConfig.upsert({
+    where: {
+      tenantId_channel: {
+        tenantId: tenant.id,
+        channel
+      }
+    },
+    update: {
+      status,
+      provider,
+      scopeConfig,
+      noticeConfig,
+      retentionConfig,
+      aiConfig,
+      confirmedById,
+      confirmedAt
+    },
+    create: {
+      tenantId: tenant.id,
+      channel,
+      status,
+      provider,
+      scopeConfig,
+      noticeConfig,
+      retentionConfig,
+      aiConfig,
+      confirmedById,
+      confirmedAt
+    }
+  });
+
+  const scopeSummary = summarizeCommunicationScope(scopeConfig);
+  const metadata = {
+    channel,
+    status: savedConfig.status,
+    provider: savedConfig.provider,
+    confirmedById: savedConfig.confirmedById,
+    scopeSummary,
+    allowAiAnalysis: aiConfig.allowAiAnalysis,
+    allowReplySuggestion: aiConfig.allowReplySuggestion,
+    allowAutoSend,
+    featureApplicationSubmitted
+  };
+
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: existingConfig ? "communication_compliance_config_updated" : "communication_compliance_config_created",
+    entityType: "CommunicationComplianceConfig",
+    entityId: savedConfig.id,
+    metadata
+  });
+
+  if (existingConfig?.status !== savedConfig.status && savedConfig.status === CommunicationComplianceStatus.ENABLED) {
+    await safeWriteAuditLog({
+      tenantId: tenant.id,
+      userId: user.id,
+      action: "communication_compliance_config_enabled",
+      entityType: "CommunicationComplianceConfig",
+      entityId: savedConfig.id,
+      metadata
+    });
+  }
+
+  if (
+    existingConfig?.status !== savedConfig.status &&
+    savedConfig.status === CommunicationComplianceStatus.PAUSED
+  ) {
+    await safeWriteAuditLog({
+      tenantId: tenant.id,
+      userId: user.id,
+      action: "communication_compliance_config_paused",
+      entityType: "CommunicationComplianceConfig",
+      entityId: savedConfig.id,
+      metadata
+    });
+  }
+
+  revalidatePath(`/app/${tenantSlug}/communication-compliance`);
+  revalidatePath(`/app/${tenantSlug}/audit-logs`);
+  redirect(
+    buildCommunicationComplianceMessageUrl(
+      tenantSlug,
+      channel,
+      "success",
+      status === CommunicationComplianceStatus.ENABLED
+        ? "采集合规配置已启用并保存。"
+        : status === CommunicationComplianceStatus.APPLYING
+          ? "采集合规配置已保存为申请中。"
+          : "采集合规配置已保存。"
+    )
+  );
 }

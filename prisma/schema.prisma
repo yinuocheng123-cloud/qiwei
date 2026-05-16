@@ -220,6 +220,28 @@ enum ImportRowStatus {
   SKIPPED
 }
 
+enum CommunicationComplianceChannel {
+  WECHAT_ARCHIVE
+  PHONE_RECORDING
+  ASR_TRANSCRIPTION
+}
+
+enum CommunicationComplianceStatus {
+  DISABLED
+  APPLYING
+  ENABLED
+  PAUSED
+  ARCHIVED
+}
+
+enum CommunicationComplianceProvider {
+  MANUAL
+  WECHAT_ARCHIVE_PLACEHOLDER
+  PHONE_SYSTEM_PLACEHOLDER
+  ASR_PROVIDER_PLACEHOLDER
+  OTHER
+}
+
 model Tenant {
   id          String                 @id @default(cuid())
   name        String
@@ -247,6 +269,7 @@ model Tenant {
   businessLines BusinessLine[]
   importBatches  ImportBatch[]
   importRows     ImportRow[]
+  communicationComplianceConfigs CommunicationComplianceConfig[]
 }
 
 model User {
@@ -270,6 +293,7 @@ model User {
   reminderQueues ReminderQueue[]
   replySuggestions ReplySuggestion[]
   importBatches  ImportBatch[]
+  confirmedCommunicationComplianceConfigs CommunicationComplianceConfig[] @relation("CommunicationComplianceConfirmedBy")
 
   @@index([tenantId, role])
 }
@@ -523,6 +547,27 @@ model WeComConfig {
   status          WeComConfigStatus @default(draft)
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
+}
+
+model CommunicationComplianceConfig {
+  id              String                            @id @default(cuid())
+  tenantId        String
+  tenant          Tenant                            @relation(fields: [tenantId], references: [id])
+  channel         CommunicationComplianceChannel
+  status          CommunicationComplianceStatus     @default(DISABLED)
+  provider        CommunicationComplianceProvider   @default(MANUAL)
+  scopeConfig     Json?
+  noticeConfig    Json?
+  retentionConfig Json?
+  aiConfig        Json?
+  confirmedById   String?
+  confirmedBy     User?                             @relation("CommunicationComplianceConfirmedBy", fields: [confirmedById], references: [id])
+  confirmedAt     DateTime?
+  createdAt       DateTime                          @default(now())
+  updatedAt       DateTime                          @updatedAt
+
+  @@unique([tenantId, channel])
+  @@index([tenantId, status, updatedAt])
 }
 
 model AuditLog {
