@@ -171,13 +171,13 @@ export default async function MarketClawKnowledgePage({
   return (
     <PageShell
       tenant={tenant}
-      title="麻虾知识库"
-      description="把企业的产品、服务、案例、FAQ、价格边界、交付流程和不能承诺事项投喂进来。麻虾会基于这些知识生成销售回复草稿，避免销售乱说、漏说、说过头。"
+      title="Market Claw 知识库"
+      description="把企业的产品、服务、案例、FAQ、价格边界、交付流程和不能承诺事项投喂进来。Market Claw 会基于这些知识生成销售回复草稿，避免销售乱说、漏说、说过头。"
     >
       <Card className="mb-6 bg-amber-50 border-amber-200">
         <h2 className="text-base font-semibold text-slate-950">投喂原则</h2>
         <p className="mt-2 text-sm leading-6 text-slate-700">
-          麻虾不是让 AI 多说，而是让销售说准。涉及价格、效果、周期、资源名额、评审结果等内容时，应优先使用边界清晰的知识。
+          Market Claw 不是让 AI 多说，而是让销售说准。涉及价格、效果、周期、资源名额、评审结果等内容时，应优先使用边界清晰的知识。
         </p>
       </Card>
 
@@ -236,7 +236,7 @@ export default async function MarketClawKnowledgePage({
             ))
           ) : (
             <Card>
-              <p className="text-sm text-slate-500">当前还没有麻虾知识条目，可以先从 FAQ、价格边界和不能承诺事项开始投喂。</p>
+              <p className="text-sm text-slate-500">当前还没有 Market Claw 知识条目，可以先从 FAQ、价格边界和不能承诺事项开始投喂。</p>
             </Card>
           )}
         </div>

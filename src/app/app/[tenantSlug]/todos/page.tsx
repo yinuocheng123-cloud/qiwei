@@ -1,11 +1,11 @@
 /*
- * 文件说明：该文件实现 V1.3.1 销售任务工作台。
- * 功能说明：基于 FollowTask 展示任务分组、筛选条件、任务操作和客户快捷入口。
+ * 文件说明：该页面实现 V2.0.3 的跟进工作台。
+ * 功能说明：保留原有任务与客户查询逻辑，并在页面顶部按“今日待办、逾期任务、已完成、任务模板”做任务归类入口。
  *
  * 结构概览：
- *   第一部分：导入依赖与类型
- *   第二部分：任务和客户查询
- *   第三部分：筛选表单、任务卡片和客户列表组件
+ *   第一部分：工作台入口卡片
+ *   第二部分：任务与客户查询
+ *   第三部分：任务区块与客户区块
  */
 import Link from "next/link";
 import { FollowTaskPriority, FollowTaskStatus, FollowTaskType, type Prisma } from "@prisma/client";
@@ -27,6 +27,26 @@ type TaskItem = Prisma.FollowTaskGetPayload<{
 type LeadItem = Prisma.LeadGetPayload<{
   include: { owner: true };
 }>;
+
+function WorkbenchEntryCard({
+  title,
+  description,
+  href
+}: {
+  title: string;
+  description: string;
+  href: string;
+}) {
+  return (
+    <Card className="h-full">
+      <h2 className="text-base font-semibold text-slate-950">{title}</h2>
+      <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
+      <Link className="mt-4 inline-flex rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700" href={href}>
+        进入
+      </Link>
+    </Card>
+  );
+}
 
 function dateTimeLocal(value: Date) {
   const local = new Date(value.getTime() - value.getTimezoneOffset() * 60_000);
@@ -72,36 +92,74 @@ export default async function TodosPage({
     ...(priorityFilter ? { priority: priorityFilter } : {})
   };
 
-  const [todayTasks, overdueTasks, highPriorityTasks, weekTasks, doneTasks, filteredTasks, highIntentLeads, quotedLeads, reactivateLeads, owners] = await Promise.all([
-    prisma.followTask.findMany({ where: taskRules.today, include: { lead: true, owner: true }, orderBy: { dueAt: "asc" }, take: 50 }),
-    prisma.followTask.findMany({ where: taskRules.overdue, include: { lead: true, owner: true }, orderBy: { dueAt: "asc" }, take: 50 }),
-    prisma.followTask.findMany({ where: taskRules.highPriority, include: { lead: true, owner: true }, orderBy: [{ priority: "desc" }, { dueAt: "asc" }], take: 50 }),
-    prisma.followTask.findMany({ where: taskRules.thisWeek, include: { lead: true, owner: true }, orderBy: { dueAt: "asc" }, take: 50 }),
-    prisma.followTask.findMany({ where: taskRules.done, include: { lead: true, owner: true }, orderBy: { completedAt: "desc" }, take: 30 }),
-    hasFilters ? prisma.followTask.findMany({ where: filteredWhere, include: { lead: true, owner: true }, orderBy: [{ dueAt: "asc" }, { updatedAt: "desc" }], take: 80 }) : Promise.resolve([]),
-    prisma.lead.findMany({ where: leadRules.highIntent, include: { owner: true }, orderBy: { updatedAt: "desc" }, take: 30 }),
-    prisma.lead.findMany({ where: { tenantId: tenant.id, ...(ownerId ? { ownerId } : {}), stage: "QUOTED" }, include: { owner: true }, orderBy: { updatedAt: "desc" }, take: 30 }),
-    prisma.lead.findMany({ where: leadRules.reactivate, include: { owner: true }, orderBy: { updatedAt: "desc" }, take: 30 }),
-    canViewAll
-      ? prisma.user.findMany({ where: { tenantId: tenant.id, status: "active", role: { in: ["SALES", "OPERATOR"] } }, orderBy: [{ role: "asc" }, { createdAt: "asc" }] })
-      : Promise.resolve([])
-  ]);
+  const [todayTasks, overdueTasks, highPriorityTasks, weekTasks, doneTasks, filteredTasks, highIntentLeads, quotedLeads, reactivateLeads, owners] =
+    await Promise.all([
+      prisma.followTask.findMany({ where: taskRules.today, include: { lead: true, owner: true }, orderBy: { dueAt: "asc" }, take: 50 }),
+      prisma.followTask.findMany({ where: taskRules.overdue, include: { lead: true, owner: true }, orderBy: { dueAt: "asc" }, take: 50 }),
+      prisma.followTask.findMany({
+        where: taskRules.highPriority,
+        include: { lead: true, owner: true },
+        orderBy: [{ priority: "desc" }, { dueAt: "asc" }],
+        take: 50
+      }),
+      prisma.followTask.findMany({ where: taskRules.thisWeek, include: { lead: true, owner: true }, orderBy: { dueAt: "asc" }, take: 50 }),
+      prisma.followTask.findMany({ where: taskRules.done, include: { lead: true, owner: true }, orderBy: { completedAt: "desc" }, take: 30 }),
+      hasFilters
+        ? prisma.followTask.findMany({
+            where: filteredWhere,
+            include: { lead: true, owner: true },
+            orderBy: [{ dueAt: "asc" }, { updatedAt: "desc" }],
+            take: 80
+          })
+        : Promise.resolve([]),
+      prisma.lead.findMany({ where: leadRules.highIntent, include: { owner: true }, orderBy: { updatedAt: "desc" }, take: 30 }),
+      prisma.lead.findMany({
+        where: { tenantId: tenant.id, ...(ownerId ? { ownerId } : {}), stage: "QUOTED" },
+        include: { owner: true },
+        orderBy: { updatedAt: "desc" },
+        take: 30
+      }),
+      prisma.lead.findMany({ where: leadRules.reactivate, include: { owner: true }, orderBy: { updatedAt: "desc" }, take: 30 }),
+      canViewAll
+        ? prisma.user.findMany({
+            where: { tenantId: tenant.id, status: "active", role: { in: ["SALES", "OPERATOR"] } },
+            orderBy: [{ role: "asc" }, { createdAt: "asc" }]
+          })
+        : Promise.resolve([])
+    ]);
 
   return (
-    <PageShell tenant={tenant} title="销售工作台" description="任务工作台支持状态、类型、优先级和负责人筛选；销售只看到自己的任务。">
+    <PageShell
+      tenant={tenant}
+      title="跟进工作台"
+      description="把今日待办、逾期任务、已完成记录和任务模板入口收口在一个工作台里。销售继续只看自己的任务。"
+    >
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        <StatCard label="今日任务" value={todayTasks.length} />
+        <StatCard label="今日待办" value={todayTasks.length} />
         <StatCard label="逾期任务" value={overdueTasks.length} />
         <StatCard label="高优先级任务" value={highPriorityTasks.length} />
         <StatCard label="本周待跟进" value={weekTasks.length} />
         <StatCard label="已完成任务" value={doneTasks.length} />
       </div>
 
+      <section className="mt-6">
+        <h2 className="text-lg font-semibold text-slate-950">工作入口</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-600">复杂任务不再拆成多个一级菜单，而是在工作台内部继续分流。</p>
+        <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <WorkbenchEntryCard title="今日待办" description="先处理今天必须完成的跟进动作。" href="#today-tasks" />
+          <WorkbenchEntryCard title="逾期任务" description="优先清理已经超时的跟进事项，避免客户失联。" href="#overdue-tasks" />
+          <WorkbenchEntryCard title="已完成" description="回看已完成的任务和推进节奏。" href="#done-tasks" />
+          {canViewAll ? (
+            <WorkbenchEntryCard title="任务模板" description="管理员和运营继续维护标准化任务模板。" href={`/app/${tenant.slug}/task-templates`} />
+          ) : null}
+        </div>
+      </section>
+
       <Card className="mt-6">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold text-slate-950">任务筛选</h2>
-            <p className="mt-1 text-sm text-slate-500">手动创建任务请进入客户详情页，任务会自动生成站内提醒队列。</p>
+            <p className="mt-1 text-sm text-slate-500">手动创建任务请进入客户详情页，任务会自动进入提醒队列。</p>
           </div>
           <Link className="rounded-md border border-slate-300 px-3 py-2 text-sm" href={`/app/${tenant.slug}/leads`}>
             选择客户创建任务
@@ -147,66 +205,82 @@ export default async function TodosPage({
       </Card>
 
       <div className="mt-6 grid gap-5 xl:grid-cols-2">
-        {hasFilters ? <TaskSection tenantSlug={tenant.slug} title="筛选结果" tasks={filteredTasks} /> : null}
-        <TaskSection tenantSlug={tenant.slug} title="今日任务" tasks={todayTasks} />
-        <TaskSection tenantSlug={tenant.slug} title="逾期任务" tasks={overdueTasks} urgent />
-        <TaskSection tenantSlug={tenant.slug} title="高优先级任务" tasks={highPriorityTasks} />
-        <TaskSection tenantSlug={tenant.slug} title="本周待跟进" tasks={weekTasks} />
-        <TaskSection tenantSlug={tenant.slug} title="已完成任务" tasks={doneTasks} readOnly />
-        <LeadSection tenantSlug={tenant.slug} title="我的高意向客户" leads={highIntentLeads} />
-        <LeadSection tenantSlug={tenant.slug} title="我的报价客户" leads={quotedLeads} />
-        <LeadSection tenantSlug={tenant.slug} title="我的待激活客户" leads={reactivateLeads} />
+        {hasFilters ? <TaskSection tenantSlug={tenant.slug} sectionId="filtered-tasks" title="筛选结果" tasks={filteredTasks} /> : null}
+        <TaskSection tenantSlug={tenant.slug} sectionId="today-tasks" title="今日待办" tasks={todayTasks} />
+        <TaskSection tenantSlug={tenant.slug} sectionId="overdue-tasks" title="逾期任务" tasks={overdueTasks} urgent />
+        <TaskSection tenantSlug={tenant.slug} sectionId="high-priority-tasks" title="高优先级任务" tasks={highPriorityTasks} />
+        <TaskSection tenantSlug={tenant.slug} sectionId="week-tasks" title="本周待跟进" tasks={weekTasks} />
+        <TaskSection tenantSlug={tenant.slug} sectionId="done-tasks" title="已完成" tasks={doneTasks} readOnly />
+        <LeadSection tenantSlug={tenant.slug} title="高意向客户" leads={highIntentLeads} />
+        <LeadSection tenantSlug={tenant.slug} title="报价客户" leads={quotedLeads} />
+        <LeadSection tenantSlug={tenant.slug} title="待激活客户" leads={reactivateLeads} />
       </div>
     </PageShell>
   );
 }
 
-function TaskSection({ tenantSlug, title, tasks, urgent = false, readOnly = false }: { tenantSlug: string; title: string; tasks: TaskItem[]; urgent?: boolean; readOnly?: boolean }) {
+function TaskSection({
+  tenantSlug,
+  sectionId,
+  title,
+  tasks,
+  urgent = false,
+  readOnly = false
+}: {
+  tenantSlug: string;
+  sectionId: string;
+  title: string;
+  tasks: TaskItem[];
+  urgent?: boolean;
+  readOnly?: boolean;
+}) {
   return (
-    <Card>
-      <h2 className="mb-3 text-base font-semibold text-slate-950">{title}</h2>
-      <div className="space-y-3">
-        {tasks.length ? (
-          tasks.map((task) => (
-            <div key={task.id} className="rounded-md border border-slate-200 p-3 text-sm">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-medium text-emerald-700">{task.title}</span>
-                <span className={urgent ? "text-red-700" : "text-slate-500"}>{formatDate(task.dueAt)}</span>
+    <section id={sectionId}>
+      <Card>
+        <h2 className="mb-3 text-base font-semibold text-slate-950">{title}</h2>
+        <div className="space-y-3">
+          {tasks.length ? (
+            tasks.map((task) => (
+              <div key={task.id} className="rounded-md border border-slate-200 p-3 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-medium text-emerald-700">{task.title}</span>
+                  <span className={urgent ? "text-red-700" : "text-slate-500"}>{formatDate(task.dueAt)}</span>
+                </div>
+                <p className="mt-1 text-slate-600">
+                  {labelOf(taskTypeOptions, task.type)} / {labelOf(taskPriorityOptions, task.priority)} / {labelOf(taskStatusOptions, task.status)}
+                </p>
+                {task.lead ? <p className="mt-1 text-slate-500">客户类型：{labelOf(customerTypeOptions, task.lead.customerType)}</p> : null}
+                <p className="mt-1 text-slate-500">负责人：{task.owner?.name ?? "未分配"}</p>
+                {task.description ? <p className="mt-1 text-slate-500">{task.description}</p> : null}
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {task.lead ? (
+                    <Link className="rounded-md border border-slate-300 px-3 py-1 text-xs" href={`/app/${tenantSlug}/leads/${task.lead.id}`}>
+                      进入客户详情
+                    </Link>
+                  ) : null}
+                  {!readOnly ? (
+                    <>
+                      <form action={completeTask.bind(null, tenantSlug, task.id)}>
+                        <button className="rounded-md bg-emerald-700 px-3 py-1 text-xs font-medium text-white">标记完成</button>
+                      </form>
+                      <form action={delayTask.bind(null, tenantSlug, task.id)} className="flex items-center gap-2">
+                        <input className="w-[170px] rounded-md border border-slate-300 px-2 py-1 text-xs" name="dueAt" type="datetime-local" defaultValue={tomorrowDefault()} />
+                        <button className="rounded-md border border-slate-300 px-3 py-1 text-xs">延期</button>
+                      </form>
+                      <form action={cancelTask.bind(null, tenantSlug, task.id)}>
+                        <button className="rounded-md border border-red-200 px-3 py-1 text-xs text-red-700">取消</button>
+                      </form>
+                    </>
+                  ) : null}
+                </div>
               </div>
-              <p className="mt-1 text-slate-600">
-                {labelOf(taskTypeOptions, task.type)} / {labelOf(taskPriorityOptions, task.priority)} / {labelOf(taskStatusOptions, task.status)}
-              </p>
-              {task.lead ? <p className="mt-1 text-slate-500">客户类型：{labelOf(customerTypeOptions, task.lead.customerType)}</p> : null}
-              <p className="mt-1 text-slate-500">负责人：{task.owner?.name ?? "未分配"}</p>
-              {task.description ? <p className="mt-1 text-slate-500">{task.description}</p> : null}
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                {task.lead ? (
-                  <Link className="rounded-md border border-slate-300 px-3 py-1 text-xs" href={`/app/${tenantSlug}/leads/${task.lead.id}`}>
-                    进入客户详情
-                  </Link>
-                ) : null}
-                {!readOnly ? (
-                  <>
-                    <form action={completeTask.bind(null, tenantSlug, task.id)}>
-                      <button className="rounded-md bg-emerald-700 px-3 py-1 text-xs font-medium text-white">标记完成</button>
-                    </form>
-                    <form action={delayTask.bind(null, tenantSlug, task.id)} className="flex items-center gap-2">
-                      <input className="w-[170px] rounded-md border border-slate-300 px-2 py-1 text-xs" name="dueAt" type="datetime-local" defaultValue={tomorrowDefault()} />
-                      <button className="rounded-md border border-slate-300 px-3 py-1 text-xs">延期</button>
-                    </form>
-                    <form action={cancelTask.bind(null, tenantSlug, task.id)}>
-                      <button className="rounded-md border border-red-200 px-3 py-1 text-xs text-red-700">取消</button>
-                    </form>
-                  </>
-                ) : null}
-              </div>
-            </div>
-          ))
-        ) : (
-          <p className="text-sm text-slate-500">暂无任务</p>
-        )}
-      </div>
-    </Card>
+            ))
+          ) : (
+            <p className="text-sm text-slate-500">暂无任务</p>
+          )}
+        </div>
+      </Card>
+    </section>
   );
 }
 

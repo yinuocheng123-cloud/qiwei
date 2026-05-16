@@ -80,9 +80,9 @@ export function MarketClawAssistant({
     <Card>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-slate-950">麻虾智能回复</h2>
+          <h2 className="text-base font-semibold text-slate-950">Market Claw 智能回复</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            客户问问题时，麻虾会根据企业知识库、业务线、客户阶段和已有标签生成回复草稿。回复不会自动发送，只支持复制、保存为跟进和记录反馈。
+            客户问问题时，Market Claw 会根据企业知识库、业务线、客户阶段和已有标签生成回复草稿。回复不会自动发送，只支持复制、保存为跟进和记录反馈。
           </p>
         </div>
         <div className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
@@ -125,7 +125,7 @@ export function MarketClawAssistant({
           ))
         ) : (
           <div className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-sm text-slate-500">
-            还没有生成麻虾回复草稿。先输入客户问题，系统会生成简短微信版、专业说明版和推进成交版三种回复。
+            还没有生成 Market Claw 回复草稿。先输入客户问题，系统会生成简短微信版、专业说明版和推进成交版三种回复。
           </div>
         )}
       </div>

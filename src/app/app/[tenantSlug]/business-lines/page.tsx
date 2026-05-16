@@ -1,33 +1,26 @@
 /*
- * 文件说明：该页面实现 V1.7 业务线／产品管理。
- * 功能说明：统一管理租户当前对外推广、销售和服务的业务线、产品或项目，并关联资料包、任务模板和推荐标签。
+ * 文件说明：该页面实现 V2.0.3 的业务配置总览。
+ * 功能说明：把产品总览、资料包、策略库、任务模板和配置入口收口到同一页面，避免业务线页面继续铺成长表单。
  *
  * 结构概览：
- *   第一部分：导入依赖与基础选项
- *   第二部分：新增与编辑辅助组件
- *   第三部分：业务线／产品管理页面
+ *   第一部分：概览卡片组件
+ *   第二部分：产品总览卡片组件
+ *   第三部分：业务配置总览页
  */
-import { createBusinessLine, updateBusinessLine, updateBusinessLineStatus } from "@/lib/actions";
+import Link from "next/link";
+import { createBusinessLine, updateBusinessLineStatus } from "@/lib/actions";
 import { requireTenantAccess } from "@/lib/auth";
 import {
   countBusinessLineMaterials,
   countBusinessLineTags,
   countBusinessLineTaskTemplates,
-  parseBusinessLineCustomerTypes,
-  parseBusinessLineIdList,
-  parseBusinessLineRecommendedTags,
-  stringifyBusinessLineRecommendedTags
+  parseBusinessLineCustomerTypes
 } from "@/lib/business-lines";
-import {
-  businessLineCategoryOptions,
-  businessLineStatusOptions,
-  customerTypeOptions,
-  formatDate,
-  labelOf
-} from "@/lib/options";
+import { businessLineCategoryOptions, businessLineStatusOptions, customerTypeOptions, formatDate, labelOf } from "@/lib/options";
 import { prisma } from "@/lib/prisma";
 import { PageShell } from "@/components/Shell";
-import { Card, Input, Select, SubmitButton, Textarea } from "@/components/Ui";
+import { BusinessLineForm, StatusActionButtons } from "@/components/BusinessLineEditor";
+import { Card, StatCard } from "@/components/Ui";
 
 export const dynamic = "force-dynamic";
 
@@ -35,247 +28,97 @@ type BusinessLineItem = Awaited<ReturnType<typeof prisma.businessLine.findMany>>
 type MaterialItem = Awaited<ReturnType<typeof prisma.material.findMany>>[number];
 type TaskTemplateItem = Awaited<ReturnType<typeof prisma.taskTemplate.findMany>>[number];
 
-function CheckboxGroup({
+function ConfigEntryCard({
   title,
-  name,
-  options,
-  selectedValues
+  description,
+  href
 }: {
   title: string;
-  name: string;
-  options: { value: string; label: string }[];
-  selectedValues: string[];
+  description: string;
+  href: string;
 }) {
   return (
-    <div>
-      <p className="text-sm font-medium text-slate-700">{title}</p>
-      <div className="mt-2 grid gap-2 sm:grid-cols-2">
-        {options.map((option) => (
-          <label key={option.value} className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700">
-            <input defaultChecked={selectedValues.includes(option.value)} name={name} type="checkbox" value={option.value} />
-            <span>{option.label}</span>
-          </label>
-        ))}
-      </div>
+    <Card className="h-full">
+      <h2 className="text-base font-semibold text-slate-950">{title}</h2>
+      <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
+      <Link className="mt-4 inline-flex rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700" href={href}>
+        进入
+      </Link>
+    </Card>
+  );
+}
+
+function InfoLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md bg-slate-50 px-3 py-2">
+      <p className="text-xs text-slate-500">{label}</p>
+      <p className="mt-1 font-medium text-slate-900">{value}</p>
     </div>
   );
 }
 
-function RelatedRecordCheckboxes({
-  title,
-  name,
-  records,
-  selectedIds,
-  emptyText
-}: {
-  title: string;
-  name: "recommendedMaterialIds" | "recommendedTaskTemplateIds";
-  records: { id: string; title: string; subtitle?: string }[];
-  selectedIds: string[];
-  emptyText: string;
-}) {
-  return (
-    <div>
-      <p className="text-sm font-medium text-slate-700">{title}</p>
-      {records.length ? (
-        <div className="mt-2 max-h-64 space-y-2 overflow-y-auto rounded-md border border-slate-200 p-3">
-          {records.map((record) => (
-            <label key={record.id} className="flex items-start gap-2 rounded-md border border-slate-100 px-3 py-2 text-sm text-slate-700">
-              <input defaultChecked={selectedIds.includes(record.id)} name={name} type="checkbox" value={record.id} />
-              <span>
-                <span className="block font-medium text-slate-900">{record.title}</span>
-                {record.subtitle ? <span className="block text-xs text-slate-500">{record.subtitle}</span> : null}
-              </span>
-            </label>
-          ))}
-        </div>
-      ) : (
-        <p className="mt-2 text-sm text-slate-500">{emptyText}</p>
-      )}
-    </div>
-  );
-}
-
-function BusinessLineForm({
-  action,
-  submitText,
-  materials,
-  taskTemplates,
-  businessLine,
-  canArchive
-}: {
-  action: (formData: FormData) => Promise<void>;
-  submitText: string;
-  materials: MaterialItem[];
-  taskTemplates: TaskTemplateItem[];
-  businessLine?: BusinessLineItem;
-  canArchive: boolean;
-}) {
-  const selectedCustomerTypes = businessLine ? parseBusinessLineCustomerTypes(businessLine.targetCustomerTypes) : [];
-  const selectedMaterialIds = businessLine ? parseBusinessLineIdList(businessLine.recommendedMaterialIds) : [];
-  const selectedTaskTemplateIds = businessLine ? parseBusinessLineIdList(businessLine.recommendedTaskTemplateIds) : [];
-  const recommendedTagText = businessLine
-    ? stringifyBusinessLineRecommendedTags(parseBusinessLineRecommendedTags(businessLine.recommendedTagNames))
-    : "";
-  const availableStatusOptions = canArchive
-    ? businessLineStatusOptions
-    : businessLineStatusOptions.filter((option) => option.value !== "ARCHIVED");
-
-  return (
-    <form action={action} className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2">
-        <Input label="名称" name="name" defaultValue={businessLine?.name} required />
-        <Input label="Slug" name="slug" defaultValue={businessLine?.slug} />
-        <Select label="分类" name="category" options={businessLineCategoryOptions} defaultValue={businessLine?.category ?? "OTHER"} />
-        <Select label="状态" name="status" options={availableStatusOptions} defaultValue={businessLine?.status ?? "ACTIVE"} />
-        <Input label="优先级" name="priority" type="number" defaultValue={String(businessLine?.priority ?? 100)} />
-        <Input label="默认下一步动作" name="defaultNextAction" defaultValue={businessLine?.defaultNextAction ?? ""} />
-      </div>
-
-      <Textarea label="业务线说明" name="description" defaultValue={businessLine?.description ?? ""} rows={3} />
-
-      <CheckboxGroup title="适合客户类型" name="targetCustomerTypes" options={customerTypeOptions} selectedValues={selectedCustomerTypes} />
-
-      <Textarea
-        label="推荐标签"
-        name="recommendedTags"
-        defaultValue={recommendedTagText}
-        rows={4}
-      />
-      <p className="text-xs text-slate-500">每行使用“标签名称|标签分组”格式，例如：GEO意向|业务标签。</p>
-
-      <RelatedRecordCheckboxes
-        title="关联资料包"
-        name="recommendedMaterialIds"
-        records={materials.map((material) => ({
-          id: material.id,
-          title: material.title,
-          subtitle: labelOf(customerTypeOptions, material.customerType ?? "") === ""
-            ? "通用资料"
-            : labelOf(customerTypeOptions, material.customerType ?? "")
-        }))}
-        selectedIds={selectedMaterialIds}
-        emptyText="当前租户还没有资料包。"
-      />
-
-      <RelatedRecordCheckboxes
-        title="关联任务模板"
-        name="recommendedTaskTemplateIds"
-        records={taskTemplates.map((template) => ({
-          id: template.id,
-          title: template.name,
-          subtitle: template.title
-        }))}
-        selectedIds={selectedTaskTemplateIds}
-        emptyText="当前租户还没有任务模板。"
-      />
-
-      <Textarea label="内部备注" name="notes" defaultValue={businessLine?.notes ?? ""} rows={3} />
-
-      <SubmitButton>{submitText}</SubmitButton>
-    </form>
-  );
-}
-
-function StatusActionButtons({
+function BusinessLineOverviewCard({
   tenantSlug,
   businessLine,
+  canEdit,
   canArchive
 }: {
   tenantSlug: string;
   businessLine: BusinessLineItem;
+  canEdit: boolean;
   canArchive: boolean;
 }) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {businessLine.status !== "ACTIVE" ? (
-        <form action={updateBusinessLineStatus.bind(null, tenantSlug, businessLine.id, "ACTIVE")}>
-          <button className="rounded-md border border-emerald-200 px-3 py-2 text-sm text-emerald-700">启用</button>
-        </form>
-      ) : null}
-      {businessLine.status !== "PAUSED" ? (
-        <form action={updateBusinessLineStatus.bind(null, tenantSlug, businessLine.id, "PAUSED")}>
-          <button className="rounded-md border border-amber-200 px-3 py-2 text-sm text-amber-700">暂停</button>
-        </form>
-      ) : null}
-      {canArchive && businessLine.status !== "ARCHIVED" ? (
-        <form action={updateBusinessLineStatus.bind(null, tenantSlug, businessLine.id, "ARCHIVED")}>
-          <button className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700">归档</button>
-        </form>
-      ) : null}
-    </div>
-  );
-}
-
-function BusinessLineReadonlyCard({
-  businessLine,
-  materialsById,
-  taskTemplatesById
-}: {
-  businessLine: BusinessLineItem;
-  materialsById: Map<string, MaterialItem>;
-  taskTemplatesById: Map<string, TaskTemplateItem>;
-}) {
   const customerTypes = parseBusinessLineCustomerTypes(businessLine.targetCustomerTypes);
-  const tags = parseBusinessLineRecommendedTags(businessLine.recommendedTagNames);
-  const materialIds = parseBusinessLineIdList(businessLine.recommendedMaterialIds);
-  const taskTemplateIds = parseBusinessLineIdList(businessLine.recommendedTaskTemplateIds);
+  const statusLabel = labelOf(businessLineStatusOptions, businessLine.status);
+  const categoryLabel = labelOf(businessLineCategoryOptions, businessLine.category);
+  const maintenanceRole = canEdit ? (canArchive ? "企业管理员 / 运营维护" : "运营维护 / 可暂停") : "销售只读 / 仅看启用产品";
 
   return (
-    <Card>
+    <Card className="h-full">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-sm text-emerald-700">{labelOf(businessLineCategoryOptions, businessLine.category)}</p>
-          <h2 className="text-lg font-semibold text-slate-950">{businessLine.name}</h2>
-          <p className="mt-1 text-sm text-slate-500">{labelOf(businessLineStatusOptions, businessLine.status)}</p>
+          <p className="text-sm text-emerald-700">{categoryLabel}</p>
+          <h2 className="mt-1 text-lg font-semibold text-slate-950">{businessLine.name}</h2>
+          <p className="mt-1 text-sm text-slate-500">{statusLabel}</p>
         </div>
-        <div className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">
-          <p>优先级：{businessLine.priority}</p>
-          <p className="mt-1">最后更新：{formatDate(businessLine.updatedAt)}</p>
-        </div>
-      </div>
-
-      {businessLine.description ? <p className="mt-4 text-sm leading-6 text-slate-700">{businessLine.description}</p> : null}
-
-      <div className="mt-4 grid gap-4 text-sm md:grid-cols-2">
-        <div>
-          <p className="font-medium text-slate-950">适合客户类型</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {customerTypes.length ? customerTypes.map((item) => <span key={item} className="rounded-md bg-slate-100 px-2.5 py-1 text-xs text-slate-700">{labelOf(customerTypeOptions, item)}</span>) : <span className="text-slate-500">未限制客户类型</span>}
-          </div>
-        </div>
-
-        <div>
-          <p className="font-medium text-slate-950">推荐标签</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {tags.length ? tags.map((tag) => <span key={`${tag.tagGroup}-${tag.tagName}`} className="rounded-md bg-emerald-50 px-2.5 py-1 text-xs text-emerald-700">{tag.tagName}</span>) : <span className="text-slate-500">未配置推荐标签</span>}
-          </div>
-        </div>
-
-        <div>
-          <p className="font-medium text-slate-950">关联资料包</p>
-          <div className="mt-2 space-y-1">
-            {materialIds.length ? materialIds.map((id) => <p key={id} className="text-slate-700">{materialsById.get(id)?.title ?? id}</p>) : <p className="text-slate-500">未绑定资料包</p>}
-          </div>
-        </div>
-
-        <div>
-          <p className="font-medium text-slate-950">关联任务模板</p>
-          <div className="mt-2 space-y-1">
-            {taskTemplateIds.length ? taskTemplateIds.map((id) => <p key={id} className="text-slate-700">{taskTemplatesById.get(id)?.name ?? id}</p>) : <p className="text-slate-500">未绑定任务模板</p>}
-          </div>
-        </div>
+        <span className="rounded-md bg-slate-100 px-3 py-1 text-xs text-slate-700">{maintenanceRole}</span>
       </div>
 
       <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
-        <div>
-          <p className="font-medium text-slate-950">默认下一步动作</p>
-          <p className="mt-1 text-slate-700">{businessLine.defaultNextAction ?? "未配置"}</p>
-        </div>
-        <div>
-          <p className="font-medium text-slate-950">内部备注</p>
-          <p className="mt-1 text-slate-700">{businessLine.notes ?? "未配置"}</p>
-        </div>
+        <InfoLine label="适合客户类型" value={customerTypes.length ? `${customerTypes.length} 类` : "未限制"} />
+        <InfoLine label="推荐标签数量" value={`${countBusinessLineTags(businessLine)} 个`} />
+        <InfoLine label="关联资料数量" value={`${countBusinessLineMaterials(businessLine)} 份`} />
+        <InfoLine label="关联任务模板数量" value={`${countBusinessLineTaskTemplates(businessLine)} 个`} />
+        <InfoLine label="优先级" value={String(businessLine.priority)} />
+        <InfoLine label="最近更新时间" value={formatDate(businessLine.updatedAt)} />
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {customerTypes.length ? (
+          customerTypes.map((item) => (
+            <span key={item} className="rounded-md bg-slate-100 px-2.5 py-1 text-xs text-slate-700">
+              {labelOf(customerTypeOptions, item)}
+            </span>
+          ))
+        ) : (
+          <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs text-slate-700">通用产品</span>
+        )}
+      </div>
+
+      {businessLine.description ? <p className="mt-4 text-sm leading-6 text-slate-600">{businessLine.description}</p> : null}
+
+      <div className="mt-5 flex flex-wrap items-center gap-3">
+        <Link className="rounded-md bg-slate-950 px-3 py-2 text-sm font-medium text-white" href={`/app/${tenantSlug}/business-lines/${businessLine.id}`}>
+          查看详情
+        </Link>
+        {canEdit ? (
+          <StatusActionButtons
+            tenantSlug={tenantSlug}
+            businessLine={businessLine}
+            canArchive={canArchive}
+            action={updateBusinessLineStatus}
+          />
+        ) : null}
       </div>
     </Card>
   );
@@ -305,64 +148,114 @@ export default async function BusinessLinesPage({ params }: { params: { tenantSl
   ]);
 
   const createAction = createBusinessLine.bind(null, tenant.slug);
-  const materialsById = new Map(materials.map((material) => [material.id, material]));
-  const taskTemplatesById = new Map(taskTemplates.map((template) => [template.id, template]));
+  const activeCount = businessLines.filter((item) => item.status === "ACTIVE").length;
+  const pausedCount = businessLines.filter((item) => item.status === "PAUSED").length;
+  const archivedCount = businessLines.filter((item) => item.status === "ARCHIVED").length;
 
   return (
     <PageShell
       tenant={tenant}
-      title="业务线／产品管理"
+      title="业务配置"
       description={
         canEdit
-          ? "用于管理企业当前对外推广、销售和服务的业务线、产品或项目。每条业务线可以关联客户类型、资料包、任务模板和推荐标签，方便销售跟进和运营管理。"
-          : "销售仅查看启用中的业务线推荐，用于跟进时参考，不提供新增、编辑、暂停或归档入口。"
+          ? "把产品总览、资料包、策略库、任务模板、企微配置和合规配置收口到同一条维护路径，避免后台入口继续平铺。"
+          : "销售侧只查看启用产品总览，用于理解当前主推方向、推荐标签、推荐资料和下一步动作。"
       }
     >
-      <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
-        {canEdit ? (
-          <Card>
-            <h2 className="mb-4 text-base font-semibold text-slate-950">新增业务线／产品</h2>
-            <BusinessLineForm action={createAction} submitText="新增业务线" materials={materials} taskTemplates={taskTemplates} canArchive={canArchive} />
-          </Card>
-        ) : null}
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="产品总数" value={businessLines.length} />
+        <StatCard label="启用中" value={activeCount} />
+        <StatCard label="暂停中" value={pausedCount} />
+        <StatCard label="已归档" value={archivedCount} />
+      </div>
 
-        <div className="space-y-4">
+      <section className="mt-6">
+        <h2 className="text-lg font-semibold text-slate-950">配置导航</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          先从产品总览进入，再按模块跳转到资料、策略、任务模板和配置页，不再把所有配置项都堆在左侧导航里。
+        </p>
+        <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <ConfigEntryCard
+            title="产品总览"
+            description="查看当前启用、暂停和归档中的产品，并进入产品详情做更细的维护。"
+            href={`/app/${tenant.slug}/business-lines#product-overview`}
+          />
+          <ConfigEntryCard
+            title="资料包"
+            description="维护销售在客户详情页和 Market Claw 推荐中会用到的资料资产。"
+            href={`/app/${tenant.slug}/materials`}
+          />
+          <ConfigEntryCard
+            title="策略库"
+            description="统一维护不同客户类型的话术、资料和推荐动作，不让销售各说各话。"
+            href={`/app/${tenant.slug}/strategies`}
+          />
+          <ConfigEntryCard
+            title="任务模板"
+            description="维护跟进模板，保证今天该做什么、下一步做什么有一致节奏。"
+            href={`/app/${tenant.slug}/task-templates`}
+          />
+          {user.role === "TENANT_ADMIN" ? (
+            <ConfigEntryCard
+              title="企微配置"
+              description="保留高权限配置入口，不让普通角色直接接触敏感密钥和回调配置。"
+              href={`/app/${tenant.slug}/wecom`}
+            />
+          ) : null}
+          {canEdit ? (
+            <ConfigEntryCard
+              title="合规配置"
+              description="围绕沟通素材采集边界做收口，继续保持不自动发送、不自动采集的原则。"
+              href={`/app/${tenant.slug}/communication-compliance`}
+            />
+          ) : null}
+        </div>
+      </section>
+
+      {canEdit ? (
+        <details className="mt-6 rounded-md border border-slate-200 bg-white p-5 shadow-sm">
+          <summary className="cursor-pointer text-base font-semibold text-slate-950">新增产品</summary>
+          <p className="mt-3 text-sm leading-6 text-slate-600">新增入口保留在总览页，但默认折叠，避免产品总览一打开就是一长串字段。</p>
+          <div className="mt-4">
+            <BusinessLineForm
+              action={createAction}
+              submitText="新增产品"
+              materials={materials as MaterialItem[]}
+              taskTemplates={taskTemplates as TaskTemplateItem[]}
+              canArchive={canArchive}
+            />
+          </div>
+        </details>
+      ) : null}
+
+      <section id="product-overview" className="mt-6">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-950">产品总览</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              每张产品卡片只展示核心信息，需要维护更多细节时再进入详情页，不再把全部字段铺成长页面。
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-4 xl:grid-cols-2">
           {businessLines.length ? (
-            businessLines.map((businessLine) => {
-              const updateAction = updateBusinessLine.bind(null, tenant.slug, businessLine.id);
-
-              return canEdit ? (
-                <Card key={businessLine.id}>
-                  <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm text-emerald-700">{labelOf(businessLineCategoryOptions, businessLine.category)}</p>
-                      <h2 className="text-lg font-semibold text-slate-950">{businessLine.name}</h2>
-                      <p className="mt-1 text-sm text-slate-500">
-                        {labelOf(businessLineStatusOptions, businessLine.status)} ／ 适合客户类型 {parseBusinessLineCustomerTypes(businessLine.targetCustomerTypes).length || 0} 类 ／ 推荐标签 {countBusinessLineTags(businessLine)} 个 ／ 资料包 {countBusinessLineMaterials(businessLine)} 个 ／ 任务模板 {countBusinessLineTaskTemplates(businessLine)} 个
-                      </p>
-                    </div>
-                    <StatusActionButtons tenantSlug={tenant.slug} businessLine={businessLine} canArchive={canArchive} />
-                  </div>
-                  <BusinessLineForm
-                    action={updateAction}
-                    submitText="保存业务线"
-                    materials={materials}
-                    taskTemplates={taskTemplates}
-                    businessLine={businessLine}
-                    canArchive={canArchive}
-                  />
-                </Card>
-              ) : (
-                <BusinessLineReadonlyCard key={businessLine.id} businessLine={businessLine} materialsById={materialsById} taskTemplatesById={taskTemplatesById} />
-              );
-            })
+            businessLines.map((businessLine) => (
+              <BusinessLineOverviewCard
+                key={businessLine.id}
+                tenantSlug={tenant.slug}
+                businessLine={businessLine}
+                canEdit={canEdit}
+                canArchive={canArchive}
+              />
+            ))
           ) : (
             <Card>
-              <p className="text-sm text-slate-500">{canEdit ? "当前还没有业务线，先新增一条。": "当前没有可查看的启用业务线。"}</p>
+              <p className="text-sm text-slate-500">{canEdit ? "当前还没有产品，先新增一个产品卡片。" : "当前没有可查看的启用产品。"}</p>
             </Card>
           )}
         </div>
-      </div>
+      </section>
     </PageShell>
   );
 }

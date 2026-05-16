@@ -52,8 +52,8 @@ export default async function MarketClawTrainingPage({ params }: { params: { ten
   return (
     <PageShell
       tenant={tenant}
-      title="回复训练场"
-      description="在这里模拟客户问题，测试麻虾生成的回复是否准确、像人话、有边界。可用回复可以沉淀为标准话术，不可用回复要记录问题，持续训练。"
+      title="Market Claw 回复训练场"
+      description="在这里模拟客户问题，测试 Market Claw 生成的回复是否准确、像人话、有边界。可用回复可以沉淀为标准话术，不可用回复要记录问题，持续训练。"
     >
       <div className="grid gap-6 xl:grid-cols-[380px_1fr]">
         <Card>
@@ -125,7 +125,7 @@ export default async function MarketClawTrainingPage({ params }: { params: { ten
             ))
           ) : (
             <Card>
-              <p className="text-sm text-slate-500">当前还没有训练记录。先用一个真实客户问题跑一轮，看看麻虾给出的边界是否够稳。</p>
+              <p className="text-sm text-slate-500">当前还没有训练记录。先用一个真实客户问题跑一轮，看看 Market Claw 给出的边界是否够稳。</p>
             </Card>
           )}
         </div>

@@ -46,7 +46,7 @@ test.describe.serial("V2.0 麻虾 Market Claw：销售智能回复助手", () =>
   test("TENANT_ADMIN 可访问麻虾知识库和训练场，可新增 GEO 知识并沉淀标准回复", async ({ page }) => {
     await login(page, "platform-boss@zhengmu.local", "123456", "/app/zhengmu-platform/market-claw/knowledge");
 
-    await expect(page.getByRole("heading", { name: "麻虾知识库" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Market Claw 知识库" })).toBeVisible();
     const createCard = page.locator("div.rounded-md.border.border-slate-200.bg-white").filter({
       has: page.getByRole("heading", { name: "新增知识" })
     }).first();
@@ -89,7 +89,7 @@ test.describe.serial("V2.0 麻虾 Market Claw：销售智能回复助手", () =>
   test("SALES 可在自己负责客户详情页使用麻虾，确认标签、保存跟进并创建任务", async ({ page }) => {
     await login(page, "platform-sales@zhengmu.local", "123456", `/app/zhengmu-platform/leads/${ownLeadId}`);
 
-    await expect(page.getByRole("heading", { name: "麻虾智能回复" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Market Claw 智能回复" })).toBeVisible();
     await expect(page.getByText("当前版本不接企业微信上下文")).toBeVisible();
     await expect(page.getByText("当前版本不自动发送客户消息")).toBeVisible();
 

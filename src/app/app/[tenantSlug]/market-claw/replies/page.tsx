@@ -64,7 +64,7 @@ export default async function MarketClawRepliesPage({
   return (
     <PageShell
       tenant={tenant}
-      title="回复记录"
+      title="Market Claw 回复记录"
       description="用于企业管理员和运营复盘哪些回复好用、哪些问题频繁出现、哪些知识库需要优化。"
     >
       <Card>
@@ -107,7 +107,7 @@ export default async function MarketClawRepliesPage({
           ))
         ) : (
           <Card>
-            <p className="text-sm text-slate-500">当前没有麻虾回复记录。先在客户详情页生成一轮回复草稿，再回来复盘使用情况。</p>
+            <p className="text-sm text-slate-500">当前没有 Market Claw 回复记录。先在客户详情页生成一轮回复草稿，再回来复盘使用情况。</p>
           </Card>
         )}
       </div>
