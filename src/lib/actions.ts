@@ -24,8 +24,15 @@ import {
   IntentionLevel,
   LeadSource,
   LeadStage,
+  MarketClawFeedbackStatus,
+  MarketClawKnowledgeStatus,
+  MarketClawKnowledgeType,
+  MarketClawReplyUseStatus,
+  MarketClawTrainingRating,
+  MarketClawTrainingReviewStatus,
   MaterialType,
   NeedType,
+  TagGroup,
   TenantStatus,
   UserRole,
   WeComConfigStatus,
@@ -35,6 +42,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { safeWriteAuditLog } from "@/lib/audit";
 import {
+  canAccessMarketClawKnowledge,
+  canAccessMarketClawReplies,
+  canAccessMarketClawTraining,
   canImportTenantLeads,
   canManageCommunicationCompliance,
   requireLeadAccess,
@@ -66,6 +76,13 @@ import {
   readUploadedImportText,
   rebuildImportBatchPreview
 } from "@/lib/imports";
+import {
+  generateMarketClawReply,
+  materialTitlesFromIds,
+  parseMarketClawSuggestedTags,
+  parseMarketClawSuggestedTask,
+  parseMarketClawTextArray
+} from "@/lib/market-claw";
 import { prisma } from "@/lib/prisma";
 import { parseSourceAttributionFromFormData, upsertLeadSourceAttribution } from "@/lib/source-attribution";
 import {
@@ -1310,6 +1327,673 @@ export async function saveReplySuggestionAsFollowUp(tenantSlug: string, leadId: 
   revalidatePath(`/app/${tenantSlug}/leads/${leadId}`);
   revalidatePath(`/app/${tenantSlug}/todos`);
   revalidatePath(`/app/${tenantSlug}/dashboard`);
+  revalidatePath(`/app/${tenantSlug}/audit-logs`);
+}
+
+function parseTagGroup(value?: string) {
+  return value && Object.values(TagGroup).includes(value as TagGroup) ? (value as TagGroup) : TagGroup.CUSTOM;
+}
+
+function parseMarketClawCustomerTypes(formData: FormData, key: string) {
+  const allowed = new Set(Object.values(CustomerType));
+  return formData
+    .getAll(key)
+    .map((value) => (typeof value === "string" ? value : ""))
+    .filter((value): value is CustomerType => allowed.has(value as CustomerType));
+}
+
+function parseMarketClawStages(formData: FormData, key: string) {
+  const allowed = new Set(Object.values(LeadStage));
+  return formData
+    .getAll(key)
+    .map((value) => (typeof value === "string" ? value : ""))
+    .filter((value): value is LeadStage => allowed.has(value as LeadStage));
+}
+
+function parseMarketClawStringArray(formData: FormData, key: string) {
+  return splitLines(text(formData, key));
+}
+
+function buildMarketClawKnowledgePayload(formData: FormData) {
+  const businessLineId = text(formData, "businessLineId");
+  const title = text(formData, "title");
+  const content = text(formData, "content");
+  if (!businessLineId || !title || !content) return null;
+
+  const keywords = parseMarketClawStringArray(formData, "keywords");
+  const forbiddenPhrases = parseMarketClawStringArray(formData, "forbiddenPhrases");
+  const recommendedMaterialIds = formData
+    .getAll("recommendedMaterialIds")
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .filter(Boolean);
+
+  return {
+    businessLineId,
+    title,
+    content,
+    knowledgeType: enumValue(MarketClawKnowledgeType, text(formData, "knowledgeType"), MarketClawKnowledgeType.OTHER),
+    status: enumValue(MarketClawKnowledgeStatus, text(formData, "status"), MarketClawKnowledgeStatus.ACTIVE),
+    keywords,
+    applicableCustomerTypes: parseMarketClawCustomerTypes(formData, "applicableCustomerTypes"),
+    applicableStages: parseMarketClawStages(formData, "applicableStages"),
+    recommendedMaterialIds,
+    forbiddenPhrases,
+    riskNotes: text(formData, "riskNotes"),
+    sortOrder: parseNumber(text(formData, "sortOrder"), 100)
+  };
+}
+
+async function requireMarketClawKnowledgeAccess(tenantSlug: string) {
+  const access = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
+  if (!canAccessMarketClawKnowledge(access.user.role)) {
+    redirect("/forbidden");
+  }
+  return access;
+}
+
+async function requireMarketClawTrainingAccess(tenantSlug: string) {
+  const access = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
+  if (!canAccessMarketClawTraining(access.user.role)) {
+    redirect("/forbidden");
+  }
+  return access;
+}
+
+async function requireMarketClawRepliesAccess(tenantSlug: string) {
+  const access = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR", "SALES"]);
+  if (!canAccessMarketClawReplies(access.user.role)) {
+    redirect("/forbidden");
+  }
+  return access;
+}
+
+function pickMarketClawReplyText(
+  draft: {
+    shortReply: string | null;
+    professionalReply: string | null;
+    closingReply: string | null;
+  },
+  selectedReplyType: string | undefined,
+  salesEditedReply?: string
+) {
+  if (salesEditedReply?.trim()) return salesEditedReply.trim();
+  if (selectedReplyType === "PROFESSIONAL") return draft.professionalReply ?? draft.shortReply ?? draft.closingReply ?? "";
+  if (selectedReplyType === "CLOSING") return draft.closingReply ?? draft.professionalReply ?? draft.shortReply ?? "";
+  return draft.shortReply ?? draft.professionalReply ?? draft.closingReply ?? "";
+}
+
+export async function createMarketClawKnowledgeItem(tenantSlug: string, formData: FormData) {
+  const { user, tenant } = await requireMarketClawKnowledgeAccess(tenantSlug);
+  const payload = buildMarketClawKnowledgePayload(formData);
+  if (!payload) return;
+
+  const knowledgeItem = await prisma.marketClawKnowledgeItem.create({
+    data: {
+      tenantId: tenant.id,
+      createdById: user.id,
+      updatedById: user.id,
+      ...payload
+    }
+  });
+
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "market_claw_knowledge_created",
+    entityType: "MarketClawKnowledgeItem",
+    entityId: knowledgeItem.id,
+    metadata: {
+      businessLineId: knowledgeItem.businessLineId,
+      knowledgeType: knowledgeItem.knowledgeType,
+      status: knowledgeItem.status
+    }
+  });
+
+  revalidatePath(`/app/${tenantSlug}/market-claw/knowledge`);
+  revalidatePath(`/app/${tenantSlug}/leads`);
+  revalidatePath(`/app/${tenantSlug}/audit-logs`);
+}
+
+export async function updateMarketClawKnowledgeItem(tenantSlug: string, knowledgeItemId: string, formData: FormData) {
+  const { user, tenant } = await requireMarketClawKnowledgeAccess(tenantSlug);
+  const payload = buildMarketClawKnowledgePayload(formData);
+  if (!payload) return;
+
+  const knowledgeItem = await prisma.marketClawKnowledgeItem.update({
+    where: { id: knowledgeItemId, tenantId: tenant.id },
+    data: {
+      updatedById: user.id,
+      ...payload
+    }
+  });
+
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "market_claw_knowledge_updated",
+    entityType: "MarketClawKnowledgeItem",
+    entityId: knowledgeItem.id,
+    metadata: {
+      businessLineId: knowledgeItem.businessLineId,
+      knowledgeType: knowledgeItem.knowledgeType,
+      status: knowledgeItem.status
+    }
+  });
+
+  revalidatePath(`/app/${tenantSlug}/market-claw/knowledge`);
+  revalidatePath(`/app/${tenantSlug}/leads`);
+  revalidatePath(`/app/${tenantSlug}/audit-logs`);
+}
+
+export async function generateMarketClawTrainingCase(tenantSlug: string, formData: FormData) {
+  const { user, tenant } = await requireMarketClawTrainingAccess(tenantSlug);
+  const businessLineId = text(formData, "businessLineId");
+  const customerQuestion = text(formData, "customerQuestion");
+  if (!businessLineId || !customerQuestion) return;
+
+  const [businessLine, knowledgeItems, materials] = await Promise.all([
+    prisma.businessLine.findFirst({
+      where: { id: businessLineId, tenantId: tenant.id }
+    }),
+    prisma.marketClawKnowledgeItem.findMany({
+      where: {
+        tenantId: tenant.id,
+        businessLineId,
+        status: "ACTIVE"
+      },
+      orderBy: [{ sortOrder: "asc" }, { updatedAt: "desc" }]
+    }),
+    prisma.material.findMany({
+      where: { tenantId: tenant.id },
+      orderBy: { createdAt: "desc" }
+    })
+  ]);
+
+  if (!businessLine) return;
+
+  const reply = generateMarketClawReply({
+    lead: {
+      name: "训练场客户",
+      customerType: enumValue(CustomerType, text(formData, "customerType"), CustomerType.OTHER),
+      stage: enumValue(LeadStage, text(formData, "customerStage"), LeadStage.NEW)
+    },
+    question: customerQuestion,
+    businessLine,
+    knowledgeItems
+  });
+
+  const trainingCase = await prisma.marketClawTrainingCase.create({
+    data: {
+      tenantId: tenant.id,
+      businessLineId,
+      createdById: user.id,
+      customerQuestion,
+      customerType: text(formData, "customerType")
+        ? enumValue(CustomerType, text(formData, "customerType"), CustomerType.OTHER)
+        : null,
+      customerStage: text(formData, "customerStage")
+        ? enumValue(LeadStage, text(formData, "customerStage"), LeadStage.NEW)
+        : null,
+      customerTags: parseMarketClawStringArray(formData, "customerTags"),
+      replyStyle: text(formData, "replyStyle"),
+      replyLength: text(formData, "replyLength"),
+      generatedShortReply: reply.shortReply,
+      generatedProfessionalReply: reply.professionalReply,
+      generatedClosingReply: reply.closingReply,
+      forbiddenNotes: reply.riskWarnings.join("\n"),
+      reviewStatus: MarketClawTrainingReviewStatus.GENERATED
+    }
+  });
+
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "market_claw_training_generated",
+    entityType: "MarketClawTrainingCase",
+    entityId: trainingCase.id,
+    metadata: {
+      businessLineId,
+      knowledgeItemIds: reply.matchedKnowledgeIds,
+      suggestedTagsCount: reply.suggestedTags.length,
+      riskWarningCount: reply.riskWarnings.length,
+      suggestedMaterials: materialTitlesFromIds(materials, reply.suggestedMaterialIds)
+    }
+  });
+
+  revalidatePath(`/app/${tenantSlug}/market-claw/training`);
+  revalidatePath(`/app/${tenantSlug}/audit-logs`);
+}
+
+export async function reviewMarketClawTrainingCase(tenantSlug: string, trainingCaseId: string, formData: FormData) {
+  const { tenant } = await requireMarketClawTrainingAccess(tenantSlug);
+
+  await prisma.marketClawTrainingCase.update({
+    where: { id: trainingCaseId, tenantId: tenant.id },
+    data: {
+      manualOptimizedReply: text(formData, "manualOptimizedReply"),
+      forbiddenNotes: text(formData, "forbiddenNotes"),
+      rating: enumValue(MarketClawTrainingRating, text(formData, "rating"), MarketClawTrainingRating.UNRATED),
+      reviewStatus: enumValue(MarketClawTrainingReviewStatus, text(formData, "reviewStatus"), MarketClawTrainingReviewStatus.REVIEWED)
+    }
+  });
+
+  revalidatePath(`/app/${tenantSlug}/market-claw/training`);
+}
+
+export async function saveMarketClawTrainingAsKnowledge(tenantSlug: string, trainingCaseId: string, formData: FormData) {
+  const { user, tenant } = await requireMarketClawTrainingAccess(tenantSlug);
+  const trainingCase = await prisma.marketClawTrainingCase.findFirst({
+    where: { id: trainingCaseId, tenantId: tenant.id }
+  });
+  if (!trainingCase) return;
+
+  const content =
+    text(formData, "manualOptimizedReply") ??
+    trainingCase.manualOptimizedReply ??
+    trainingCase.generatedProfessionalReply ??
+    trainingCase.generatedShortReply ??
+    trainingCase.generatedClosingReply;
+  if (!content) return;
+
+  const knowledgeItem = await prisma.marketClawKnowledgeItem.create({
+    data: {
+      tenantId: tenant.id,
+      businessLineId: trainingCase.businessLineId,
+      createdById: user.id,
+      updatedById: user.id,
+      title: text(formData, "knowledgeTitle") ?? `标准回复：${truncateAuditQuestion(trainingCase.customerQuestion, 40)}`,
+      content,
+      knowledgeType: MarketClawKnowledgeType.STANDARD_REPLY,
+      status: MarketClawKnowledgeStatus.ACTIVE,
+      keywords: splitLines(trainingCase.customerQuestion),
+      applicableCustomerTypes: trainingCase.customerType ? [trainingCase.customerType] : [],
+      applicableStages: trainingCase.customerStage ? [trainingCase.customerStage] : [],
+      forbiddenPhrases: parseMarketClawStringArray(formData, "forbiddenPhraseList"),
+      riskNotes: text(formData, "forbiddenNotes") ?? trainingCase.forbiddenNotes,
+      sortOrder: 80
+    }
+  });
+
+  await prisma.marketClawTrainingCase.update({
+    where: { id: trainingCase.id },
+    data: {
+      manualOptimizedReply: text(formData, "manualOptimizedReply") ?? trainingCase.manualOptimizedReply,
+      forbiddenNotes: text(formData, "forbiddenNotes") ?? trainingCase.forbiddenNotes,
+      rating: enumValue(MarketClawTrainingRating, text(formData, "rating"), MarketClawTrainingRating.GOOD),
+      reviewStatus: MarketClawTrainingReviewStatus.SAVED_AS_STANDARD,
+      savedAsKnowledgeItemId: knowledgeItem.id
+    }
+  });
+
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "market_claw_knowledge_created",
+    entityType: "MarketClawKnowledgeItem",
+    entityId: knowledgeItem.id,
+    metadata: {
+      businessLineId: knowledgeItem.businessLineId,
+      knowledgeType: knowledgeItem.knowledgeType,
+      status: knowledgeItem.status
+    }
+  });
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "market_claw_training_saved_as_knowledge",
+    entityType: "MarketClawTrainingCase",
+    entityId: trainingCase.id,
+    metadata: {
+      businessLineId: trainingCase.businessLineId,
+      knowledgeItemIds: [knowledgeItem.id]
+    }
+  });
+
+  revalidatePath(`/app/${tenantSlug}/market-claw/training`);
+  revalidatePath(`/app/${tenantSlug}/market-claw/knowledge`);
+  revalidatePath(`/app/${tenantSlug}/audit-logs`);
+}
+
+export async function generateMarketClawReplyDraft(tenantSlug: string, leadId: string, formData: FormData) {
+  const { user, tenant, lead } = await requireLeadAccess(tenantSlug, leadId);
+  const customerQuestion = text(formData, "customerQuestion");
+  if (!customerQuestion) return;
+
+  let businessLineId = text(formData, "businessLineId");
+  const [businessLines, knowledgeItems, materials] = await Promise.all([
+    prisma.businessLine.findMany({
+      where: { tenantId: tenant.id, status: "ACTIVE" },
+      orderBy: [{ priority: "asc" }, { updatedAt: "desc" }]
+    }),
+    prisma.marketClawKnowledgeItem.findMany({
+      where: { tenantId: tenant.id, status: "ACTIVE" },
+      orderBy: [{ sortOrder: "asc" }, { updatedAt: "desc" }]
+    }),
+    prisma.material.findMany({
+      where: { tenantId: tenant.id },
+      orderBy: { createdAt: "desc" }
+    })
+  ]);
+
+  if (!businessLineId) {
+    businessLineId = businessLines.find((item) => item.name.includes("GEO") && customerQuestion.includes("GEO"))?.id ?? businessLines[0]?.id;
+  }
+
+  const businessLine = businessLines.find((item) => item.id === businessLineId) ?? null;
+  const reply = generateMarketClawReply({
+    lead: {
+      name: lead.name,
+      customerType: lead.customerType,
+      stage: lead.stage
+    },
+    question: customerQuestion,
+    businessLine,
+    knowledgeItems
+  });
+
+  const draft = await prisma.marketClawReplyDraft.create({
+    data: {
+      tenantId: tenant.id,
+      leadId: lead.id,
+      businessLineId: businessLine?.id ?? null,
+      createdById: user.id,
+      customerQuestion,
+      matchedKnowledgeIds: reply.matchedKnowledgeIds,
+      shortReply: reply.shortReply,
+      professionalReply: reply.professionalReply,
+      closingReply: reply.closingReply,
+      riskWarnings: reply.riskWarnings,
+      suggestedTags: reply.suggestedTags,
+      suggestedMaterials: reply.suggestedMaterialIds,
+      suggestedTask: reply.suggestedTask ?? undefined,
+      selectedReplyType: text(formData, "replyType") ?? "ALL",
+      useStatus: MarketClawReplyUseStatus.GENERATED,
+      feedbackStatus: MarketClawFeedbackStatus.UNRATED
+    }
+  });
+
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "market_claw_reply_generated",
+    entityType: "MarketClawReplyDraft",
+    entityId: draft.id,
+    metadata: {
+      leadId: lead.id,
+      businessLineId: businessLine?.id ?? null,
+      replyDraftId: draft.id,
+      knowledgeItemIds: reply.matchedKnowledgeIds,
+      replyType: text(formData, "replyType") ?? "ALL",
+      suggestedTagsCount: reply.suggestedTags.length,
+      hasTask: Boolean(reply.suggestedTask),
+      riskWarningCount: reply.riskWarnings.length,
+      suggestedMaterials: materialTitlesFromIds(materials, reply.suggestedMaterialIds)
+    }
+  });
+
+  revalidatePath(`/app/${tenantSlug}/leads/${leadId}`);
+  revalidatePath(`/app/${tenantSlug}/market-claw/replies`);
+  revalidatePath(`/app/${tenantSlug}/audit-logs`);
+}
+
+export async function confirmMarketClawDraftTags(tenantSlug: string, leadId: string, formData: FormData) {
+  const { user, tenant, lead } = await requireLeadAccess(tenantSlug, leadId);
+  const draftId = text(formData, "draftId");
+  if (!draftId) return;
+
+  const draft = await prisma.marketClawReplyDraft.findFirst({
+    where: { id: draftId, tenantId: tenant.id, leadId: lead.id }
+  });
+  if (!draft) return;
+
+  const suggestedTags = parseMarketClawSuggestedTags(draft.suggestedTags);
+  const selectedKeys = formData.getAll("selectedTags").map((value) => (typeof value === "string" ? value : ""));
+  const tagsToConfirm = suggestedTags.filter((tag) => selectedKeys.includes(`${tag.tagGroup}::${tag.tagName}`));
+  if (!tagsToConfirm.length) return;
+
+  const existingTags = await prisma.leadTag.findMany({
+    where: { tenantId: tenant.id, leadId: lead.id }
+  });
+  const existingKeys = new Set(existingTags.map((tag) => `${tag.tagGroup}::${tag.tagName}`));
+  const createPayload = tagsToConfirm.filter((tag) => !existingKeys.has(`${tag.tagGroup}::${tag.tagName}`));
+
+  if (createPayload.length) {
+    await prisma.leadTag.createMany({
+      data: createPayload.map((tag) => ({
+        tenantId: tenant.id,
+        leadId: lead.id,
+        tagName: tag.tagName,
+        tagGroup: tag.tagGroup
+      }))
+    });
+  }
+
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "market_claw_tags_confirmed",
+    entityType: "LeadTag",
+    entityId: lead.id,
+    metadata: {
+      leadId: lead.id,
+      replyDraftId: draft.id,
+      suggestedTagsCount: tagsToConfirm.length
+    }
+  });
+
+  revalidatePath(`/app/${tenantSlug}/leads/${leadId}`);
+  revalidatePath(`/app/${tenantSlug}/market-claw/replies`);
+  revalidatePath(`/app/${tenantSlug}/audit-logs`);
+}
+
+export async function saveMarketClawReplyDraftAsFollowUp(tenantSlug: string, leadId: string, formData: FormData) {
+  const { user, tenant, lead } = await requireLeadAccess(tenantSlug, leadId);
+  const draftId = text(formData, "draftId");
+  if (!draftId) return;
+
+  const draft = await prisma.marketClawReplyDraft.findFirst({
+    where: { id: draftId, tenantId: tenant.id, leadId: lead.id }
+  });
+  if (!draft) return;
+
+  const selectedReplyType = text(formData, "selectedReplyType") ?? "SHORT";
+  const salesEditedReply = text(formData, "salesEditedReply");
+  const finalReply = pickMarketClawReplyText(draft, selectedReplyType, salesEditedReply);
+  if (!finalReply) return;
+
+  const suggestedTask = parseMarketClawSuggestedTask(draft.suggestedTask);
+  const followUp = await prisma.followUp.create({
+    data: {
+      tenantId: tenant.id,
+      leadId: lead.id,
+      userId: user.id,
+      marketClawReplyDraftId: draft.id,
+      content: finalReply,
+      nextAction: suggestedTask?.title ?? draft.customerQuestion,
+      stageBefore: lead.stage,
+      stageAfter: lead.stage
+    }
+  });
+
+  await prisma.lead.update({
+    where: { id: lead.id },
+    data: { lastFollowAt: new Date() }
+  });
+
+  await prisma.marketClawReplyDraft.update({
+    where: { id: draft.id },
+    data: {
+      useStatus: MarketClawReplyUseStatus.SAVED_AS_FOLLOWUP,
+      selectedReplyType,
+      finalReply
+    }
+  });
+
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "followup_created",
+    entityType: "FollowUp",
+    entityId: followUp.id,
+    metadata: {
+      leadId: lead.id,
+      stageBefore: lead.stage,
+      stageAfter: lead.stage,
+      nextFollowAt: null
+    }
+  });
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "market_claw_reply_saved_as_followup",
+    entityType: "MarketClawReplyDraft",
+    entityId: draft.id,
+    metadata: {
+      leadId: lead.id,
+      businessLineId: draft.businessLineId,
+      replyDraftId: draft.id,
+      replyType: selectedReplyType
+    }
+  });
+
+  revalidatePath(`/app/${tenantSlug}/leads/${leadId}`);
+  revalidatePath(`/app/${tenantSlug}/market-claw/replies`);
+  revalidatePath(`/app/${tenantSlug}/todos`);
+  revalidatePath(`/app/${tenantSlug}/audit-logs`);
+}
+
+export async function markMarketClawReplyCopied(tenantSlug: string, leadId: string, formData: FormData) {
+  const { user, tenant, lead } = await requireLeadAccess(tenantSlug, leadId);
+  const draftId = text(formData, "draftId");
+  if (!draftId) return;
+
+  const draft = await prisma.marketClawReplyDraft.findFirst({
+    where: { id: draftId, tenantId: tenant.id, leadId: lead.id }
+  });
+  if (!draft) return;
+
+  const selectedReplyType = text(formData, "selectedReplyType") ?? "SHORT";
+  const finalReply = pickMarketClawReplyText(draft, selectedReplyType, text(formData, "salesEditedReply"));
+  await prisma.marketClawReplyDraft.update({
+    where: { id: draft.id },
+    data: {
+      useStatus: MarketClawReplyUseStatus.COPIED,
+      selectedReplyType,
+      finalReply
+    }
+  });
+
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "market_claw_reply_copied",
+    entityType: "MarketClawReplyDraft",
+    entityId: draft.id,
+    metadata: {
+      leadId: lead.id,
+      businessLineId: draft.businessLineId,
+      replyDraftId: draft.id,
+      replyType: selectedReplyType
+    }
+  });
+
+  revalidatePath(`/app/${tenantSlug}/leads/${leadId}`);
+  revalidatePath(`/app/${tenantSlug}/market-claw/replies`);
+  revalidatePath(`/app/${tenantSlug}/audit-logs`);
+}
+
+export async function createMarketClawTask(tenantSlug: string, leadId: string, formData: FormData) {
+  const { user, tenant, lead } = await requireLeadAccess(tenantSlug, leadId);
+  const draftId = text(formData, "draftId");
+  if (!draftId) return;
+
+  const draft = await prisma.marketClawReplyDraft.findFirst({
+    where: { id: draftId, tenantId: tenant.id, leadId: lead.id }
+  });
+  if (!draft) return;
+
+  const suggestedTask = parseMarketClawSuggestedTask(draft.suggestedTask);
+  if (!suggestedTask) return;
+
+  const ownerId = lead.ownerId ?? user.id;
+  await createTaskWithAudit({
+    tenantId: tenant.id,
+    leadId: lead.id,
+    ownerId,
+    createdById: user.id,
+    title: suggestedTask.title,
+    description: suggestedTask.description,
+    type: FollowTaskType.CUSTOM,
+    priority: enumValue(FollowTaskPriority, suggestedTask.priority, FollowTaskPriority.NORMAL),
+    dueAt: defaultDueAfterDays(suggestedTask.dueDays),
+    auditAction: "market_claw_task_created",
+    auditMetadata: {
+      leadId: lead.id,
+      businessLineId: draft.businessLineId,
+      replyDraftId: draft.id,
+      hasTask: true
+    }
+  });
+
+  revalidatePath(`/app/${tenantSlug}/leads/${leadId}`);
+  revalidatePath(`/app/${tenantSlug}/todos`);
+  revalidatePath(`/app/${tenantSlug}/market-claw/replies`);
+  revalidatePath(`/app/${tenantSlug}/audit-logs`);
+}
+
+export async function createMarketClawFeedback(tenantSlug: string, leadId: string, formData: FormData) {
+  const { user, tenant, lead } = await requireLeadAccess(tenantSlug, leadId);
+  const draftId = text(formData, "draftId");
+  if (!draftId) return;
+
+  const draft = await prisma.marketClawReplyDraft.findFirst({
+    where: { id: draftId, tenantId: tenant.id, leadId: lead.id }
+  });
+  if (!draft) return;
+
+  const feedbackStatus = enumValue(
+    MarketClawFeedbackStatus,
+    text(formData, "feedbackStatus"),
+    MarketClawFeedbackStatus.UNRATED
+  );
+
+  const feedback = await prisma.marketClawReplyFeedback.create({
+    data: {
+      tenantId: tenant.id,
+      replyDraftId: draft.id,
+      leadId: lead.id,
+      createdById: user.id,
+      feedbackStatus,
+      feedbackNote: text(formData, "feedbackNote"),
+      salesEditedReply: text(formData, "salesEditedReply"),
+      recommendAsTrainingCase: checkbox(formData, "recommendAsTrainingCase")
+    }
+  });
+
+  await prisma.marketClawReplyDraft.update({
+    where: { id: draft.id },
+    data: {
+      feedbackStatus,
+      finalReply: text(formData, "salesEditedReply") ?? draft.finalReply
+    }
+  });
+
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "market_claw_feedback_created",
+    entityType: "MarketClawReplyFeedback",
+    entityId: feedback.id,
+    metadata: {
+      leadId: lead.id,
+      businessLineId: draft.businessLineId,
+      replyDraftId: draft.id,
+      feedbackStatus
+    }
+  });
+
+  revalidatePath(`/app/${tenantSlug}/leads/${leadId}`);
+  revalidatePath(`/app/${tenantSlug}/market-claw/replies`);
   revalidatePath(`/app/${tenantSlug}/audit-logs`);
 }
 

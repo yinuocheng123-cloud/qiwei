@@ -242,6 +242,55 @@ enum CommunicationComplianceProvider {
   OTHER
 }
 
+enum MarketClawKnowledgeType {
+  SERVICE_INTRO
+  FAQ
+  STANDARD_REPLY
+  CASE_STUDY
+  PRICE_BOUNDARY
+  DELIVERY_PROCESS
+  OBJECTION_HANDLING
+  FORBIDDEN_COMMITMENT
+  RISK_NOTICE
+  SALES_SCRIPT
+  OTHER
+}
+
+enum MarketClawKnowledgeStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum MarketClawTrainingRating {
+  GOOD
+  NEEDS_EDIT
+  BAD
+  UNRATED
+}
+
+enum MarketClawTrainingReviewStatus {
+  DRAFT
+  GENERATED
+  REVIEWED
+  SAVED_AS_STANDARD
+  DISMISSED
+}
+
+enum MarketClawReplyUseStatus {
+  GENERATED
+  COPIED
+  SAVED_AS_FOLLOWUP
+  DISMISSED
+}
+
+enum MarketClawFeedbackStatus {
+  USEFUL
+  NOT_USEFUL
+  NEEDS_EDIT
+  UNRATED
+}
+
 model Tenant {
   id          String                 @id @default(cuid())
   name        String
@@ -271,6 +320,10 @@ model Tenant {
   importRows     ImportRow[]
   communicationComplianceConfigs CommunicationComplianceConfig[]
   leadSourceAttributions         LeadSourceAttribution[]
+  marketClawKnowledgeItems       MarketClawKnowledgeItem[]
+  marketClawTrainingCases        MarketClawTrainingCase[]
+  marketClawReplyDrafts          MarketClawReplyDraft[]
+  marketClawReplyFeedbacks       MarketClawReplyFeedback[]
 }
 
 model User {
@@ -296,6 +349,11 @@ model User {
   importBatches  ImportBatch[]
   confirmedCommunicationComplianceConfigs CommunicationComplianceConfig[] @relation("CommunicationComplianceConfirmedBy")
   sourceAttributedLeads                 LeadSourceAttribution[]          @relation("LeadSourceAttributionStaff")
+  createdMarketClawKnowledgeItems       MarketClawKnowledgeItem[]        @relation("MarketClawKnowledgeCreator")
+  updatedMarketClawKnowledgeItems       MarketClawKnowledgeItem[]        @relation("MarketClawKnowledgeUpdater")
+  createdMarketClawTrainingCases        MarketClawTrainingCase[]         @relation("MarketClawTrainingCreator")
+  createdMarketClawReplyDrafts          MarketClawReplyDraft[]           @relation("MarketClawReplyDraftCreator")
+  marketClawReplyFeedbacks              MarketClawReplyFeedback[]
 
   @@index([tenantId, role])
 }
@@ -345,6 +403,8 @@ model Lead {
   replySuggestions ReplySuggestion[]
   importRows        ImportRow[]
   sourceAttribution LeadSourceAttribution?
+  marketClawReplyDrafts   MarketClawReplyDraft[]
+  marketClawReplyFeedbacks MarketClawReplyFeedback[]
 
   @@index([tenantId, createdAt])
   @@index([tenantId, source])
@@ -373,6 +433,8 @@ model FollowUp {
   lead         Lead       @relation(fields: [leadId], references: [id])
   userId       String
   user         User       @relation(fields: [userId], references: [id])
+  marketClawReplyDraftId String?
+  marketClawReplyDraft   MarketClawReplyDraft? @relation("MarketClawReplyDraftFollowUps", fields: [marketClawReplyDraftId], references: [id])
   content      String
   nextAction   String?
   nextFollowAt DateTime?
@@ -458,6 +520,9 @@ model BusinessLine {
   notes                      String?
   createdAt                  DateTime             @default(now())
   updatedAt                  DateTime             @updatedAt
+  marketClawKnowledgeItems   MarketClawKnowledgeItem[]
+  marketClawTrainingCases    MarketClawTrainingCase[]
+  marketClawReplyDrafts      MarketClawReplyDraft[]
 
   @@unique([tenantId, slug])
   @@index([tenantId, status, priority])
@@ -605,6 +670,118 @@ model LeadSourceAttribution {
   @@index([tenantId, sourceCampaign, createdAt])
   @@index([tenantId, sourceScene, createdAt])
   @@index([tenantId, sourceStaffId, createdAt])
+}
+
+model MarketClawKnowledgeItem {
+  id                      String                   @id @default(cuid())
+  tenantId                String
+  tenant                  Tenant                   @relation(fields: [tenantId], references: [id])
+  businessLineId          String
+  businessLine            BusinessLine             @relation(fields: [businessLineId], references: [id])
+  createdById             String
+  createdBy               User                     @relation("MarketClawKnowledgeCreator", fields: [createdById], references: [id])
+  updatedById             String
+  updatedBy               User                     @relation("MarketClawKnowledgeUpdater", fields: [updatedById], references: [id])
+  title                   String
+  content                 String
+  knowledgeType           MarketClawKnowledgeType
+  status                  MarketClawKnowledgeStatus @default(ACTIVE)
+  keywords                Json?
+  applicableCustomerTypes Json?
+  applicableStages        Json?
+  recommendedMaterialIds  Json?
+  forbiddenPhrases        Json?
+  riskNotes               String?
+  sortOrder               Int                      @default(100)
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  savedFromTrainingCases  MarketClawTrainingCase[]
+
+  @@index([tenantId, businessLineId, knowledgeType, status])
+  @@index([tenantId, status, updatedAt])
+}
+
+model MarketClawTrainingCase {
+  id                    String                       @id @default(cuid())
+  tenantId              String
+  tenant                Tenant                       @relation(fields: [tenantId], references: [id])
+  businessLineId        String
+  businessLine          BusinessLine                 @relation(fields: [businessLineId], references: [id])
+  createdById           String
+  createdBy             User                         @relation("MarketClawTrainingCreator", fields: [createdById], references: [id])
+  customerQuestion      String
+  customerType          CustomerType?
+  customerStage         LeadStage?
+  customerTags          Json?
+  replyStyle            String?
+  replyLength           String?
+  generatedShortReply   String?
+  generatedProfessionalReply String?
+  generatedClosingReply String?
+  manualOptimizedReply  String?
+  rating                MarketClawTrainingRating    @default(UNRATED)
+  reviewStatus          MarketClawTrainingReviewStatus @default(DRAFT)
+  forbiddenNotes        String?
+  savedAsKnowledgeItemId String?
+  savedAsKnowledgeItem  MarketClawKnowledgeItem?    @relation(fields: [savedAsKnowledgeItemId], references: [id])
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+
+  @@index([tenantId, businessLineId, createdAt])
+  @@index([tenantId, createdById, createdAt])
+}
+
+model MarketClawReplyDraft {
+  id                 String                    @id @default(cuid())
+  tenantId           String
+  tenant             Tenant                    @relation(fields: [tenantId], references: [id])
+  leadId             String
+  lead               Lead                      @relation(fields: [leadId], references: [id])
+  businessLineId     String?
+  businessLine       BusinessLine?             @relation(fields: [businessLineId], references: [id])
+  createdById        String
+  createdBy          User                      @relation("MarketClawReplyDraftCreator", fields: [createdById], references: [id])
+  customerQuestion   String
+  matchedKnowledgeIds Json?
+  shortReply         String?
+  professionalReply  String?
+  closingReply       String?
+  riskWarnings       Json?
+  suggestedTags      Json?
+  suggestedMaterials Json?
+  suggestedTask      Json?
+  selectedReplyType  String?
+  finalReply         String?
+  useStatus          MarketClawReplyUseStatus   @default(GENERATED)
+  feedbackStatus     MarketClawFeedbackStatus   @default(UNRATED)
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+  followUps          FollowUp[]                 @relation("MarketClawReplyDraftFollowUps")
+  feedbacks          MarketClawReplyFeedback[]
+
+  @@index([tenantId, leadId, createdById, createdAt])
+  @@index([tenantId, createdAt])
+}
+
+model MarketClawReplyFeedback {
+  id                     String                  @id @default(cuid())
+  tenantId               String
+  tenant                 Tenant                  @relation(fields: [tenantId], references: [id])
+  replyDraftId           String
+  replyDraft             MarketClawReplyDraft    @relation(fields: [replyDraftId], references: [id], onDelete: Cascade)
+  leadId                 String
+  lead                   Lead                    @relation(fields: [leadId], references: [id])
+  createdById            String
+  createdBy              User                    @relation(fields: [createdById], references: [id])
+  feedbackStatus         MarketClawFeedbackStatus
+  feedbackNote           String?
+  salesEditedReply       String?
+  recommendAsTrainingCase Boolean                @default(false)
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+
+  @@index([tenantId, replyDraftId, createdAt])
+  @@index([tenantId, createdById, createdAt])
 }
 
 model AuditLog {

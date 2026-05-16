@@ -210,6 +210,18 @@ export function canManageCommunicationCompliance(role: UserRole) {
   return role === "TENANT_ADMIN";
 }
 
+export function canAccessMarketClawKnowledge(role: UserRole) {
+  return role === "TENANT_ADMIN" || role === "OPERATOR";
+}
+
+export function canAccessMarketClawTraining(role: UserRole) {
+  return role === "TENANT_ADMIN" || role === "OPERATOR";
+}
+
+export function canAccessMarketClawReplies(role: UserRole) {
+  return role === "TENANT_ADMIN" || role === "OPERATOR" || role === "SALES";
+}
+
 export async function requireLeadAccess(tenantSlug: string, leadId: string) {
   const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR", "SALES"]);
   const lead = await prisma.lead.findFirst({

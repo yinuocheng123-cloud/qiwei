@@ -10,6 +10,7 @@
  */
 import { notFound } from "next/navigation";
 import { LeadReplyAssistant } from "@/components/LeadReplyAssistant";
+import { MarketClawAssistant } from "@/components/MarketClawAssistant";
 import { PageShell } from "@/components/Shell";
 import { Card, Input, Select, SubmitButton, Textarea } from "@/components/Ui";
 import { addFollowUp, assignLeadOwner, createManualTask } from "@/lib/actions";
@@ -47,7 +48,7 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
   if (!lead) notFound();
   const cnasData = readCnasExtraData(lead.extraData);
 
-  const [strategy, materials, assistantMaterials, owners, taskTemplates, currentTasks, replySuggestions] = await Promise.all([
+  const [strategy, materials, assistantMaterials, owners, taskTemplates, currentTasks, replySuggestions, marketClawDrafts, marketClawKnowledgeItems, activeBusinessLines] = await Promise.all([
     prisma.customerTypeStrategy.findUnique({
       where: { tenantId_customerType: { tenantId: tenant.id, customerType: lead.customerType } }
     }),
@@ -85,7 +86,32 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
       orderBy: [{ dueAt: "asc" }, { updatedAt: "desc" }],
       take: 6
     }),
-    getLatestReplySuggestionBatch(tenant.id, lead.id, user.id)
+    getLatestReplySuggestionBatch(tenant.id, lead.id, user.id),
+    prisma.marketClawReplyDraft.findMany({
+      where: {
+        tenantId: tenant.id,
+        leadId: lead.id,
+        createdById: user.id
+      },
+      orderBy: { createdAt: "desc" },
+      take: 3
+    }),
+    prisma.marketClawKnowledgeItem.findMany({
+      where: {
+        tenantId: tenant.id,
+        status: "ACTIVE"
+      },
+      select: { id: true, title: true },
+      orderBy: { updatedAt: "desc" }
+    }),
+    prisma.businessLine.findMany({
+      where: {
+        tenantId: tenant.id,
+        status: "ACTIVE"
+      },
+      select: { id: true, name: true },
+      orderBy: [{ priority: "asc" }, { updatedAt: "desc" }]
+    })
   ]);
 
   const followAction = addFollowUp.bind(null, tenant.slug, lead.id);
@@ -245,6 +271,16 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
         </div>
 
         <aside className="space-y-6">
+          <MarketClawAssistant
+            tenantSlug={tenant.slug}
+            leadId={lead.id}
+            businessLines={activeBusinessLines}
+            drafts={marketClawDrafts}
+            materials={assistantMaterials.map((material) => ({ id: material.id, title: material.title }))}
+            knowledgeItems={marketClawKnowledgeItems}
+            existingTags={lead.tags.map((tag) => ({ id: tag.id, tagName: tag.tagName, tagGroup: tag.tagGroup }))}
+          />
+
           <LeadReplyAssistant
             tenantSlug={tenant.slug}
             leadId={lead.id}

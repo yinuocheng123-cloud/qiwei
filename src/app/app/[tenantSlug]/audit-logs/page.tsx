@@ -64,7 +64,17 @@ const actionOptions = [
   { value: "communication_compliance_config_created", label: "创建采集合规配置" },
   { value: "communication_compliance_config_updated", label: "更新采集合规配置" },
   { value: "communication_compliance_config_enabled", label: "启用采集合规配置" },
-  { value: "communication_compliance_config_paused", label: "暂停采集合规配置" }
+  { value: "communication_compliance_config_paused", label: "暂停采集合规配置" },
+  { value: "market_claw_knowledge_created", label: "创建麻虾知识" },
+  { value: "market_claw_knowledge_updated", label: "更新麻虾知识" },
+  { value: "market_claw_training_generated", label: "生成麻虾训练结果" },
+  { value: "market_claw_training_saved_as_knowledge", label: "训练结果沉淀为知识" },
+  { value: "market_claw_reply_generated", label: "生成麻虾回复草稿" },
+  { value: "market_claw_reply_copied", label: "复制麻虾回复" },
+  { value: "market_claw_reply_saved_as_followup", label: "麻虾回复保存为跟进" },
+  { value: "market_claw_tags_confirmed", label: "确认麻虾推荐标签" },
+  { value: "market_claw_task_created", label: "创建麻虾建议任务" },
+  { value: "market_claw_feedback_created", label: "新增麻虾反馈" }
 ];
 
 const entityTypeOptions = [
@@ -85,7 +95,11 @@ const entityTypeOptions = [
   { value: "LeadSourceAttribution", label: "来源归因" },
   { value: "CommunicationComplianceConfig", label: "采集合规配置" },
   { value: "IntakeForm", label: "公开表单" },
-  { value: "Tenant", label: "企业租户" }
+  { value: "Tenant", label: "企业租户" },
+  { value: "MarketClawKnowledgeItem", label: "麻虾知识条目" },
+  { value: "MarketClawTrainingCase", label: "麻虾训练样本" },
+  { value: "MarketClawReplyDraft", label: "麻虾回复草稿" },
+  { value: "MarketClawReplyFeedback", label: "麻虾回复反馈" }
 ];
 
 function metadataSummary(value: Prisma.JsonValue | null) {
