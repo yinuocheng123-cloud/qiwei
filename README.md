@@ -48,6 +48,41 @@ APP_URL="http://localhost:3000"
 
 `custom/notes/v1.4.5-local-demo-runbook.md`
 
+## 本地演示一键启动
+
+如果你只是想把本地演示环境稳定拉起，推荐直接执行：
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File custom\experiments\start-local-demo.ps1
+```
+
+这个脚本会自动完成以下动作：
+
+1. 检查项目目录和 PostgreSQL 可执行文件。
+2. 检查或初始化 `custom/experiments/postgres-data` 数据目录。
+3. 启动本地 PostgreSQL，并等待 `127.0.0.1:55432` 可用。
+4. 设置当前进程的 `DATABASE_URL`。
+5. 执行 Prisma generate、migrate deploy 和 seed。
+6. 启动 Next.js dev server。
+
+如果登录页报错：
+
+`Can't reach database server at 127.0.0.1:55432`
+
+说明本地 PostgreSQL 没有成功常驻，应该优先使用上面的脚本，而不是单独执行 `npm run dev`。
+
+默认登录地址：
+
+- `http://127.0.0.1:3000/login`
+
+推荐测试账号：
+
+- `platform-boss@zhengmu.local / 123456`
+- `platform-operator@zhengmu.local / 123456`
+- `platform-sales@zhengmu.local / 123456`
+
+当前本地演示方案不依赖 Docker。
+
 ## 鐩存帴缁欓摼鎺ユ祴璇?
 
 濡傛灉浣犲笇鏈涙妸褰撳墠鏈湴鐜鐩存帴鍙樻垚鈥滅粰涓€涓摼鎺ュ氨鑳芥祴鈥濓紝寤鸿鍏堟寜鏈湴婕旂ず鎵嬪唽鍑嗗濂?`.env`銆丳ostgreSQL銆乵igrate 鍜?seed锛岀劧鍚庢墽琛岋細
