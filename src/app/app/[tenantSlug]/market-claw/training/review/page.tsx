@@ -62,6 +62,7 @@ export default async function MarketClawTrainingReviewPage({
         items={[
           { key: "overview", label: "总览", href: `/app/${tenant.slug}/market-claw` },
           { key: "knowledge", label: "知识库", href: `/app/${tenant.slug}/market-claw/knowledge` },
+          { key: "ingestion", label: "资料投喂", href: `/app/${tenant.slug}/market-claw/ingestion` },
           { key: "training", label: "回复训练场", href: `/app/${tenant.slug}/market-claw/training` },
           { key: "review", label: "训练审核", href: `/app/${tenant.slug}/market-claw/training/review` },
           { key: "replies", label: "回复记录", href: `/app/${tenant.slug}/market-claw/replies` }

@@ -11,6 +11,7 @@ import Link from "next/link";
 import { PageShell } from "@/components/Shell";
 import { Callout, Card, SectionTabs, StatCard } from "@/components/Ui";
 import {
+  canAccessMarketClawIngestion,
   canAccessMarketClawKnowledge,
   canAccessMarketClawReplies,
   canAccessMarketClawTraining,
@@ -53,14 +54,18 @@ export default async function MarketClawPage({ params }: { params: { tenantSlug:
       : [
           { key: "overview", label: "总览", href: `/app/${tenant.slug}/market-claw` },
           { key: "knowledge", label: "知识库", href: `/app/${tenant.slug}/market-claw/knowledge` },
+          { key: "ingestion", label: "资料投喂", href: `/app/${tenant.slug}/market-claw/ingestion` },
           { key: "training", label: "回复训练场", href: `/app/${tenant.slug}/market-claw/training` },
           { key: "review", label: "训练审核", href: `/app/${tenant.slug}/market-claw/training/review` },
           { key: "replies", label: "回复记录", href: `/app/${tenant.slug}/market-claw/replies` }
         ];
 
-  const [knowledgeCount, trainingCount, pendingReviewCount, replyDraftCount, feedbackCount, recentDrafts] = await Promise.all([
+  const [knowledgeCount, ingestionBatchCount, trainingCount, pendingReviewCount, replyDraftCount, feedbackCount, recentDrafts] = await Promise.all([
     canAccessMarketClawKnowledge(user.role)
       ? prisma.marketClawKnowledgeItem.count({ where: { tenantId: tenant.id } })
+      : Promise.resolve(0),
+    canAccessMarketClawIngestion(user.role)
+      ? prisma.marketClawIngestionBatch.count({ where: { tenantId: tenant.id } })
       : Promise.resolve(0),
     canAccessMarketClawTraining(user.role)
       ? prisma.marketClawTrainingCase.count({
@@ -132,6 +137,11 @@ export default async function MarketClawPage({ params }: { params: { tenantSlug:
             href: `/app/${tenant.slug}/market-claw/knowledge`
           },
           {
+            title: "资料投喂",
+            description: "把百问百答、服务说明和案例资料先拆成候选知识，再由人工审核采纳入库。",
+            href: `/app/${tenant.slug}/market-claw/ingestion`
+          },
+          {
             title: "回复训练场",
             description: "模拟客户问题，验证回复是否准确、像人话且有边界，再沉淀为标准话术。",
             href: `/app/${tenant.slug}/market-claw/training`
@@ -181,6 +191,7 @@ export default async function MarketClawPage({ params }: { params: { tenantSlug:
 
       <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="知识库数量" value={knowledgeCount} />
+        <StatCard label="资料投喂批次" value={ingestionBatchCount} />
         <StatCard label="训练样本数量" value={trainingCount} />
         <StatCard label="待审核训练" value={pendingReviewCount} />
         <StatCard label="回复草稿数量" value={replyDraftCount} />

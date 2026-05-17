@@ -12,6 +12,9 @@ import type {
   BusinessLine,
   CustomerType,
   LeadStage,
+  MarketClawIngestionSourceType,
+  MarketClawIngestionStatus,
+  MarketClawKnowledgeCandidateReviewStatus,
   MarketClawKnowledgeItem,
   MarketClawKnowledgeReviewStatus,
   MarketClawKnowledgeScopeLevel,
@@ -94,6 +97,19 @@ type MarketClawSignal = {
   cnas: boolean;
   highIntent: boolean;
   lowIntent: boolean;
+};
+
+export type MarketClawKnowledgeCandidateDraft = {
+  title: string;
+  content: string;
+  knowledgeType: MarketClawKnowledgeType;
+  suggestedScopeLevel: MarketClawKnowledgeScopeLevel;
+  suggestedKeywords: string[];
+  suggestedForbiddenPhrases: string[];
+  suggestedRiskNotes: string | null;
+  suggestedReplyShort: string;
+  suggestedReplyProfessional: string;
+  suggestedReplyClosing: string;
 };
 
 export const marketClawKnowledgeTypeOptions: { value: MarketClawKnowledgeType; label: string }[] = [
@@ -184,6 +200,34 @@ export const marketClawReviewResultOptions: { value: MarketClawReviewResult; lab
   { value: "REJECTED", label: "已驳回" }
 ];
 
+export const marketClawIngestionSourceTypeOptions: { value: MarketClawIngestionSourceType; label: string }[] = [
+  { value: "PASTED_TEXT", label: "粘贴文本" },
+  { value: "TXT", label: "TXT 文本" },
+  { value: "MARKDOWN", label: "Markdown" },
+  { value: "CSV", label: "CSV" },
+  { value: "MANUAL", label: "人工整理" }
+];
+
+export const marketClawIngestionStatusOptions: { value: MarketClawIngestionStatus; label: string }[] = [
+  { value: "DRAFT", label: "草稿" },
+  { value: "PROCESSING", label: "处理中" },
+  { value: "CANDIDATES_GENERATED", label: "已生成候选知识" },
+  { value: "REVIEWING", label: "审核中" },
+  { value: "COMPLETED", label: "已完成" },
+  { value: "FAILED", label: "处理失败" }
+];
+
+export const marketClawKnowledgeCandidateReviewStatusOptions: {
+  value: MarketClawKnowledgeCandidateReviewStatus;
+  label: string;
+}[] = [
+  { value: "PENDING_REVIEW", label: "待审核" },
+  { value: "ADOPTED", label: "已采纳" },
+  { value: "ADOPTED_WITH_EDIT", label: "修改后采纳" },
+  { value: "REJECTED", label: "已驳回" },
+  { value: "MERGED", label: "已合并" }
+];
+
 export const marketClawTagGroupLabels: Record<TagGroup, string> = {
   SOURCE: "来源标签",
   CUSTOMER_TYPE: "客户类型标签",
@@ -205,6 +249,9 @@ const cnasKeywords = ["cnas", "认可", "实验室", "评审", "体系文件", "
 const highIntentKeywords = ["什么时候开始", "能不能尽快", "今天聊", "明天聊", "发合同", "怎么付款", "报价发我", "约时间"];
 const lowIntentKeywords = ["先了解", "不着急", "以后再说", "暂时不用", "没有预算"];
 const riskKeywords = ["价格", "周期", "保证", "通过", "奖项", "名额", "独家", "合同", "赔付", "投放效果", "资源承诺"];
+const processKeywords = ["流程", "步骤", "周期", "准备", "交付", "启动", "推进"];
+const objectionKeywords = ["太贵", "没预算", "先了解", "再看看", "别人也能做", "没效果"];
+const forbiddenCommitmentKeywords = ["保证", "一定", "肯定", "包过", "包推荐", "名额", "排名", "奖项", "效果"];
 
 function normalizeText(value: string) {
   return value.trim().toLowerCase();
@@ -225,6 +272,10 @@ function splitTextList(value?: string | null) {
 
 function toStringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
+}
+
+function dedupeStrings(values: string[]) {
+  return [...new Set(values.map((item) => item.trim()).filter(Boolean))];
 }
 
 export function parseMarketClawTextArray(value: unknown) {
@@ -255,6 +306,111 @@ export function parseMarketClawSuggestedTask(value: unknown) {
     return null;
   }
   return { title, description, priority: priority as MarketClawSuggestedTask["priority"], dueDays };
+}
+
+function extractCandidateKeywords(...values: string[]) {
+  const tokens = values
+    .flatMap((value) =>
+      value
+        .split(/[\s,，。！？；：:\n\r、()（）【】\[\]\-_/]+/)
+        .map((item) => item.trim())
+        .filter((item) => item.length >= 2)
+    )
+    .slice(0, 16);
+  return dedupeStrings(tokens).slice(0, 8);
+}
+
+function detectForbiddenPhrases(text: string) {
+  const normalized = normalizeText(text);
+  return dedupeStrings(forbiddenCommitmentKeywords.filter((keyword) => normalized.includes(keyword.toLowerCase())));
+}
+
+function buildCandidateRiskNotes(type: MarketClawKnowledgeType, content: string) {
+  if (type === "FORBIDDEN_COMMITMENT") {
+    return "涉及效果、名额、推荐或结果保证时，必须先收紧边界，不能把候选内容直接当作对外承诺。";
+  }
+  if (type === "PRICE_BOUNDARY") {
+    return "价格相关内容只能作为报价边界参考，正式报价前仍需结合客户场景、业务线和服务范围确认。";
+  }
+  if (type === "OBJECTION_HANDLING") {
+    return "异议处理更适合先缓和情绪、再补事实和下一步动作，不要为了推进而追加未经确认的承诺。";
+  }
+  if (type === "CASE_STUDY") {
+    return "案例类内容只适合作为参考样本，不能把别人的结果直接承诺给当前客户。";
+  }
+  if (includesKeyword(normalizeText(content), effectKeywords)) {
+    return "涉及效果、排名、通过率或资源承诺时，需要先加风险边界。";
+  }
+  return null;
+}
+
+function buildCandidateReplies(title: string, content: string, knowledgeType: MarketClawKnowledgeType) {
+  const shortReply =
+    knowledgeType === "PRICE_BOUNDARY"
+      ? "这块我先不给你空口报死价，先按当前客户情况把范围收清楚，再给你更准确的边界。"
+      : knowledgeType === "FORBIDDEN_COMMITMENT"
+        ? "这类问题我建议先把边界说清楚，避免把结果、名额或推荐说成绝对保证。"
+        : knowledgeType === "OBJECTION_HANDLING"
+          ? "我先按你现在最在意的点给你一个稳妥说法，再决定下一步怎么推进。"
+          : `这条资料更适合整理成“${title}”这类标准说法，先给你一个可直接用的版本。`;
+  const professionalReply =
+    knowledgeType === "FORBIDDEN_COMMITMENT"
+      ? `${content}\n\n使用时请优先保留风险边界，不要把候选知识直接变成绝对承诺。`
+      : `${content}\n\n这条候选知识更适合先作为人工审核素材，再决定是否进入正式知识库。`;
+  const closingReply =
+    knowledgeType === "PRICE_BOUNDARY"
+      ? "如果你愿意，我下一步先把客户场景、业务线和预算范围收紧，再把可讲的价格边界整理给你。"
+      : knowledgeType === "CASE_STUDY"
+        ? "如果要继续推进，建议再补一个更接近当前客户场景的案例，避免只停留在泛化展示。"
+        : "如果这条候选内容方向对，我们可以先人工审核，再决定是沉淀为标准回复、风险提醒还是异议处理话术。";
+
+  return { shortReply, professionalReply, closingReply };
+}
+
+function splitIngestionBlocks(rawText: string) {
+  return rawText
+    .split(/\r?\n\s*\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseFaqCandidates(rawText: string) {
+  const results: { question: string; answer: string }[] = [];
+  const pattern =
+    /(?:^|\n)\s*(?:问|问题|Q)\s*[：:]\s*(.+?)\s*(?:\r?\n)+(?:答|回答|A)\s*[：:]\s*([\s\S]*?)(?=(?:\r?\n){2,}\s*(?:问|问题|Q)\s*[：:]|$)/gim;
+
+  for (const match of rawText.matchAll(pattern)) {
+    const question = match[1]?.trim();
+    const answer = match[2]?.trim();
+    if (question && answer) {
+      results.push({ question, answer });
+    }
+  }
+
+  return results;
+}
+
+function pushCandidate(
+  candidates: MarketClawKnowledgeCandidateDraft[],
+  seenKeys: Set<string>,
+  draft: Omit<MarketClawKnowledgeCandidateDraft, "suggestedReplyShort" | "suggestedReplyProfessional" | "suggestedReplyClosing">
+) {
+  const content = draft.content.trim();
+  if (!draft.title.trim() || !content) return;
+  const uniqueKey = `${draft.knowledgeType}::${draft.title.trim()}::${content}`;
+  if (seenKeys.has(uniqueKey)) return;
+  seenKeys.add(uniqueKey);
+  const replies = buildCandidateReplies(draft.title.trim(), content, draft.knowledgeType);
+  candidates.push({
+    ...draft,
+    title: draft.title.trim(),
+    content,
+    suggestedKeywords: dedupeStrings(draft.suggestedKeywords),
+    suggestedForbiddenPhrases: dedupeStrings(draft.suggestedForbiddenPhrases),
+    suggestedReplyShort: replies.shortReply,
+    suggestedReplyProfessional: replies.professionalReply,
+    suggestedReplyClosing: replies.closingReply
+  });
 }
 
 function buildSignals(question: string): MarketClawSignal {
@@ -618,6 +774,114 @@ export function generateMarketClawReply(input: {
     suggestedMaterialIds: pickSuggestedMaterials(input.businessLine, matchedKnowledge),
     suggestedTask
   } satisfies MarketClawReplyResult;
+}
+
+export function generateMarketClawKnowledgeCandidates(input: {
+  title: string;
+  rawText: string;
+  businessLineName?: string | null;
+  defaultScopeLevel: MarketClawKnowledgeScopeLevel;
+}) {
+  const rawText = input.rawText.trim();
+  if (!rawText) return [] as MarketClawKnowledgeCandidateDraft[];
+
+  const candidates: MarketClawKnowledgeCandidateDraft[] = [];
+  const seenKeys = new Set<string>();
+  const faqEntries = parseFaqCandidates(rawText);
+
+  for (const entry of faqEntries) {
+    const combined = `${entry.question}\n${entry.answer}`;
+    pushCandidate(candidates, seenKeys, {
+      title: `FAQ：${entry.question.slice(0, 32)}`,
+      content: `问题：${entry.question}\n回答：${entry.answer}`,
+      knowledgeType: "FAQ",
+      suggestedScopeLevel: input.defaultScopeLevel,
+      suggestedKeywords: extractCandidateKeywords(entry.question, entry.answer, input.businessLineName ?? ""),
+      suggestedForbiddenPhrases: detectForbiddenPhrases(combined),
+      suggestedRiskNotes: buildCandidateRiskNotes("FAQ", combined)
+    });
+  }
+
+  const blocks = splitIngestionBlocks(rawText);
+  for (const block of blocks) {
+    const normalized = normalizeText(block);
+    const keywords = extractCandidateKeywords(block, input.title, input.businessLineName ?? "");
+    const forbiddenPhrases = detectForbiddenPhrases(block);
+
+    if (includesKeyword(normalized, priceKeywords)) {
+      pushCandidate(candidates, seenKeys, {
+        title: `价格边界：${block.slice(0, 28)}`,
+        content: block,
+        knowledgeType: "PRICE_BOUNDARY",
+        suggestedScopeLevel: input.defaultScopeLevel,
+        suggestedKeywords: keywords,
+        suggestedForbiddenPhrases: forbiddenPhrases,
+        suggestedRiskNotes: buildCandidateRiskNotes("PRICE_BOUNDARY", block)
+      });
+    }
+
+    if (includesKeyword(normalized, effectKeywords) || forbiddenPhrases.length) {
+      pushCandidate(candidates, seenKeys, {
+        title: `风险提醒：${block.slice(0, 28)}`,
+        content: block,
+        knowledgeType: "FORBIDDEN_COMMITMENT",
+        suggestedScopeLevel: input.defaultScopeLevel,
+        suggestedKeywords: keywords,
+        suggestedForbiddenPhrases: forbiddenPhrases.length ? forbiddenPhrases : ["保证", "一定", "效果承诺"],
+        suggestedRiskNotes: buildCandidateRiskNotes("FORBIDDEN_COMMITMENT", block)
+      });
+    }
+
+    if (includesKeyword(normalized, caseKeywords)) {
+      pushCandidate(candidates, seenKeys, {
+        title: `案例素材：${block.slice(0, 28)}`,
+        content: block,
+        knowledgeType: "CASE_STUDY",
+        suggestedScopeLevel: input.defaultScopeLevel,
+        suggestedKeywords: keywords,
+        suggestedForbiddenPhrases: forbiddenPhrases,
+        suggestedRiskNotes: buildCandidateRiskNotes("CASE_STUDY", block)
+      });
+    }
+
+    if (includesKeyword(normalized, processKeywords)) {
+      pushCandidate(candidates, seenKeys, {
+        title: `交付流程：${block.slice(0, 28)}`,
+        content: block,
+        knowledgeType: "DELIVERY_PROCESS",
+        suggestedScopeLevel: input.defaultScopeLevel,
+        suggestedKeywords: keywords,
+        suggestedForbiddenPhrases: forbiddenPhrases,
+        suggestedRiskNotes: buildCandidateRiskNotes("DELIVERY_PROCESS", block)
+      });
+    }
+
+    if (includesKeyword(normalized, objectionKeywords)) {
+      pushCandidate(candidates, seenKeys, {
+        title: `异议处理：${block.slice(0, 28)}`,
+        content: block,
+        knowledgeType: "OBJECTION_HANDLING",
+        suggestedScopeLevel: input.defaultScopeLevel,
+        suggestedKeywords: keywords,
+        suggestedForbiddenPhrases: forbiddenPhrases,
+        suggestedRiskNotes: buildCandidateRiskNotes("OBJECTION_HANDLING", block)
+      });
+    }
+  }
+
+  if (!candidates.length) {
+    pushCandidate(candidates, seenKeys, {
+      title: `候选知识：${input.title.slice(0, 28)}`,
+      content: rawText,
+      knowledgeType: "OTHER",
+      suggestedScopeLevel: input.defaultScopeLevel,
+      suggestedKeywords: extractCandidateKeywords(input.title, rawText, input.businessLineName ?? ""),
+      suggestedForbiddenPhrases: detectForbiddenPhrases(rawText),
+      suggestedRiskNotes: "当前资料未命中明确的 FAQ、价格边界或风险提醒规则，建议人工拆成更清晰的知识条目后再入库。"
+    });
+  }
+
+  return candidates.slice(0, 24);
 }
 
 export function materialTitlesFromIds(materials: MaterialLike[], ids: string[]) {

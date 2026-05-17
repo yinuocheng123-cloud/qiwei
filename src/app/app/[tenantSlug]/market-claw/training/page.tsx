@@ -40,6 +40,7 @@ function buildOverviewTabs(tenantSlug: string, role: string) {
   return [
     { key: "overview", label: "总览", href: `/app/${tenantSlug}/market-claw` },
     { key: "knowledge", label: "知识库", href: `/app/${tenantSlug}/market-claw/knowledge` },
+    { key: "ingestion", label: "资料投喂", href: `/app/${tenantSlug}/market-claw/ingestion` },
     { key: "training", label: "回复训练场", href: `/app/${tenantSlug}/market-claw/training` },
     { key: "review", label: "训练审核", href: `/app/${tenantSlug}/market-claw/training/review` },
     { key: "replies", label: "回复记录", href: `/app/${tenantSlug}/market-claw/replies` }

@@ -338,6 +338,31 @@ enum MarketClawReviewResult {
   REJECTED
 }
 
+enum MarketClawIngestionSourceType {
+  PASTED_TEXT
+  TXT
+  MARKDOWN
+  CSV
+  MANUAL
+}
+
+enum MarketClawIngestionStatus {
+  DRAFT
+  PROCESSING
+  CANDIDATES_GENERATED
+  REVIEWING
+  COMPLETED
+  FAILED
+}
+
+enum MarketClawKnowledgeCandidateReviewStatus {
+  PENDING_REVIEW
+  ADOPTED
+  ADOPTED_WITH_EDIT
+  REJECTED
+  MERGED
+}
+
 model Tenant {
   id          String                 @id @default(cuid())
   name        String
@@ -371,6 +396,8 @@ model Tenant {
   marketClawTrainingCases        MarketClawTrainingCase[]
   marketClawReplyDrafts          MarketClawReplyDraft[]
   marketClawReplyFeedbacks       MarketClawReplyFeedback[]
+  marketClawIngestionBatches     MarketClawIngestionBatch[]
+  marketClawKnowledgeCandidates  MarketClawKnowledgeCandidate[]
 }
 
 model User {
@@ -401,6 +428,8 @@ model User {
   createdMarketClawTrainingCases        MarketClawTrainingCase[]         @relation("MarketClawTrainingCreator")
   createdMarketClawReplyDrafts          MarketClawReplyDraft[]           @relation("MarketClawReplyDraftCreator")
   marketClawReplyFeedbacks              MarketClawReplyFeedback[]
+  createdMarketClawIngestionBatches     MarketClawIngestionBatch[]       @relation("MarketClawIngestionBatchCreator")
+  createdMarketClawKnowledgeCandidates  MarketClawKnowledgeCandidate[]   @relation("MarketClawKnowledgeCandidateCreator")
 
   @@index([tenantId, role])
 }
@@ -570,6 +599,8 @@ model BusinessLine {
   marketClawKnowledgeItems   MarketClawKnowledgeItem[]
   marketClawTrainingCases    MarketClawTrainingCase[]
   marketClawReplyDrafts      MarketClawReplyDraft[]
+  marketClawIngestionBatches MarketClawIngestionBatch[]
+  marketClawKnowledgeCandidates MarketClawKnowledgeCandidate[]
 
   @@unique([tenantId, slug])
   @@index([tenantId, status, priority])
@@ -725,6 +756,8 @@ model MarketClawKnowledgeItem {
   tenant                  Tenant                   @relation(fields: [tenantId], references: [id])
   businessLineId          String?
   businessLine            BusinessLine?            @relation(fields: [businessLineId], references: [id])
+  sourceIngestionBatchId  String?
+  sourceIngestionBatch    MarketClawIngestionBatch? @relation(fields: [sourceIngestionBatchId], references: [id])
   createdById             String
   createdBy               User                     @relation("MarketClawKnowledgeCreator", fields: [createdById], references: [id])
   updatedById             String
@@ -740,6 +773,7 @@ model MarketClawKnowledgeItem {
   approvedById            String?
   approvedAt              DateTime?
   sourceTrainingCaseId    String?
+  sourceKnowledgeCandidateId String?
   status                  MarketClawKnowledgeStatus @default(ACTIVE)
   keywords                Json?
   applicableCustomerTypes Json?
@@ -757,6 +791,8 @@ model MarketClawKnowledgeItem {
   @@index([tenantId, scopeLevel, reviewStatus, updatedAt])
   @@index([tenantId, departmentName, reviewStatus, updatedAt])
   @@index([tenantId, ownerUserId, reviewStatus, updatedAt])
+  @@index([tenantId, sourceIngestionBatchId, updatedAt])
+  @@index([tenantId, sourceKnowledgeCandidateId, updatedAt])
 }
 
 model MarketClawTrainingCase {
@@ -869,6 +905,64 @@ model MarketClawReplyFeedback {
   @@index([tenantId, replyDraftId, createdAt])
   @@index([tenantId, createdById, createdAt])
   @@index([tenantId, reviewResult, createdAt])
+}
+
+model MarketClawIngestionBatch {
+  id             String                    @id @default(cuid())
+  tenantId       String
+  tenant         Tenant                    @relation(fields: [tenantId], references: [id])
+  businessLineId String?
+  businessLine   BusinessLine?             @relation(fields: [businessLineId], references: [id])
+  createdById    String
+  createdBy      User                      @relation("MarketClawIngestionBatchCreator", fields: [createdById], references: [id])
+  title          String
+  sourceType     MarketClawIngestionSourceType
+  sourceName     String?
+  rawText        String
+  status         MarketClawIngestionStatus @default(DRAFT)
+  candidateCount Int                       @default(0)
+  adoptedCount   Int                       @default(0)
+  rejectedCount  Int                       @default(0)
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  candidates     MarketClawKnowledgeCandidate[]
+  adoptedKnowledgeItems MarketClawKnowledgeItem[]
+
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, businessLineId, createdAt])
+  @@index([tenantId, createdById, createdAt])
+}
+
+model MarketClawKnowledgeCandidate {
+  id                         String                                 @id @default(cuid())
+  tenantId                   String
+  tenant                     Tenant                                 @relation(fields: [tenantId], references: [id])
+  batchId                    String
+  batch                      MarketClawIngestionBatch               @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  businessLineId             String?
+  businessLine               BusinessLine?                          @relation(fields: [businessLineId], references: [id])
+  createdById                String
+  createdBy                  User                                   @relation("MarketClawKnowledgeCandidateCreator", fields: [createdById], references: [id])
+  title                      String
+  content                    String
+  knowledgeType              MarketClawKnowledgeType
+  suggestedScopeLevel        MarketClawKnowledgeScopeLevel          @default(BUSINESS_LINE)
+  suggestedKeywords          Json?
+  suggestedForbiddenPhrases  Json?
+  suggestedRiskNotes         String?
+  suggestedReplyShort        String?
+  suggestedReplyProfessional String?
+  suggestedReplyClosing      String?
+  reviewStatus               MarketClawKnowledgeCandidateReviewStatus @default(PENDING_REVIEW)
+  reviewComment              String?
+  adoptedKnowledgeItemId     String?
+  createdAt                  DateTime                               @default(now())
+  updatedAt                  DateTime                               @updatedAt
+
+  @@index([tenantId, batchId, reviewStatus, createdAt])
+  @@index([tenantId, businessLineId, reviewStatus, createdAt])
+  @@index([tenantId, createdById, reviewStatus, createdAt])
+  @@index([tenantId, adoptedKnowledgeItemId, updatedAt])
 }
 
 model AuditLog {

@@ -100,7 +100,7 @@ function buildTenantNavGroups(tenant: Tenant, role: UserRole): NavGroup[] {
     description:
       role === "SALES"
         ? "销售从客户详情页使用 Market Claw，也可以做我的训练、保存个人话术并回看回复记录。"
-        : "统一承接 Market Claw 总览、知识库、回复训练场、训练审核和回复记录。",
+        : "统一承接 Market Claw 总览、知识库、资料投喂、回复训练场、训练审核和回复记录。",
     children:
       role === "SALES"
         ? [
@@ -111,6 +111,7 @@ function buildTenantNavGroups(tenant: Tenant, role: UserRole): NavGroup[] {
         : [
             { label: "Market Claw 总览", href: `${base}/market-claw` },
             { label: "知识库", href: `${base}/market-claw/knowledge` },
+            { label: "资料投喂", href: `${base}/market-claw/ingestion` },
             { label: "回复训练场", href: `${base}/market-claw/training` },
             { label: "训练审核", href: `${base}/market-claw/training/review` },
             { label: "回复记录", href: `${base}/market-claw/replies` }
