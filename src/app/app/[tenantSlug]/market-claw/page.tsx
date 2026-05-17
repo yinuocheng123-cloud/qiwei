@@ -48,6 +48,7 @@ export default async function MarketClawPage({ params }: { params: { tenantSlug:
       ? [
           { key: "overview", label: "总览", href: `/app/${tenant.slug}/market-claw` },
           { key: "training", label: "我的训练", href: `/app/${tenant.slug}/market-claw/training` },
+          { key: "insights", label: "我的训练表现", href: `/app/${tenant.slug}/market-claw/insights` },
           { key: "replies", label: "我的回复记录", href: `/app/${tenant.slug}/market-claw/replies` },
           { key: "leads", label: "去客户列表", href: `/app/${tenant.slug}/leads` }
         ]
@@ -57,6 +58,7 @@ export default async function MarketClawPage({ params }: { params: { tenantSlug:
           { key: "ingestion", label: "资料投喂", href: `/app/${tenant.slug}/market-claw/ingestion` },
           { key: "training", label: "回复训练场", href: `/app/${tenant.slug}/market-claw/training` },
           { key: "review", label: "训练审核", href: `/app/${tenant.slug}/market-claw/training/review` },
+          { key: "insights", label: "训练复盘", href: `/app/${tenant.slug}/market-claw/insights` },
           { key: "replies", label: "回复记录", href: `/app/${tenant.slug}/market-claw/replies` }
         ];
 
@@ -120,6 +122,11 @@ export default async function MarketClawPage({ params }: { params: { tenantSlug:
             href: `/app/${tenant.slug}/market-claw/replies`
           },
           {
+            title: "我的训练表现",
+            description: "只看自己的训练数量、高频问题和审核进展，不把全租户治理数据暴露给销售。",
+            href: `/app/${tenant.slug}/market-claw/insights`
+          },
+          {
             title: "去客户列表",
             description: "销售继续从客户详情页使用 Market Claw 生成回复，不把知识库和训练场暴露成后台入口。",
             href: `/app/${tenant.slug}/leads`
@@ -150,6 +157,11 @@ export default async function MarketClawPage({ params }: { params: { tenantSlug:
             title: "训练审核",
             description: "查看销售提交的训练样本，决定采纳为团队标准、企业标准，或驳回并纠偏。",
             href: `/app/${tenant.slug}/market-claw/training/review`
+          },
+          {
+            title: "训练复盘",
+            description: "看清高频客户问题、风险问题、知识缺口和候选采纳合并趋势，决定下一步治理重点。",
+            href: `/app/${tenant.slug}/market-claw/insights`
           },
           {
             title: "回复记录",

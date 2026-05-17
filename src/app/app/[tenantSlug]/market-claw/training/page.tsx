@@ -32,6 +32,7 @@ function buildOverviewTabs(tenantSlug: string, role: string) {
     return [
       { key: "overview", label: "总览", href: `/app/${tenantSlug}/market-claw` },
       { key: "training", label: "我的训练", href: `/app/${tenantSlug}/market-claw/training` },
+      { key: "insights", label: "我的训练表现", href: `/app/${tenantSlug}/market-claw/insights` },
       { key: "replies", label: "我的回复记录", href: `/app/${tenantSlug}/market-claw/replies` },
       { key: "leads", label: "去客户列表", href: `/app/${tenantSlug}/leads` }
     ];
@@ -43,6 +44,7 @@ function buildOverviewTabs(tenantSlug: string, role: string) {
     { key: "ingestion", label: "资料投喂", href: `/app/${tenantSlug}/market-claw/ingestion` },
     { key: "training", label: "回复训练场", href: `/app/${tenantSlug}/market-claw/training` },
     { key: "review", label: "训练审核", href: `/app/${tenantSlug}/market-claw/training/review` },
+    { key: "insights", label: "训练复盘", href: `/app/${tenantSlug}/market-claw/insights` },
     { key: "replies", label: "回复记录", href: `/app/${tenantSlug}/market-claw/replies` }
   ];
 }

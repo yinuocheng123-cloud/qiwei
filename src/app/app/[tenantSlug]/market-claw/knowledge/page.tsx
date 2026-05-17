@@ -227,6 +227,7 @@ export default async function MarketClawKnowledgePage({
           { key: "ingestion", label: "资料投喂", href: `/app/${tenant.slug}/market-claw/ingestion` },
           { key: "training", label: "回复训练场", href: `/app/${tenant.slug}/market-claw/training` },
           { key: "review", label: "训练审核", href: `/app/${tenant.slug}/market-claw/training/review` },
+          { key: "insights", label: "训练复盘", href: `/app/${tenant.slug}/market-claw/insights` },
           { key: "replies", label: "回复记录", href: `/app/${tenant.slug}/market-claw/replies` }
         ]}
         className="mb-6"

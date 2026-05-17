@@ -26,9 +26,11 @@ import type {
   MarketClawTrainingReviewStatus,
   MarketClawTrainingScope,
   Material,
-  TagGroup
+  TagGroup,
+  UserRole
 } from "@prisma/client";
 import { parseBusinessLineIdList } from "@/lib/business-lines";
+import { prisma } from "@/lib/prisma";
 
 type LeadLike = {
   name: string;
@@ -129,6 +131,113 @@ export type MarketClawKnowledgeSimilarityHint = {
   matchedKeywords: string[];
   contentPreview: string;
   businessLineId: string | null;
+};
+
+export type MarketClawInsightsRoleView = "GLOBAL" | "PERSONAL";
+
+export type MarketClawInsightsSummaryMetrics = {
+  trainingTotal: number;
+  myTrainingCount: number;
+  pendingTrainingCount: number;
+  adoptedTrainingCount: number;
+  rejectedTrainingCount: number;
+  personalScriptCount: number;
+  ingestionBatchCount: number;
+  candidateCount: number;
+  adoptedCandidateCount: number;
+  mergedCandidateCount: number;
+  rejectedCandidateCount: number;
+  enterpriseKnowledgeCount: number;
+  teamKnowledgeCount: number;
+  businessLineKnowledgeCount: number;
+  personalKnowledgeCount: number;
+};
+
+export type MarketClawFrequentQuestionStat = {
+  topic: string;
+  count: number;
+  businessLines: string[];
+  lastSeenAt: Date;
+  hasStandardKnowledge: boolean;
+  suggestedAction: string;
+};
+
+export type MarketClawRiskQuestionStat = {
+  riskType: string;
+  count: number;
+  businessLines: string[];
+  hasRiskNotice: boolean;
+  hasForbiddenCommitment: boolean;
+  suggestedAction: string;
+};
+
+export type MarketClawKnowledgeGap = {
+  businessLine: string;
+  gapType: string;
+  currentSnapshot: string;
+  suggestedContent: string;
+  nextAction: string;
+};
+
+export type MarketClawCandidateActivity = {
+  title: string;
+  businessLine: string;
+  knowledgeType: string;
+  occurredAt: Date;
+  operatorName: string;
+  reviewStatus: string;
+};
+
+export type MarketClawTrainingContributionStat = {
+  userName: string;
+  adoptedCount: number;
+  latestAt: Date;
+};
+
+export type MarketClawMergeInsight = {
+  title: string;
+  businessLine: string;
+  sourceCandidateCount: number;
+  sourceBatchCount: number;
+  lastMergedAt: Date | null;
+};
+
+export type MarketClawKnowledgeTypeCount = {
+  knowledgeType: string;
+  count: number;
+};
+
+export type MarketClawMaturityStage = {
+  stage: "初始阶段" | "启动阶段" | "成长期" | "标准化阶段" | "成熟运营阶段";
+  rationale: string[];
+  nextActions: string[];
+};
+
+export type MarketClawTrainingReviewProgress = {
+  question: string;
+  reviewStatus: string;
+  updatedAt: Date;
+  reviewComment: string | null;
+  promotedScope: string | null;
+};
+
+export type MarketClawTrainingInsights = {
+  roleView: MarketClawInsightsRoleView;
+  summaryMetrics: MarketClawInsightsSummaryMetrics;
+  frequentQuestions: MarketClawFrequentQuestionStat[];
+  riskQuestionStats: MarketClawRiskQuestionStat[];
+  knowledgeGaps: MarketClawKnowledgeGap[];
+  adoptionStats: {
+    recentAdoptions: MarketClawCandidateActivity[];
+    topContributors: MarketClawTrainingContributionStat[];
+  };
+  mergeStats: {
+    recentMerges: MarketClawCandidateActivity[];
+    mostMergedKnowledgeItems: MarketClawMergeInsight[];
+    duplicateRejectedTypes: MarketClawKnowledgeTypeCount[];
+  };
+  maturityStage: MarketClawMaturityStage | null;
+  personalReviewProgress: MarketClawTrainingReviewProgress[];
 };
 
 export const marketClawKnowledgeTypeOptions: { value: MarketClawKnowledgeType; label: string }[] = [
@@ -281,6 +390,103 @@ const riskKeywords = ["价格", "周期", "保证", "通过", "奖项", "名额"
 const processKeywords = ["流程", "步骤", "周期", "准备", "交付", "启动", "推进"];
 const objectionKeywords = ["太贵", "没预算", "先了解", "再看看", "别人也能做", "没效果"];
 const forbiddenCommitmentKeywords = ["保证", "一定", "肯定", "包过", "包推荐", "名额", "排名", "奖项", "效果"];
+const marketClawKnowledgeTypeLabelMap = new Map(marketClawKnowledgeTypeOptions.map((item) => [item.value, item.label]));
+
+const marketClawInsightQuestionThemes = [
+  {
+    label: "怎么收费",
+    keywords: ["怎么收费", "收费", "价格", "报价", "多少钱", "预算", "费用"],
+    suggestedAction: "建议补充价格边界、报价前置条件和标准回复。"
+  },
+  {
+    label: "能不能保证效果",
+    keywords: ["保证", "效果", "排名", "推荐", "通过", "结果"],
+    suggestedAction: "建议补充效果边界、风险提醒和不能承诺事项。"
+  },
+  {
+    label: "有没有案例",
+    keywords: ["案例", "客户", "样板", "落地", "合作"],
+    suggestedAction: "建议补充更贴近业务线的案例资料和标准说法。"
+  },
+  {
+    label: "多久见效",
+    keywords: ["多久", "周期", "见效", "什么时候", "多长时间"],
+    suggestedAction: "建议补充周期边界、交付节奏和推进预期。"
+  },
+  {
+    label: "和别人有什么区别",
+    keywords: ["区别", "优势", "差异", "为什么选", "对比", "竞品"],
+    suggestedAction: "建议补充标准回复、案例对比和价值表达。"
+  },
+  {
+    label: "我只是先了解",
+    keywords: ["先了解", "再看看", "以后再说", "先看看", "暂时不用"],
+    suggestedAction: "建议补充低打扰培育话术和下一步动作建议。"
+  },
+  {
+    label: "预算不够",
+    keywords: ["预算不够", "太贵", "没预算", "价格高"],
+    suggestedAction: "建议补充异议处理、价格边界和价值解释。"
+  },
+  {
+    label: "能不能先发资料",
+    keywords: ["发资料", "先发", "资料", "介绍", "方案"],
+    suggestedAction: "建议补充资料投喂、服务说明和发送前说明口径。"
+  }
+] as const;
+
+const marketClawInsightRiskThemes = [
+  {
+    label: "价格边界",
+    keywords: ["价格", "费用", "报价", "多少钱", "预算", "收费"],
+    suggestedAction: "建议补充价格边界和报价前置条件。"
+  },
+  {
+    label: "效果边界",
+    keywords: ["效果", "保证", "一定", "排名", "推荐", "通过"],
+    suggestedAction: "建议补充效果边界和不能承诺事项。"
+  },
+  {
+    label: "周期边界",
+    keywords: ["周期", "多久", "时间", "多长时间", "见效"],
+    suggestedAction: "建议补充周期边界和交付节奏说明。"
+  },
+  {
+    label: "名额边界",
+    keywords: ["名额", "奖项", "榜单", "资源位", "独家"],
+    suggestedAction: "建议补充资源边界和审核说明。"
+  },
+  {
+    label: "服务边界",
+    keywords: ["服务", "包含", "负责", "售后", "范围"],
+    suggestedAction: "建议补充服务范围、售后责任和交付边界。"
+  },
+  {
+    label: "交付边界",
+    keywords: ["交付", "流程", "步骤", "准备", "启动"],
+    suggestedAction: "建议补充交付流程与项目节奏说明。"
+  },
+  {
+    label: "案例真实性",
+    keywords: ["案例", "客户", "真实", "样板", "落地"],
+    suggestedAction: "建议补充案例使用边界和真实性说明。"
+  },
+  {
+    label: "竞品比较",
+    keywords: ["别人也能做", "竞品", "对比", "区别", "优势"],
+    suggestedAction: "建议补充竞品比较话术和价值解释。"
+  },
+  {
+    label: "合同前承诺",
+    keywords: ["合同", "承诺", "赔付", "保证", "包过"],
+    suggestedAction: "建议补充合同前承诺边界和风险提醒。"
+  },
+  {
+    label: "售后责任",
+    keywords: ["售后", "负责", "维护", "持续", "后续"],
+    suggestedAction: "建议补充售后责任和服务边界说明。"
+  }
+] as const;
 
 function normalizeText(value: string) {
   return value.trim().toLowerCase();
@@ -1102,6 +1308,767 @@ export function buildMarketClawMergedKnowledgeContent(input: {
   }
 
   return input.candidateContent.trim();
+}
+
+type MarketClawInsightSourceRecord = {
+  text: string;
+  businessLineName: string | null;
+  createdAt: Date;
+};
+
+function cleanInsightText(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function trimInsightLabel(value: string, maxLength = 24) {
+  return value.length <= maxLength ? value : `${value.slice(0, maxLength)}...`;
+}
+
+function extractInsightSubject(value: string) {
+  const normalized = cleanInsightText(value)
+    .replace(/^(faq|问题|问|q|价格边界|风险提醒|异议处理|案例素材|交付流程|候选知识)[：:]\s*/i, "")
+    .replace(/^(回答|答|a)[：:]\s*/i, "");
+  const questionMatch = normalized.match(/(?:问题|问|q)[：:]\s*([^。！？\n]+)/i);
+  const firstLine = questionMatch?.[1] ?? normalized.split(/(?:回答|答|a)[：:]/i)[0] ?? normalized;
+  return trimInsightLabel(firstLine.trim() || normalized);
+}
+
+function matchInsightQuestionTheme(text: string) {
+  const normalized = normalizeText(text);
+  return marketClawInsightQuestionThemes.find((theme) =>
+    theme.keywords.some((keyword) => normalized.includes(keyword.toLowerCase()))
+  );
+}
+
+function matchInsightRiskTheme(text: string) {
+  const normalized = normalizeText(text);
+  return marketClawInsightRiskThemes.find((theme) =>
+    theme.keywords.some((keyword) => normalized.includes(keyword.toLowerCase()))
+  );
+}
+
+function hasKnowledgeCoverage(
+  knowledgeItems: {
+    title: string;
+    content: string;
+    riskNotes: string | null;
+    knowledgeType: MarketClawKnowledgeType;
+    scopeLevel: MarketClawKnowledgeScopeLevel;
+    status: MarketClawKnowledgeStatus;
+    reviewStatus: MarketClawKnowledgeReviewStatus;
+  }[],
+  keywords: string[],
+  allowedTypes?: MarketClawKnowledgeType[]
+) {
+  const normalizedKeywords = dedupeStrings(keywords.map((keyword) => normalizeText(keyword))).filter(Boolean);
+  if (!normalizedKeywords.length) return false;
+
+  return knowledgeItems.some((item) => {
+    if (item.status !== "ACTIVE" || item.reviewStatus !== "APPROVED") return false;
+    if (item.scopeLevel === "PERSONAL") return false;
+    if (allowedTypes?.length && !allowedTypes.includes(item.knowledgeType)) return false;
+
+    const searchable = normalizeText([item.title, item.content, item.riskNotes ?? ""].join("\n"));
+    return normalizedKeywords.some((keyword) => searchable.includes(keyword));
+  });
+}
+
+function buildFrequentQuestionStats(
+  sources: MarketClawInsightSourceRecord[],
+  knowledgeItems: {
+    title: string;
+    content: string;
+    riskNotes: string | null;
+    knowledgeType: MarketClawKnowledgeType;
+    scopeLevel: MarketClawKnowledgeScopeLevel;
+    status: MarketClawKnowledgeStatus;
+    reviewStatus: MarketClawKnowledgeReviewStatus;
+  }[]
+) {
+  const aggregate = new Map<
+    string,
+    {
+      count: number;
+      businessLines: Set<string>;
+      lastSeenAt: Date;
+      keywords: string[];
+      suggestedAction: string;
+    }
+  >();
+
+  for (const source of sources) {
+    const theme = matchInsightQuestionTheme(source.text);
+    const topic = theme?.label ?? extractInsightSubject(source.text);
+    const existing = aggregate.get(topic) ?? {
+      count: 0,
+      businessLines: new Set<string>(),
+      lastSeenAt: source.createdAt,
+      keywords: theme?.keywords ? [...theme.keywords] : tokenizeKnowledgeText(topic, source.text).slice(0, 6),
+      suggestedAction: theme?.suggestedAction ?? "建议补充 FAQ、标准回复或异议处理口径。"
+    };
+
+    existing.count += 1;
+    if (source.businessLineName) {
+      existing.businessLines.add(source.businessLineName);
+    }
+    if (source.createdAt > existing.lastSeenAt) {
+      existing.lastSeenAt = source.createdAt;
+    }
+    aggregate.set(topic, existing);
+  }
+
+  return [...aggregate.entries()]
+    .map(([topic, item]) => {
+      const hasStandardKnowledge = hasKnowledgeCoverage(knowledgeItems, item.keywords, [
+        "FAQ",
+        "STANDARD_REPLY",
+        "OBJECTION_HANDLING",
+        "PRICE_BOUNDARY",
+        "FORBIDDEN_COMMITMENT"
+      ]);
+
+      return {
+        topic,
+        count: item.count,
+        businessLines: [...item.businessLines],
+        lastSeenAt: item.lastSeenAt,
+        hasStandardKnowledge,
+        suggestedAction: hasStandardKnowledge ? "已有标准知识覆盖，建议继续复盘真实使用反馈。" : item.suggestedAction
+      } satisfies MarketClawFrequentQuestionStat;
+    })
+    .sort((left, right) => right.count - left.count || right.lastSeenAt.getTime() - left.lastSeenAt.getTime())
+    .slice(0, 8);
+}
+
+function buildRiskQuestionStats(
+  sources: MarketClawInsightSourceRecord[],
+  knowledgeItems: {
+    title: string;
+    content: string;
+    riskNotes: string | null;
+    knowledgeType: MarketClawKnowledgeType;
+    scopeLevel: MarketClawKnowledgeScopeLevel;
+    status: MarketClawKnowledgeStatus;
+    reviewStatus: MarketClawKnowledgeReviewStatus;
+  }[]
+) {
+  const aggregate = new Map<
+    string,
+    {
+      count: number;
+      businessLines: Set<string>;
+      keywords: string[];
+      suggestedAction: string;
+    }
+  >();
+
+  for (const source of sources) {
+    const theme = matchInsightRiskTheme(source.text);
+    if (!theme) continue;
+
+    const existing = aggregate.get(theme.label) ?? {
+      count: 0,
+      businessLines: new Set<string>(),
+      keywords: [...theme.keywords],
+      suggestedAction: theme.suggestedAction
+    };
+    existing.count += 1;
+    if (source.businessLineName) {
+      existing.businessLines.add(source.businessLineName);
+    }
+    aggregate.set(theme.label, existing);
+  }
+
+  return [...aggregate.entries()]
+    .map(([riskType, item]) => {
+      const hasRiskNotice = hasKnowledgeCoverage(knowledgeItems, item.keywords, ["RISK_NOTICE", "PRICE_BOUNDARY", "FORBIDDEN_COMMITMENT"]);
+      const hasForbiddenCommitment = hasKnowledgeCoverage(knowledgeItems, item.keywords, ["FORBIDDEN_COMMITMENT"]);
+
+      return {
+        riskType,
+        count: item.count,
+        businessLines: [...item.businessLines],
+        hasRiskNotice,
+        hasForbiddenCommitment,
+        suggestedAction:
+          hasRiskNotice && hasForbiddenCommitment ? "当前已有边界知识，可继续复盘是否需要升级为更稳的标准回复。" : item.suggestedAction
+      } satisfies MarketClawRiskQuestionStat;
+    })
+    .sort((left, right) => right.count - left.count || left.riskType.localeCompare(right.riskType, "zh-CN"))
+    .slice(0, 10);
+}
+
+function buildKnowledgeGapStats(input: {
+  businessLineNames: string[];
+  trainingCases: { customerQuestion: string; businessLineName: string }[];
+  replyDrafts: { customerQuestion: string; businessLineName: string }[];
+  candidates: { reviewStatus: MarketClawKnowledgeCandidateReviewStatus; mergeAction: string | null; businessLineName: string }[];
+  knowledgeItems: {
+    knowledgeType: MarketClawKnowledgeType;
+    scopeLevel: MarketClawKnowledgeScopeLevel;
+    businessLineName: string;
+    status: MarketClawKnowledgeStatus;
+    reviewStatus: MarketClawKnowledgeReviewStatus;
+  }[];
+}) {
+  const statsMap = new Map<
+    string,
+    {
+      trainingCount: number;
+      faqCount: number;
+      candidateCount: number;
+      adoptedCandidateCount: number;
+      mergedCandidateCount: number;
+      rejectedCandidateCount: number;
+      priceQuestionCount: number;
+      priceBoundaryCount: number;
+      riskQuestionCount: number;
+      riskNoticeCount: number;
+      personalScriptCount: number;
+      teamKnowledgeCount: number;
+    }
+  >();
+
+  const getStats = (businessLine: string) => {
+    const key = businessLine || "通用资料";
+    const existing =
+      statsMap.get(key) ??
+      {
+        trainingCount: 0,
+        faqCount: 0,
+        candidateCount: 0,
+        adoptedCandidateCount: 0,
+        mergedCandidateCount: 0,
+        rejectedCandidateCount: 0,
+        priceQuestionCount: 0,
+        priceBoundaryCount: 0,
+        riskQuestionCount: 0,
+        riskNoticeCount: 0,
+        personalScriptCount: 0,
+        teamKnowledgeCount: 0
+      };
+    statsMap.set(key, existing);
+    return existing;
+  };
+
+  for (const businessLine of input.businessLineNames) {
+    getStats(businessLine);
+  }
+
+  for (const item of [...input.trainingCases, ...input.replyDrafts]) {
+    const stats = getStats(item.businessLineName);
+    stats.trainingCount += 1;
+    const normalized = normalizeText(item.customerQuestion);
+    if (includesKeyword(normalized, priceKeywords)) {
+      stats.priceQuestionCount += 1;
+    }
+    if (includesKeyword(normalized, riskKeywords)) {
+      stats.riskQuestionCount += 1;
+    }
+  }
+
+  for (const candidate of input.candidates) {
+    const stats = getStats(candidate.businessLineName);
+    stats.candidateCount += 1;
+    if (candidate.reviewStatus === "ADOPTED" || candidate.reviewStatus === "ADOPTED_WITH_EDIT") {
+      stats.adoptedCandidateCount += 1;
+    }
+    if (candidate.reviewStatus === "MERGED") {
+      stats.mergedCandidateCount += 1;
+    }
+    if (candidate.reviewStatus === "REJECTED") {
+      stats.rejectedCandidateCount += 1;
+    }
+  }
+
+  for (const item of input.knowledgeItems) {
+    if (item.status !== "ACTIVE" || item.reviewStatus !== "APPROVED") continue;
+    const stats = getStats(item.businessLineName);
+    if (["FAQ", "STANDARD_REPLY", "OBJECTION_HANDLING"].includes(item.knowledgeType)) {
+      stats.faqCount += 1;
+    }
+    if (item.knowledgeType === "PRICE_BOUNDARY") {
+      stats.priceBoundaryCount += 1;
+    }
+    if (item.knowledgeType === "RISK_NOTICE" || item.knowledgeType === "FORBIDDEN_COMMITMENT") {
+      stats.riskNoticeCount += 1;
+    }
+    if (item.scopeLevel === "PERSONAL") {
+      stats.personalScriptCount += 1;
+    }
+    if (item.scopeLevel === "DEPARTMENT" || item.scopeLevel === "BUSINESS_LINE") {
+      stats.teamKnowledgeCount += 1;
+    }
+  }
+
+  const gaps: MarketClawKnowledgeGap[] = [];
+  for (const [businessLine, stats] of statsMap.entries()) {
+    if (stats.trainingCount >= 3 && stats.faqCount <= 1) {
+      gaps.push({
+        businessLine,
+        gapType: "高频问题多但 FAQ 偏少",
+        currentSnapshot: `${stats.trainingCount} 条训练 / ${stats.faqCount} 条 FAQ`,
+        suggestedContent: "补充 FAQ、标准回复和异议处理。",
+        nextAction: "先整理该业务线最常见的 10~20 个客户问题。"
+      });
+    }
+
+    if (stats.candidateCount >= 3 && stats.adoptedCandidateCount === 0) {
+      gaps.push({
+        businessLine,
+        gapType: "候选知识多但采纳偏少",
+        currentSnapshot: `${stats.candidateCount} 条候选 / ${stats.adoptedCandidateCount} 条采纳`,
+        suggestedContent: "补充更清晰的候选标题、标准回复和审核说明。",
+        nextAction: "复盘资料投喂质量，优先提升候选可采纳率。"
+      });
+    }
+
+    if (stats.priceQuestionCount >= 2 && stats.priceBoundaryCount === 0) {
+      gaps.push({
+        businessLine,
+        gapType: "价格边界不足",
+        currentSnapshot: `${stats.priceQuestionCount} 个价格问题 / ${stats.priceBoundaryCount} 条价格边界`,
+        suggestedContent: "补充价格边界、报价条件和报价前问法。",
+        nextAction: "优先把价格敏感问题整理成标准边界。"
+      });
+    }
+
+    if (stats.riskQuestionCount >= 2 && stats.riskNoticeCount === 0) {
+      gaps.push({
+        businessLine,
+        gapType: "风险提醒不足",
+        currentSnapshot: `${stats.riskQuestionCount} 个风险问题 / ${stats.riskNoticeCount} 条风险提醒`,
+        suggestedContent: "补充不能承诺事项、效果边界和风险提醒。",
+        nextAction: "由管理员复审该业务线的高风险问题。"
+      });
+    }
+
+    if (stats.personalScriptCount >= 3 && stats.teamKnowledgeCount <= 1) {
+      gaps.push({
+        businessLine,
+        gapType: "个人话术较多但团队标准偏少",
+        currentSnapshot: `${stats.personalScriptCount} 条个人话术 / ${stats.teamKnowledgeCount} 条团队标准`,
+        suggestedContent: "把高质量个人话术升级为团队标准。",
+        nextAction: "优先挑选已被多次采用的话术进入训练审核。"
+      });
+    }
+
+    if (stats.rejectedCandidateCount >= 3 && stats.rejectedCandidateCount >= stats.adoptedCandidateCount + 2) {
+      gaps.push({
+        businessLine,
+        gapType: "候选驳回偏多",
+        currentSnapshot: `${stats.rejectedCandidateCount} 条驳回 / ${stats.adoptedCandidateCount} 条采纳`,
+        suggestedContent: "补充更稳定的资料投喂模板和拆解规则。",
+        nextAction: "先复盘素材质量，再决定是否继续扩大投喂量。"
+      });
+    }
+
+    if (stats.mergedCandidateCount >= 3) {
+      gaps.push({
+        businessLine,
+        gapType: "重复候选偏多",
+        currentSnapshot: `${stats.mergedCandidateCount} 条合并候选`,
+        suggestedContent: "补充统一标题规则和来源整理。",
+        nextAction: "优先清理该业务线重复知识，避免知识库越用越散。"
+      });
+    }
+  }
+
+  return gaps.slice(0, 12);
+}
+
+function buildMaturityStage(input: {
+  summaryMetrics: MarketClawInsightsSummaryMetrics;
+  knowledgeGaps: MarketClawKnowledgeGap[];
+  approvedKnowledgeItems: { knowledgeType: MarketClawKnowledgeType; scopeLevel: MarketClawKnowledgeScopeLevel }[];
+}) {
+  const priceBoundaryCount = input.approvedKnowledgeItems.filter((item) => item.knowledgeType === "PRICE_BOUNDARY").length;
+  const riskNoticeCount = input.approvedKnowledgeItems.filter((item) =>
+    item.knowledgeType === "RISK_NOTICE" || item.knowledgeType === "FORBIDDEN_COMMITMENT"
+  ).length;
+  const enterpriseStandardCount =
+    input.summaryMetrics.enterpriseKnowledgeCount +
+    input.summaryMetrics.teamKnowledgeCount +
+    input.summaryMetrics.businessLineKnowledgeCount;
+
+  if (
+    enterpriseStandardCount >= 24 &&
+    input.summaryMetrics.trainingTotal >= 30 &&
+    input.summaryMetrics.ingestionBatchCount >= 4 &&
+    input.summaryMetrics.mergedCandidateCount >= 4 &&
+    priceBoundaryCount >= 3 &&
+    riskNoticeCount >= 3
+  ) {
+    return {
+      stage: "成熟运营阶段",
+      rationale: [
+        `标准知识 ${enterpriseStandardCount} 条，训练样本 ${input.summaryMetrics.trainingTotal} 条。`,
+        `资料投喂 ${input.summaryMetrics.ingestionBatchCount} 批，合并候选 ${input.summaryMetrics.mergedCandidateCount} 条。`,
+        `价格边界 ${priceBoundaryCount} 条，风险提醒 ${riskNoticeCount} 条。`
+      ],
+      nextActions: ["做月度知识治理。", "按业务线评估知识质量。", "建立优秀话术榜和复审节奏。"] 
+    } satisfies MarketClawMaturityStage;
+  }
+
+  if (
+    input.summaryMetrics.enterpriseKnowledgeCount >= 10 &&
+    input.summaryMetrics.teamKnowledgeCount >= 6 &&
+    input.summaryMetrics.businessLineKnowledgeCount >= 6 &&
+    input.summaryMetrics.pendingTrainingCount <= 5 &&
+    input.summaryMetrics.adoptedCandidateCount >= 8
+  ) {
+    return {
+      stage: "标准化阶段",
+      rationale: [
+        `企业标准 ${input.summaryMetrics.enterpriseKnowledgeCount} 条，团队标准 ${input.summaryMetrics.teamKnowledgeCount} 条。`,
+        `业务线知识 ${input.summaryMetrics.businessLineKnowledgeCount} 条，待审核训练 ${input.summaryMetrics.pendingTrainingCount} 条。`,
+        `候选采纳 ${input.summaryMetrics.adoptedCandidateCount} 条。`
+      ],
+      nextActions: ["定期复审企业标准知识。", "继续识别知识缺口。", "复盘销售贡献并优化训练质量。"] 
+    } satisfies MarketClawMaturityStage;
+  }
+
+  if (
+    input.summaryMetrics.trainingTotal >= 10 &&
+    input.summaryMetrics.candidateCount >= 10 &&
+    (input.summaryMetrics.mergedCandidateCount >= 2 || input.knowledgeGaps.length >= 2)
+  ) {
+    return {
+      stage: "成长期",
+      rationale: [
+        `训练样本 ${input.summaryMetrics.trainingTotal} 条，候选知识 ${input.summaryMetrics.candidateCount} 条。`,
+        `已合并候选 ${input.summaryMetrics.mergedCandidateCount} 条，当前知识缺口 ${input.knowledgeGaps.length} 项。`
+      ],
+      nextActions: ["优先做候选去重和合并。", "按业务线补齐 FAQ、案例、价格边界与异议处理。", "开始固定复盘高频客户问题。"] 
+    } satisfies MarketClawMaturityStage;
+  }
+
+  if (input.summaryMetrics.ingestionBatchCount > 0 && input.summaryMetrics.candidateCount > 0) {
+    return {
+      stage: "启动阶段",
+      rationale: [
+        `资料投喂 ${input.summaryMetrics.ingestionBatchCount} 批，候选知识 ${input.summaryMetrics.candidateCount} 条。`,
+        `已采纳候选 ${input.summaryMetrics.adoptedCandidateCount} 条，训练样本 ${input.summaryMetrics.trainingTotal} 条。`
+      ],
+      nextActions: ["优先完善核心业务线知识。", "建立标准回复与风险提醒。", "让销售稳定使用“我的训练”。"] 
+    } satisfies MarketClawMaturityStage;
+  }
+
+  return {
+    stage: "初始阶段",
+    rationale: [
+      `训练样本 ${input.summaryMetrics.trainingTotal} 条，企业标准 ${input.summaryMetrics.enterpriseKnowledgeCount} 条。`,
+      `个人话术 ${input.summaryMetrics.personalKnowledgeCount} 条，候选知识 ${input.summaryMetrics.candidateCount} 条。`
+    ],
+    nextActions: ["先补企业介绍、服务介绍、基础 FAQ、价格边界和不能承诺事项。", "优先整理客户常问的 20 个问题。", "暂时不要急着追求复杂复盘。"] 
+  } satisfies MarketClawMaturityStage;
+}
+
+export async function getMarketClawTrainingInsights(input: {
+  tenantId: string;
+  role: UserRole;
+  userId: string;
+}) {
+  const isPersonalView = input.role === "SALES";
+
+  const [businessLines, users, trainingCases, replyDrafts, ingestionBatches, candidates, knowledgeItems] = await Promise.all([
+    prisma.businessLine.findMany({
+      where: { tenantId: input.tenantId, status: "ACTIVE" },
+      select: { id: true, name: true },
+      orderBy: [{ priority: "asc" }, { updatedAt: "desc" }]
+    }),
+    prisma.user.findMany({
+      where: { tenantId: input.tenantId },
+      select: { id: true, name: true }
+    }),
+    prisma.marketClawTrainingCase.findMany({
+      where: {
+        tenantId: input.tenantId,
+        ...(isPersonalView
+          ? {
+              OR: [{ ownerUserId: input.userId }, { createdById: input.userId }]
+            }
+          : {})
+      },
+      select: {
+        customerQuestion: true,
+        reviewStatus: true,
+        createdAt: true,
+        updatedAt: true,
+        ownerUserId: true,
+        createdById: true,
+        reviewComment: true,
+        promotedKnowledgeItemId: true,
+        createdBy: { select: { name: true } },
+        businessLine: { select: { name: true } },
+        promotedKnowledgeItem: { select: { scopeLevel: true } }
+      },
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }]
+    }),
+    prisma.marketClawReplyDraft.findMany({
+      where: {
+        tenantId: input.tenantId,
+        ...(isPersonalView ? { createdById: input.userId } : {})
+      },
+      select: {
+        customerQuestion: true,
+        createdAt: true,
+        businessLine: { select: { name: true } }
+      },
+      orderBy: { createdAt: "desc" }
+    }),
+    isPersonalView
+      ? Promise.resolve([])
+      : prisma.marketClawIngestionBatch.findMany({
+          where: { tenantId: input.tenantId },
+          select: { id: true }
+        }),
+    isPersonalView
+      ? Promise.resolve([])
+      : prisma.marketClawKnowledgeCandidate.findMany({
+          where: { tenantId: input.tenantId },
+          select: {
+            id: true,
+            title: true,
+            content: true,
+            knowledgeType: true,
+            reviewStatus: true,
+            mergeAction: true,
+            mergeReason: true,
+            mergedAt: true,
+            updatedAt: true,
+            mergedById: true,
+            createdBy: { select: { name: true } },
+            businessLine: { select: { name: true } },
+            adoptedKnowledgeItemId: true
+          },
+          orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }]
+        }),
+    prisma.marketClawKnowledgeItem.findMany({
+      where: {
+        tenantId: input.tenantId,
+        ...(isPersonalView
+          ? {
+              OR: [
+                { ownerUserId: input.userId },
+                { createdById: input.userId, scopeLevel: "PERSONAL" }
+              ]
+            }
+          : {})
+      },
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        knowledgeType: true,
+        scopeLevel: true,
+        status: true,
+        reviewStatus: true,
+        riskNotes: true,
+        sourceCandidateIds: true,
+        sourceBatchIds: true,
+        lastMergedAt: true,
+        createdById: true,
+        ownerUserId: true,
+        updatedBy: { select: { name: true } },
+        businessLine: { select: { name: true } }
+      },
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }]
+    })
+  ]);
+
+  const userNameMap = new Map(users.map((user) => [user.id, user.name]));
+  const businessLineNames = businessLines.map((item) => item.name);
+  const approvedKnowledgeItems = knowledgeItems.filter((item) => item.status === "ACTIVE" && item.reviewStatus === "APPROVED");
+
+  const questionSources: MarketClawInsightSourceRecord[] = [
+    ...trainingCases.map((item) => ({
+      text: item.customerQuestion,
+      businessLineName: item.businessLine?.name ?? null,
+      createdAt: item.updatedAt
+    })),
+    ...replyDrafts.map((item) => ({
+      text: item.customerQuestion,
+      businessLineName: item.businessLine?.name ?? null,
+      createdAt: item.createdAt
+    })),
+    ...candidates.flatMap((item) => [
+      {
+        text: item.title,
+        businessLineName: item.businessLine?.name ?? null,
+        createdAt: item.updatedAt
+      },
+      {
+        text: item.content,
+        businessLineName: item.businessLine?.name ?? null,
+        createdAt: item.updatedAt
+      }
+    ]),
+    ...approvedKnowledgeItems
+      .filter((item) => ["FAQ", "STANDARD_REPLY", "OBJECTION_HANDLING"].includes(item.knowledgeType))
+      .flatMap((item) => [
+        {
+          text: item.title,
+          businessLineName: item.businessLine?.name ?? null,
+          createdAt: item.lastMergedAt ?? new Date()
+        },
+        {
+          text: item.content,
+          businessLineName: item.businessLine?.name ?? null,
+          createdAt: item.lastMergedAt ?? new Date()
+        }
+      ])
+  ];
+
+  const myTrainingCount = trainingCases.filter((item) => item.ownerUserId === input.userId || item.createdById === input.userId).length;
+  const personalKnowledgeCount = knowledgeItems.filter((item) => item.scopeLevel === "PERSONAL").length;
+  const approvedTrainingStatuses = ["TEAM_APPROVED", "ENTERPRISE_APPROVED"];
+  const summaryMetrics: MarketClawInsightsSummaryMetrics = {
+    trainingTotal: trainingCases.length,
+    myTrainingCount,
+    pendingTrainingCount: trainingCases.filter((item) => item.reviewStatus === "PENDING_REVIEW").length,
+    adoptedTrainingCount: trainingCases.filter((item) => approvedTrainingStatuses.includes(item.reviewStatus)).length,
+    rejectedTrainingCount: trainingCases.filter((item) => item.reviewStatus === "REJECTED").length,
+    personalScriptCount: personalKnowledgeCount,
+    ingestionBatchCount: ingestionBatches.length,
+    candidateCount: candidates.length,
+    adoptedCandidateCount: candidates.filter((item) => item.reviewStatus === "ADOPTED" || item.reviewStatus === "ADOPTED_WITH_EDIT").length,
+    mergedCandidateCount: candidates.filter((item) => item.reviewStatus === "MERGED").length,
+    rejectedCandidateCount: candidates.filter((item) => item.reviewStatus === "REJECTED").length,
+    enterpriseKnowledgeCount: approvedKnowledgeItems.filter((item) => item.scopeLevel === "ENTERPRISE").length,
+    teamKnowledgeCount: approvedKnowledgeItems.filter((item) => item.scopeLevel === "DEPARTMENT").length,
+    businessLineKnowledgeCount: approvedKnowledgeItems.filter((item) => item.scopeLevel === "BUSINESS_LINE").length,
+    personalKnowledgeCount
+  };
+
+  const frequentQuestions = buildFrequentQuestionStats(questionSources, approvedKnowledgeItems);
+  const riskQuestionStats = isPersonalView ? [] : buildRiskQuestionStats(questionSources, approvedKnowledgeItems);
+  const knowledgeGaps = isPersonalView
+    ? []
+    : buildKnowledgeGapStats({
+        businessLineNames,
+        trainingCases: trainingCases.map((item) => ({
+          customerQuestion: item.customerQuestion,
+          businessLineName: item.businessLine?.name ?? "通用资料"
+        })),
+        replyDrafts: replyDrafts.map((item) => ({
+          customerQuestion: item.customerQuestion,
+          businessLineName: item.businessLine?.name ?? "通用资料"
+        })),
+        candidates: candidates.map((item) => ({
+          reviewStatus: item.reviewStatus,
+          mergeAction: item.mergeAction,
+          businessLineName: item.businessLine?.name ?? "通用资料"
+        })),
+        knowledgeItems: approvedKnowledgeItems.map((item) => ({
+          knowledgeType: item.knowledgeType,
+          scopeLevel: item.scopeLevel,
+          businessLineName: item.businessLine?.name ?? "通用资料",
+          status: item.status,
+          reviewStatus: item.reviewStatus
+        }))
+      });
+
+  const recentAdoptions = candidates
+    .filter((item) => item.reviewStatus === "ADOPTED" || item.reviewStatus === "ADOPTED_WITH_EDIT")
+    .slice(0, 6)
+    .map((item) => ({
+      title: item.title,
+      businessLine: item.businessLine?.name ?? "通用资料",
+      knowledgeType: marketClawKnowledgeTypeLabelMap.get(item.knowledgeType) ?? item.knowledgeType,
+      occurredAt: item.updatedAt,
+      operatorName: item.createdBy.name,
+      reviewStatus: item.reviewStatus === "ADOPTED_WITH_EDIT" ? "修改后采纳" : "已采纳"
+    }));
+
+  const recentMerges = candidates
+    .filter((item) => item.reviewStatus === "MERGED")
+    .slice(0, 6)
+    .map((item) => ({
+      title: item.title,
+      businessLine: item.businessLine?.name ?? "通用资料",
+      knowledgeType: marketClawKnowledgeTypeLabelMap.get(item.knowledgeType) ?? item.knowledgeType,
+      occurredAt: item.mergedAt ?? item.updatedAt,
+      operatorName: userNameMap.get(item.mergedById ?? "") ?? item.createdBy.name,
+      reviewStatus: item.mergeAction === "APPEND_TO_EXISTING" ? "补充追加" : "已合并"
+    }));
+
+  const contributorMap = new Map<string, { adoptedCount: number; latestAt: Date }>();
+  for (const item of trainingCases) {
+    if (!item.promotedKnowledgeItemId && !approvedTrainingStatuses.includes(item.reviewStatus)) continue;
+    const key = item.createdBy.name;
+    const existing = contributorMap.get(key) ?? { adoptedCount: 0, latestAt: item.updatedAt };
+    existing.adoptedCount += 1;
+    if (item.updatedAt > existing.latestAt) {
+      existing.latestAt = item.updatedAt;
+    }
+    contributorMap.set(key, existing);
+  }
+
+  const topContributors = [...contributorMap.entries()]
+    .map(([userName, item]) => ({
+      userName,
+      adoptedCount: item.adoptedCount,
+      latestAt: item.latestAt
+    }))
+    .sort((left, right) => right.adoptedCount - left.adoptedCount || right.latestAt.getTime() - left.latestAt.getTime())
+    .slice(0, 6);
+
+  const mostMergedKnowledgeItems = approvedKnowledgeItems
+    .map((item) => ({
+      title: item.title,
+      businessLine: item.businessLine?.name ?? "通用资料",
+      sourceCandidateCount: parseMarketClawTextArray(item.sourceCandidateIds).length,
+      sourceBatchCount: parseMarketClawTextArray(item.sourceBatchIds).length,
+      lastMergedAt: item.lastMergedAt
+    }))
+    .filter((item) => item.sourceCandidateCount > 0)
+    .sort((left, right) => right.sourceCandidateCount - left.sourceCandidateCount || (right.lastMergedAt?.getTime() ?? 0) - (left.lastMergedAt?.getTime() ?? 0))
+    .slice(0, 6);
+
+  const duplicateRejectedTypeMap = new Map<string, number>();
+  for (const item of candidates) {
+    if (item.reviewStatus !== "REJECTED" || item.mergeAction !== "REJECT_AS_DUPLICATE") continue;
+    duplicateRejectedTypeMap.set(item.knowledgeType, (duplicateRejectedTypeMap.get(item.knowledgeType) ?? 0) + 1);
+  }
+  const duplicateRejectedTypes = [...duplicateRejectedTypeMap.entries()]
+    .map(([knowledgeType, count]) => ({
+      knowledgeType: marketClawKnowledgeTypeLabelMap.get(knowledgeType as MarketClawKnowledgeType) ?? knowledgeType,
+      count
+    }))
+    .sort((left, right) => right.count - left.count)
+    .slice(0, 6);
+
+  const personalReviewProgress = trainingCases
+    .filter((item) => item.ownerUserId === input.userId || item.createdById === input.userId)
+    .slice(0, 8)
+    .map((item) => ({
+      question: item.customerQuestion,
+      reviewStatus:
+        marketClawTrainingReviewStatusOptions.find((option) => option.value === item.reviewStatus)?.label ?? item.reviewStatus,
+      updatedAt: item.updatedAt,
+      reviewComment: item.reviewComment,
+      promotedScope: item.promotedKnowledgeItem?.scopeLevel ?? null
+    }));
+
+  return {
+    roleView: isPersonalView ? "PERSONAL" : "GLOBAL",
+    summaryMetrics,
+    frequentQuestions,
+    riskQuestionStats,
+    knowledgeGaps,
+    adoptionStats: {
+      recentAdoptions,
+      topContributors
+    },
+    mergeStats: {
+      recentMerges,
+      mostMergedKnowledgeItems,
+      duplicateRejectedTypes
+    },
+    maturityStage: isPersonalView ? null : buildMaturityStage({ summaryMetrics, knowledgeGaps, approvedKnowledgeItems }),
+    personalReviewProgress
+  } satisfies MarketClawTrainingInsights;
 }
 
 export function materialTitlesFromIds(materials: MaterialLike[], ids: string[]) {

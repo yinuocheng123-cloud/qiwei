@@ -46,6 +46,7 @@ function buildOverviewTabs(tenantSlug: string) {
     { key: "training", label: "回复训练场", href: `/app/${tenantSlug}/market-claw/training` },
     { key: "review", label: "训练审核", href: `/app/${tenantSlug}/market-claw/training/review` },
     { key: "ingestion", label: "资料投喂", href: `/app/${tenantSlug}/market-claw/ingestion` },
+    { key: "insights", label: "训练复盘", href: `/app/${tenantSlug}/market-claw/insights` },
     { key: "replies", label: "回复记录", href: `/app/${tenantSlug}/market-claw/replies` }
   ];
 }

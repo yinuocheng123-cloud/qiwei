@@ -110,6 +110,7 @@ export default async function MarketClawRepliesPage({
             ? [
                 { key: "overview", label: "总览", href: `/app/${tenant.slug}/market-claw` },
                 { key: "training", label: "我的训练", href: `/app/${tenant.slug}/market-claw/training` },
+                { key: "insights", label: "我的训练表现", href: `/app/${tenant.slug}/market-claw/insights` },
                 { key: "replies", label: "我的回复记录", href: `/app/${tenant.slug}/market-claw/replies` },
                 { key: "leads", label: "去客户列表", href: `/app/${tenant.slug}/leads` }
               ]
@@ -119,6 +120,7 @@ export default async function MarketClawRepliesPage({
                 { key: "ingestion", label: "资料投喂", href: `/app/${tenant.slug}/market-claw/ingestion` },
                 { key: "training", label: "回复训练场", href: `/app/${tenant.slug}/market-claw/training` },
                 { key: "review", label: "训练审核", href: `/app/${tenant.slug}/market-claw/training/review` },
+                { key: "insights", label: "训练复盘", href: `/app/${tenant.slug}/market-claw/insights` },
                 { key: "replies", label: "回复记录", href: `/app/${tenant.slug}/market-claw/replies` }
               ]
         }
