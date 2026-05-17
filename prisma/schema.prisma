@@ -774,6 +774,10 @@ model MarketClawKnowledgeItem {
   approvedAt              DateTime?
   sourceTrainingCaseId    String?
   sourceKnowledgeCandidateId String?
+  sourceCandidateIds      Json?
+  sourceBatchIds          Json?
+  lastMergedAt            DateTime?
+  lastMergedById          String?
   status                  MarketClawKnowledgeStatus @default(ACTIVE)
   keywords                Json?
   applicableCustomerTypes Json?
@@ -953,9 +957,16 @@ model MarketClawKnowledgeCandidate {
   suggestedReplyShort        String?
   suggestedReplyProfessional String?
   suggestedReplyClosing      String?
+  similarKnowledgeItemIds    Json?
+  similarityHints            Json?
   reviewStatus               MarketClawKnowledgeCandidateReviewStatus @default(PENDING_REVIEW)
   reviewComment              String?
   adoptedKnowledgeItemId     String?
+  mergeTargetKnowledgeItemId String?
+  mergeAction                String?
+  mergeReason                String?
+  mergedAt                   DateTime?
+  mergedById                 String?
   createdAt                  DateTime                               @default(now())
   updatedAt                  DateTime                               @updatedAt
 
@@ -963,6 +974,7 @@ model MarketClawKnowledgeCandidate {
   @@index([tenantId, businessLineId, reviewStatus, createdAt])
   @@index([tenantId, createdById, reviewStatus, createdAt])
   @@index([tenantId, adoptedKnowledgeItemId, updatedAt])
+  @@index([tenantId, mergeTargetKnowledgeItemId, updatedAt])
 }
 
 model AuditLog {

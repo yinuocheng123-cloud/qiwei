@@ -14,7 +14,8 @@ import {
   marketClawKnowledgeScopeOptions,
   marketClawKnowledgeStatusOptions,
   marketClawKnowledgeTypeOptions,
-  marketClawKnowledgeVisibilityOptions
+  marketClawKnowledgeVisibilityOptions,
+  parseMarketClawTextArray
 } from "@/lib/market-claw";
 import { customerTypeOptions, stageOptions } from "@/lib/options";
 import { prisma } from "@/lib/prisma";
@@ -77,6 +78,19 @@ function MaterialCheckboxes({
 
 function parseStringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function sourceCount(value: unknown, fallbackId?: string | null) {
+  const ids = parseMarketClawTextArray(value);
+  if (ids.length) return ids.length;
+  return fallbackId ? 1 : 0;
+}
+
+function formatDateTime(value: Date | string) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    dateStyle: "short",
+    timeStyle: "short"
+  }).format(new Date(value));
 }
 
 function KnowledgeForm({
@@ -286,6 +300,17 @@ export default async function MarketClawKnowledgePage({
                   </div>
                 </div>
                 <p className="mt-4 text-sm leading-6 text-slate-700">{item.content}</p>
+                <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                  <h3 className="text-sm font-semibold text-slate-950">来源提示</h3>
+                  <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                    <p>是否来自资料投喂：{item.sourceIngestionBatchId || item.sourceBatchIds ? "是" : "否"}</p>
+                    <p>是否来自候选采纳：{item.sourceKnowledgeCandidateId || item.sourceCandidateIds ? "是" : "否"}</p>
+                    <p>是否由多候选合并：{sourceCount(item.sourceCandidateIds, item.sourceKnowledgeCandidateId) > 1 ? "是" : "否"}</p>
+                    <p>来源批次数量：{sourceCount(item.sourceBatchIds, item.sourceIngestionBatchId)}</p>
+                    <p>来源候选数量：{sourceCount(item.sourceCandidateIds, item.sourceKnowledgeCandidateId)}</p>
+                    <p>最近合并时间：{item.lastMergedAt ? formatDateTime(item.lastMergedAt) : "-"}</p>
+                  </div>
+                </div>
                 <details className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-4">
                   <summary className="cursor-pointer text-sm font-medium text-slate-800">编辑这条知识</summary>
                   <div className="mt-4">

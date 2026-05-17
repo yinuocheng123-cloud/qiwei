@@ -88,13 +88,16 @@ import {
   rebuildImportBatchPreview
 } from "@/lib/imports";
 import {
+  buildMarketClawMergedKnowledgeContent,
+  findSimilarKnowledgeItems,
   generateMarketClawKnowledgeCandidates,
   generateMarketClawReply,
   materialTitlesFromIds,
+  type MarketClawKnowledgeCandidateMergeAction,
   parseMarketClawSuggestedTags,
   parseMarketClawSuggestedTask,
-  splitKnowledgeIdsByScope,
-  parseMarketClawTextArray
+  parseMarketClawTextArray,
+  splitKnowledgeIdsByScope
 } from "@/lib/market-claw";
 import { prisma } from "@/lib/prisma";
 import { parseSourceAttributionFromFormData, upsertLeadSourceAttribution } from "@/lib/source-attribution";
@@ -1418,6 +1421,26 @@ function parseMarketClawCandidateKeywords(formData: FormData, key: string) {
   return parseMarketClawStringArray(formData, key);
 }
 
+function parseMarketClawCandidateMergeAction(
+  formData: FormData,
+  key: string,
+  fallback: MarketClawKnowledgeCandidateMergeAction
+) {
+  const value = text(formData, key);
+  return ["ADOPT_AS_NEW", "MERGE_INTO_EXISTING", "APPEND_TO_EXISTING", "REJECT_AS_DUPLICATE"].includes(value ?? "")
+    ? (value as MarketClawKnowledgeCandidateMergeAction)
+    : fallback;
+}
+
+function mergeMarketClawJsonTextArray(existing: unknown, nextValues: Array<string | null | undefined>) {
+  return [...new Set([...parseMarketClawTextArray(existing), ...nextValues.filter((item): item is string => Boolean(item?.trim())).map((item) => item.trim())])];
+}
+
+function mergeMarketClawRiskNotes(existing: string | null | undefined, next: string | null | undefined) {
+  const values = [existing?.trim(), next?.trim()].filter((item): item is string => Boolean(item));
+  return [...new Set(values)].join("\n\n");
+}
+
 function hasTextDiff(left: string | null | undefined, right: string | null | undefined) {
   return (left ?? "").trim() !== (right ?? "").trim();
 }
@@ -1481,6 +1504,86 @@ async function refreshMarketClawIngestionBatch(batchId: string) {
       status
     }
   });
+}
+
+async function refreshMarketClawCandidateSimilarities(input: {
+  tenantId: string;
+  userId: string;
+  batchId: string;
+}) {
+  try {
+    const [candidates, knowledgeItems] = await Promise.all([
+      prisma.marketClawKnowledgeCandidate.findMany({
+        where: { tenantId: input.tenantId, batchId: input.batchId },
+        select: {
+          id: true,
+          batchId: true,
+          businessLineId: true,
+          title: true,
+          content: true,
+          knowledgeType: true,
+          suggestedKeywords: true,
+          suggestedRiskNotes: true
+        }
+      }),
+      prisma.marketClawKnowledgeItem.findMany({
+        where: {
+          tenantId: input.tenantId,
+          status: MarketClawKnowledgeStatus.ACTIVE,
+          reviewStatus: MarketClawKnowledgeReviewStatus.APPROVED
+        },
+        select: {
+          id: true,
+          businessLineId: true,
+          title: true,
+          content: true,
+          knowledgeType: true,
+          keywords: true,
+          riskNotes: true,
+          status: true,
+          reviewStatus: true
+        }
+      })
+    ]);
+
+    for (const candidate of candidates) {
+      const similarityHints = findSimilarKnowledgeItems({
+        businessLineId: candidate.businessLineId,
+        knowledgeType: candidate.knowledgeType,
+        title: candidate.title,
+        content: candidate.content,
+        suggestedKeywords: parseMarketClawTextArray(candidate.suggestedKeywords),
+        suggestedRiskNotes: candidate.suggestedRiskNotes,
+        knowledgeItems
+      });
+
+      await prisma.marketClawKnowledgeCandidate.update({
+        where: { id: candidate.id },
+        data: {
+          similarKnowledgeItemIds: similarityHints.map((item) => item.knowledgeItemId),
+          similarityHints
+        }
+      });
+
+      if (similarityHints.length) {
+        await safeWriteAuditLog({
+          tenantId: input.tenantId,
+          userId: input.userId,
+          action: "market_claw_knowledge_candidate_similarity_checked",
+          entityType: "MarketClawKnowledgeCandidate",
+          entityId: candidate.id,
+          metadata: {
+            batchId: candidate.batchId,
+            businessLineId: candidate.businessLineId,
+            similarityLevel: similarityHints[0]?.similarityLevel ?? null,
+            similarKnowledgeCount: similarityHints.length
+          }
+        });
+      }
+    }
+  } catch {
+    // 相似提示失败不能阻断资料投喂主流程，后续可在候选页按当前知识库状态重新计算。
+  }
 }
 
 function buildMarketClawKnowledgePayload(formData: FormData) {
@@ -1773,6 +1876,11 @@ export async function createMarketClawIngestionBatch(tenantSlug: string, formDat
       candidateTypes: [...new Set(candidates.map((item) => item.knowledgeType))]
     }
   });
+  await refreshMarketClawCandidateSimilarities({
+    tenantId: tenant.id,
+    userId: user.id,
+    batchId: batch.id
+  });
 
   revalidatePath(`/app/${tenantSlug}/market-claw`);
   revalidatePath(`/app/${tenantSlug}/market-claw/ingestion`);
@@ -1831,6 +1939,8 @@ export async function adoptMarketClawKnowledgeCandidate(tenantSlug: string, cand
       approvedById: user.id,
       approvedAt: new Date(),
       sourceKnowledgeCandidateId: candidate.id,
+      sourceCandidateIds: [candidate.id],
+      sourceBatchIds: [candidate.batchId],
       status: MarketClawKnowledgeStatus.ACTIVE,
       keywords,
       forbiddenPhrases,
@@ -1846,7 +1956,9 @@ export async function adoptMarketClawKnowledgeCandidate(tenantSlug: string, cand
         ? MarketClawKnowledgeCandidateReviewStatus.ADOPTED_WITH_EDIT
         : MarketClawKnowledgeCandidateReviewStatus.ADOPTED,
       reviewComment,
-      adoptedKnowledgeItemId: knowledgeItem.id
+      adoptedKnowledgeItemId: knowledgeItem.id,
+      mergeAction: "ADOPT_AS_NEW",
+      mergeReason: reviewComment
     }
   });
   await refreshMarketClawIngestionBatch(candidate.batchId);
@@ -1898,6 +2010,10 @@ export async function rejectMarketClawKnowledgeCandidate(tenantSlug: string, can
   });
   if (!candidate || candidate.adoptedKnowledgeItemId) return;
 
+  const mergeAction = parseMarketClawCandidateMergeAction(formData, "mergeAction", "REJECT_AS_DUPLICATE");
+  const reviewComment = text(formData, "reviewComment");
+  const targetKnowledgeItemId = text(formData, "targetKnowledgeItemId");
+
   const updated = await prisma.marketClawKnowledgeCandidate.update({
     where: { id: candidate.id },
     data: {
@@ -1906,7 +2022,10 @@ export async function rejectMarketClawKnowledgeCandidate(tenantSlug: string, can
         "reviewStatus",
         MarketClawKnowledgeCandidateReviewStatus.REJECTED
       ),
-      reviewComment: text(formData, "reviewComment")
+      reviewComment,
+      mergeAction,
+      mergeReason: reviewComment,
+      mergeTargetKnowledgeItemId: targetKnowledgeItemId ?? null
     }
   });
   await refreshMarketClawIngestionBatch(candidate.batchId);
@@ -1914,13 +2033,18 @@ export async function rejectMarketClawKnowledgeCandidate(tenantSlug: string, can
   await safeWriteAuditLog({
     tenantId: tenant.id,
     userId: user.id,
-    action: "market_claw_knowledge_candidate_rejected",
+    action:
+      mergeAction === "REJECT_AS_DUPLICATE"
+        ? "market_claw_knowledge_candidate_rejected_as_duplicate"
+        : "market_claw_knowledge_candidate_rejected",
     entityType: "MarketClawKnowledgeCandidate",
     entityId: updated.id,
     metadata: {
       batchId: updated.batchId,
       businessLineId: updated.businessLineId,
-      reviewStatus: updated.reviewStatus
+      reviewStatus: updated.reviewStatus,
+      mergeAction,
+      targetKnowledgeItemId
     }
   });
 
@@ -1935,29 +2059,112 @@ export async function mergeMarketClawKnowledgeCandidate(tenantSlug: string, cand
   });
   if (!candidate || candidate.adoptedKnowledgeItemId) return;
 
-  const updated = await prisma.marketClawKnowledgeCandidate.update({
-    where: { id: candidate.id },
-    data: {
-      reviewStatus: MarketClawKnowledgeCandidateReviewStatus.MERGED,
-      reviewComment: text(formData, "reviewComment")
-    }
+  const targetKnowledgeItemId = text(formData, "targetKnowledgeItemId");
+  if (!targetKnowledgeItemId) return;
+  const mergeAction = parseMarketClawCandidateMergeAction(formData, "mergeAction", "MERGE_INTO_EXISTING");
+  if (mergeAction !== "MERGE_INTO_EXISTING" && mergeAction !== "APPEND_TO_EXISTING") return;
+
+  const targetKnowledgeItem = await prisma.marketClawKnowledgeItem.findFirst({
+    where: { id: targetKnowledgeItemId, tenantId: tenant.id }
   });
+  if (!targetKnowledgeItem) return;
+
+  const mergeReason = text(formData, "mergeReason") ?? text(formData, "reviewComment");
+  const mergedContent =
+    text(formData, "mergedContent") ??
+    buildMarketClawMergedKnowledgeContent({
+      action: mergeAction,
+      targetTitle: targetKnowledgeItem.title,
+      targetContent: targetKnowledgeItem.content,
+      candidateTitle: candidate.title,
+      candidateContent: candidate.content
+    });
+  if (!mergedContent.trim()) return;
+
+  const nextKeywords = mergeMarketClawJsonTextArray(targetKnowledgeItem.keywords, parseMarketClawTextArray(candidate.suggestedKeywords));
+  const nextForbiddenPhrases = mergeMarketClawJsonTextArray(
+    targetKnowledgeItem.forbiddenPhrases,
+    parseMarketClawTextArray(candidate.suggestedForbiddenPhrases)
+  );
+  const nextSourceCandidateIds = mergeMarketClawJsonTextArray(targetKnowledgeItem.sourceCandidateIds, [
+    targetKnowledgeItem.sourceKnowledgeCandidateId,
+    candidate.id
+  ]);
+  const nextSourceBatchIds = mergeMarketClawJsonTextArray(targetKnowledgeItem.sourceBatchIds, [
+    targetKnowledgeItem.sourceIngestionBatchId,
+    candidate.batchId
+  ]);
+  const mergedAt = new Date();
+
+  const [knowledgeItem, updatedCandidate] = await prisma.$transaction([
+    prisma.marketClawKnowledgeItem.update({
+      where: { id: targetKnowledgeItem.id },
+      data: {
+        content: mergedContent,
+        updatedById: user.id,
+        sourceIngestionBatchId: targetKnowledgeItem.sourceIngestionBatchId ?? candidate.batchId,
+        sourceKnowledgeCandidateId: targetKnowledgeItem.sourceKnowledgeCandidateId ?? candidate.id,
+        sourceCandidateIds: nextSourceCandidateIds,
+        sourceBatchIds: nextSourceBatchIds,
+        lastMergedAt: mergedAt,
+        lastMergedById: user.id,
+        keywords: nextKeywords,
+        forbiddenPhrases: nextForbiddenPhrases,
+        riskNotes: mergeMarketClawRiskNotes(targetKnowledgeItem.riskNotes, candidate.suggestedRiskNotes)
+      }
+    }),
+    prisma.marketClawKnowledgeCandidate.update({
+      where: { id: candidate.id },
+      data: {
+        reviewStatus: MarketClawKnowledgeCandidateReviewStatus.MERGED,
+        reviewComment: mergeReason,
+        adoptedKnowledgeItemId: targetKnowledgeItem.id,
+        mergeTargetKnowledgeItemId: targetKnowledgeItem.id,
+        mergeAction,
+        mergeReason,
+        mergedAt,
+        mergedById: user.id
+      }
+    })
+  ]);
   await refreshMarketClawIngestionBatch(candidate.batchId);
 
   await safeWriteAuditLog({
     tenantId: tenant.id,
     userId: user.id,
-    action: "market_claw_knowledge_candidate_merged",
+    action:
+      mergeAction === "APPEND_TO_EXISTING"
+        ? "market_claw_knowledge_candidate_appended"
+        : "market_claw_knowledge_candidate_merged",
     entityType: "MarketClawKnowledgeCandidate",
-    entityId: updated.id,
+    entityId: updatedCandidate.id,
     metadata: {
-      batchId: updated.batchId,
-      businessLineId: updated.businessLineId,
-      reviewStatus: updated.reviewStatus
+      batchId: updatedCandidate.batchId,
+      businessLineId: updatedCandidate.businessLineId,
+      reviewStatus: updatedCandidate.reviewStatus,
+      targetKnowledgeItemId: targetKnowledgeItem.id,
+      mergeAction
+    }
+  });
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "market_claw_knowledge_source_updated",
+    entityType: "MarketClawKnowledgeItem",
+    entityId: knowledgeItem.id,
+    metadata: {
+      candidateId: candidate.id,
+      batchId: candidate.batchId,
+      targetKnowledgeItemId: knowledgeItem.id,
+      businessLineId: knowledgeItem.businessLineId,
+      mergeAction,
+      sourceCandidateCount: nextSourceCandidateIds.length,
+      sourceBatchCount: nextSourceBatchIds.length
     }
   });
 
   revalidatePath(`/app/${tenantSlug}/market-claw/ingestion`);
+  revalidatePath(`/app/${tenantSlug}/market-claw/knowledge`);
   revalidatePath(`/app/${tenantSlug}/audit-logs`);
 }
 

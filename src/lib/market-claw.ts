@@ -112,6 +112,25 @@ export type MarketClawKnowledgeCandidateDraft = {
   suggestedReplyClosing: string;
 };
 
+export type MarketClawKnowledgeCandidateMergeAction =
+  | "ADOPT_AS_NEW"
+  | "MERGE_INTO_EXISTING"
+  | "APPEND_TO_EXISTING"
+  | "REJECT_AS_DUPLICATE";
+
+export type MarketClawKnowledgeSimilarityLevel = "HIGH" | "MEDIUM" | "LOW";
+
+export type MarketClawKnowledgeSimilarityHint = {
+  knowledgeItemId: string;
+  title: string;
+  knowledgeType: MarketClawKnowledgeType;
+  similarityLevel: MarketClawKnowledgeSimilarityLevel;
+  reasons: string[];
+  matchedKeywords: string[];
+  contentPreview: string;
+  businessLineId: string | null;
+};
+
 export const marketClawKnowledgeTypeOptions: { value: MarketClawKnowledgeType; label: string }[] = [
   { value: "SERVICE_INTRO", label: "服务介绍" },
   { value: "FAQ", label: "常见问题" },
@@ -228,6 +247,16 @@ export const marketClawKnowledgeCandidateReviewStatusOptions: {
   { value: "MERGED", label: "已合并" }
 ];
 
+export const marketClawKnowledgeCandidateMergeActionOptions: {
+  value: MarketClawKnowledgeCandidateMergeAction;
+  label: string;
+}[] = [
+  { value: "ADOPT_AS_NEW", label: "采纳为新知识" },
+  { value: "MERGE_INTO_EXISTING", label: "合并到已有知识" },
+  { value: "APPEND_TO_EXISTING", label: "作为补充追加" },
+  { value: "REJECT_AS_DUPLICATE", label: "标记重复并驳回" }
+];
+
 export const marketClawTagGroupLabels: Record<TagGroup, string> = {
   SOURCE: "来源标签",
   CUSTOMER_TYPE: "客户类型标签",
@@ -280,6 +309,40 @@ function dedupeStrings(values: string[]) {
 
 export function parseMarketClawTextArray(value: unknown) {
   return toStringArray(value);
+}
+
+export function parseMarketClawSimilarityHints(value: unknown) {
+  if (!Array.isArray(value)) return [] as MarketClawKnowledgeSimilarityHint[];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const record = item as Record<string, unknown>;
+    const knowledgeItemId = typeof record.knowledgeItemId === "string" ? record.knowledgeItemId : "";
+    const title = typeof record.title === "string" ? record.title : "";
+    const knowledgeType = typeof record.knowledgeType === "string" ? record.knowledgeType : "";
+    const similarityLevel = typeof record.similarityLevel === "string" ? record.similarityLevel : "";
+    const reasons = toStringArray(record.reasons);
+    const matchedKeywords = toStringArray(record.matchedKeywords);
+    const contentPreview = typeof record.contentPreview === "string" ? record.contentPreview : "";
+    const businessLineId =
+      typeof record.businessLineId === "string" && record.businessLineId.trim().length ? record.businessLineId : null;
+
+    if (!knowledgeItemId || !title) return [];
+    if (!marketClawKnowledgeTypeOptions.some((option) => option.value === knowledgeType)) return [];
+    if (!["HIGH", "MEDIUM", "LOW"].includes(similarityLevel)) return [];
+
+    return [
+      {
+        knowledgeItemId,
+        title,
+        knowledgeType: knowledgeType as MarketClawKnowledgeType,
+        similarityLevel: similarityLevel as MarketClawKnowledgeSimilarityLevel,
+        reasons,
+        matchedKeywords,
+        contentPreview,
+        businessLineId
+      }
+    ];
+  });
 }
 
 export function parseMarketClawSuggestedTags(value: unknown) {
@@ -365,6 +428,38 @@ function buildCandidateReplies(title: string, content: string, knowledgeType: Ma
         : "如果这条候选内容方向对，我们可以先人工审核，再决定是沉淀为标准回复、风险提醒还是异议处理话术。";
 
   return { shortReply, professionalReply, closingReply };
+}
+
+function tokenizeKnowledgeText(...values: string[]) {
+  return dedupeStrings(
+    values.flatMap((value) =>
+      value
+        .toLowerCase()
+        .split(/[\s,，。！？；：、\n\r:"'“”‘’（）()【】[\]{}<>《》\-_/|]+/)
+        .map((item) => item.trim())
+        .filter((item) => item.length >= 2)
+    )
+  );
+}
+
+function intersectStrings(left: string[], right: string[]) {
+  const rightSet = new Set(right);
+  return left.filter((item) => rightSet.has(item));
+}
+
+function buildKnowledgePreview(value: string, maxLength = 96) {
+  const text = value.trim();
+  return text.length <= maxLength ? text : `${text.slice(0, maxLength)}...`;
+}
+
+function areKnowledgeTypesClose(left: MarketClawKnowledgeType, right: MarketClawKnowledgeType) {
+  if (left === right) return true;
+  const groups: MarketClawKnowledgeType[][] = [
+    ["PRICE_BOUNDARY", "RISK_NOTICE", "FORBIDDEN_COMMITMENT"],
+    ["FAQ", "STANDARD_REPLY", "OBJECTION_HANDLING"],
+    ["SERVICE_INTRO", "DELIVERY_PROCESS", "CASE_STUDY"]
+  ];
+  return groups.some((group) => group.includes(left) && group.includes(right));
 }
 
 function splitIngestionBlocks(rawText: string) {
@@ -882,6 +977,131 @@ export function generateMarketClawKnowledgeCandidates(input: {
   }
 
   return candidates.slice(0, 24);
+}
+
+type SimilarKnowledgeLike = Pick<
+  MarketClawKnowledgeItem,
+  "id" | "businessLineId" | "title" | "content" | "knowledgeType" | "keywords" | "riskNotes" | "status" | "reviewStatus"
+>;
+
+export function findSimilarKnowledgeItems(input: {
+  businessLineId?: string | null;
+  knowledgeType: MarketClawKnowledgeType;
+  title: string;
+  content: string;
+  suggestedKeywords?: string[];
+  suggestedRiskNotes?: string | null;
+  knowledgeItems: SimilarKnowledgeLike[];
+}) {
+  const titleTokens = tokenizeKnowledgeText(input.title);
+  const contentTokens = tokenizeKnowledgeText(input.content);
+  const keywordTokens = dedupeStrings([
+    ...titleTokens,
+    ...contentTokens.slice(0, 8),
+    ...(input.suggestedKeywords ?? []).map((item) => item.toLowerCase())
+  ]);
+  const riskTokens = tokenizeKnowledgeText(input.suggestedRiskNotes ?? "");
+
+  return input.knowledgeItems
+    .filter((item) => item.status === "ACTIVE" && item.reviewStatus === "APPROVED")
+    .map((item) => {
+      const reasons = new Set<string>();
+      const matchedKeywords = new Set<string>();
+      let score = 0;
+
+      if (input.businessLineId && item.businessLineId === input.businessLineId) {
+        reasons.add("业务线相同");
+        score += 3;
+      }
+
+      if (item.knowledgeType === input.knowledgeType) {
+        reasons.add("类型相同");
+        score += 3;
+      } else if (areKnowledgeTypesClose(item.knowledgeType, input.knowledgeType)) {
+        reasons.add("类型接近");
+        score += 1;
+      }
+
+      const itemTitleTokens = tokenizeKnowledgeText(item.title);
+      const itemContentTokens = tokenizeKnowledgeText(item.content);
+      const itemKeywordTokens = dedupeStrings([
+        ...itemTitleTokens,
+        ...itemContentTokens.slice(0, 8),
+        ...toStringArray(item.keywords).map((keyword) => keyword.toLowerCase())
+      ]);
+      const itemRiskTokens = tokenizeKnowledgeText(item.riskNotes ?? "");
+
+      const titleOverlap = intersectStrings(titleTokens, itemTitleTokens);
+      const contentOverlap = intersectStrings(contentTokens, itemContentTokens);
+      const keywordOverlap = intersectStrings(keywordTokens, itemKeywordTokens);
+      const riskOverlap = intersectStrings(riskTokens, itemRiskTokens);
+
+      if (titleOverlap.length) {
+        reasons.add("标题关键词重合");
+        titleOverlap.slice(0, 4).forEach((item) => matchedKeywords.add(item));
+        score += Math.min(4, titleOverlap.length * 2);
+      }
+
+      if (contentOverlap.length) {
+        reasons.add("正文关键词重合");
+        contentOverlap.slice(0, 4).forEach((item) => matchedKeywords.add(item));
+        score += Math.min(3, contentOverlap.length);
+      }
+
+      if (keywordOverlap.length) {
+        reasons.add("建议关键词重合");
+        keywordOverlap.slice(0, 4).forEach((item) => matchedKeywords.add(item));
+        score += Math.min(3, keywordOverlap.length);
+      }
+
+      if (riskOverlap.length) {
+        reasons.add("风险提醒相似");
+        riskOverlap.slice(0, 3).forEach((item) => matchedKeywords.add(item));
+        score += 2;
+      }
+
+      if (normalizeText(item.title) === normalizeText(input.title)) {
+        score += 3;
+      }
+
+      const similarityLevel: MarketClawKnowledgeSimilarityLevel | null =
+        score >= 9 ? "HIGH" : score >= 6 ? "MEDIUM" : score >= 4 ? "LOW" : null;
+      if (!similarityLevel) return null;
+
+      return {
+        knowledgeItemId: item.id,
+        title: item.title,
+        knowledgeType: item.knowledgeType,
+        similarityLevel,
+        reasons: [...reasons],
+        matchedKeywords: [...matchedKeywords].slice(0, 6),
+        contentPreview: buildKnowledgePreview(item.content),
+        businessLineId: item.businessLineId ?? null,
+        score
+      };
+    })
+    .filter((item): item is MarketClawKnowledgeSimilarityHint & { score: number } => Boolean(item))
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 5)
+    .map(({ score: _score, ...item }) => item);
+}
+
+export function buildMarketClawMergedKnowledgeContent(input: {
+  action: MarketClawKnowledgeCandidateMergeAction;
+  targetTitle: string;
+  targetContent: string;
+  candidateTitle: string;
+  candidateContent: string;
+}) {
+  if (input.action === "APPEND_TO_EXISTING") {
+    return `${input.targetContent.trim()}\n\n补充说明（来自候选知识：${input.candidateTitle}）\n${input.candidateContent.trim()}`.trim();
+  }
+
+  if (input.action === "MERGE_INTO_EXISTING") {
+    return `${input.targetContent.trim()}\n\n整合候选补充：\n${input.candidateContent.trim()}`.trim();
+  }
+
+  return input.candidateContent.trim();
 }
 
 export function materialTitlesFromIds(materials: MaterialLike[], ids: string[]) {
