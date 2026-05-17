@@ -53,10 +53,17 @@ function buildTenantNavGroups(tenant: Tenant, role: UserRole): NavGroup[] {
     label: "首页",
     href: `${base}/dashboard`,
     description: "集中查看今日重点、待办提醒、高意向客户、逾期任务和最近新增线索。",
-    children: [
-      { label: "总览看板", href: `${base}/dashboard` },
-      { label: "演示说明", href: `${base}/demo-guide` }
-    ]
+    children:
+      role === "SALES"
+        ? [
+            { label: "总览看板", href: `${base}/dashboard` },
+            { label: "演示说明", href: `${base}/demo-guide` }
+          ]
+        : [
+            { label: "总览看板", href: `${base}/dashboard` },
+            { label: "初始化向导", href: `${base}/onboarding` },
+            { label: "演示说明", href: `${base}/demo-guide` }
+          ]
   };
 
   const customerGroup: NavGroup = {

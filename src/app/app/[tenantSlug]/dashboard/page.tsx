@@ -11,6 +11,7 @@ import { Card, DistributionTable, StatCard } from "@/components/Ui";
 import { requireTenantAccess } from "@/lib/auth";
 import { getDashboardMetrics } from "@/lib/dashboard";
 import { customerTypeOptions, intentionOptions, labelOf, sourceOptions, stageOptions } from "@/lib/options";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,22 @@ export default async function DashboardPage({ params }: { params: { tenantSlug: 
         <StatCard label="已成交客户" value={metrics.wonCount} />
         <StatCard label="沉默客户" value={metrics.silentCount} />
       </div>
+
+      {user.role !== "SALES" ? (
+        <Card className="mt-6 border-emerald-200 bg-emerald-50">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="text-base font-semibold text-slate-950">初始化向导</h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-700">
+                面向第一次启用系统的新企业，帮助管理员和运营判断先配什么、先导什么、先投喂什么、先让谁开始用，不把初始化步骤散落在多个页面里。
+              </p>
+            </div>
+            <Link className="inline-flex rounded-md bg-slate-950 px-3 py-2 text-sm font-medium text-white" href={`/app/${tenant.slug}/onboarding`}>
+              进入初始化向导
+            </Link>
+          </div>
+        </Card>
+      ) : null}
 
       {metrics.salesOverview.length ? (
         <Card className="mt-6">
