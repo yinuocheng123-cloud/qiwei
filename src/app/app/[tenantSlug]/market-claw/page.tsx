@@ -46,6 +46,7 @@ export default async function MarketClawPage({ params }: { params: { tenantSlug:
     user.role === "SALES"
       ? [
           { key: "overview", label: "总览", href: `/app/${tenant.slug}/market-claw` },
+          { key: "training", label: "我的训练", href: `/app/${tenant.slug}/market-claw/training` },
           { key: "replies", label: "我的回复记录", href: `/app/${tenant.slug}/market-claw/replies` },
           { key: "leads", label: "去客户列表", href: `/app/${tenant.slug}/leads` }
         ]
@@ -53,15 +54,26 @@ export default async function MarketClawPage({ params }: { params: { tenantSlug:
           { key: "overview", label: "总览", href: `/app/${tenant.slug}/market-claw` },
           { key: "knowledge", label: "知识库", href: `/app/${tenant.slug}/market-claw/knowledge` },
           { key: "training", label: "回复训练场", href: `/app/${tenant.slug}/market-claw/training` },
+          { key: "review", label: "训练审核", href: `/app/${tenant.slug}/market-claw/training/review` },
           { key: "replies", label: "回复记录", href: `/app/${tenant.slug}/market-claw/replies` }
         ];
 
-  const [knowledgeCount, trainingCount, replyDraftCount, feedbackCount, recentDrafts] = await Promise.all([
+  const [knowledgeCount, trainingCount, pendingReviewCount, replyDraftCount, feedbackCount, recentDrafts] = await Promise.all([
     canAccessMarketClawKnowledge(user.role)
       ? prisma.marketClawKnowledgeItem.count({ where: { tenantId: tenant.id } })
       : Promise.resolve(0),
     canAccessMarketClawTraining(user.role)
-      ? prisma.marketClawTrainingCase.count({ where: { tenantId: tenant.id } })
+      ? prisma.marketClawTrainingCase.count({
+          where: {
+            tenantId: tenant.id,
+            ...(user.role === "SALES" ? { ownerUserId: user.id } : {})
+          }
+        })
+      : Promise.resolve(0),
+    canAccessMarketClawKnowledge(user.role)
+      ? prisma.marketClawTrainingCase.count({
+          where: { tenantId: tenant.id, reviewStatus: "PENDING_REVIEW" }
+        })
       : Promise.resolve(0),
     prisma.marketClawReplyDraft.count({
       where: {
@@ -93,6 +105,11 @@ export default async function MarketClawPage({ params }: { params: { tenantSlug:
     user.role === "SALES"
       ? [
           {
+            title: "我的训练",
+            description: "把一线真实客户问题拿来练，先沉淀成自己的常用话术，再决定是否提交审核。",
+            href: `/app/${tenant.slug}/market-claw/training`
+          },
+          {
             title: "我的回复记录",
             description: "回看自己已经生成、复制或保存为跟进的回复草稿，继续复盘常见问题。",
             href: `/app/${tenant.slug}/market-claw/replies`
@@ -118,6 +135,11 @@ export default async function MarketClawPage({ params }: { params: { tenantSlug:
             title: "回复训练场",
             description: "模拟客户问题，验证回复是否准确、像人话且有边界，再沉淀为标准话术。",
             href: `/app/${tenant.slug}/market-claw/training`
+          },
+          {
+            title: "训练审核",
+            description: "查看销售提交的训练样本，决定采纳为团队标准、企业标准，或驳回并纠偏。",
+            href: `/app/${tenant.slug}/market-claw/training/review`
           },
           {
             title: "回复记录",
@@ -160,6 +182,7 @@ export default async function MarketClawPage({ params }: { params: { tenantSlug:
       <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="知识库数量" value={knowledgeCount} />
         <StatCard label="训练样本数量" value={trainingCount} />
+        <StatCard label="待审核训练" value={pendingReviewCount} />
         <StatCard label="回复草稿数量" value={replyDraftCount} />
         <StatCard label="使用反馈数量" value={feedbackCount} />
       </div>

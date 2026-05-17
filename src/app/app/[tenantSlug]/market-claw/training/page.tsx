@@ -1,38 +1,79 @@
 /*
- * 文件说明：该文件实现 V2.0 麻虾回复训练场页面。
- * 功能说明：允许企业管理员与运营模拟客户问题、生成三版回复，并把人工优化后的版本沉淀为标准回复知识。
+ * 文件说明：该文件实现 V2.0.5 Market Claw 训练场与“我的训练”页面。
+ * 功能说明：支持企业训练、部门训练、业务线训练和销售自我训练，并在同一页面完成个人保存与提交审核。
  *
  * 结构概览：
- *   第一部分：导入依赖
+ *   第一部分：导入依赖与选项
  *   第二部分：训练场页面
- *   第三部分：辅助展示组件
+ *   第三部分：训练卡片与辅助展示
  */
-import { generateMarketClawTrainingCase, reviewMarketClawTrainingCase, saveMarketClawTrainingAsKnowledge } from "@/lib/actions";
-import { canAccessMarketClawTraining, requireTenantAccess } from "@/lib/auth";
+import {
+  generateMarketClawTrainingCase,
+  saveMarketClawTrainingAsPersonalKnowledge,
+  submitMarketClawTrainingForReview
+} from "@/lib/actions";
+import { canAccessMarketClawTraining, canReviewMarketClawTraining, requireTenantAccess } from "@/lib/auth";
+import {
+  marketClawTrainingReviewStatusOptions,
+  marketClawTrainingScopeOptions
+} from "@/lib/market-claw";
 import { customerTypeOptions, stageOptions } from "@/lib/options";
 import { prisma } from "@/lib/prisma";
 import { PageShell } from "@/components/Shell";
-import { Card, Input, SectionTabs, Select, SubmitButton, Textarea } from "@/components/Ui";
+import { Callout, Card, Input, SectionTabs, Select, SubmitButton, Textarea } from "@/components/Ui";
 
 export const dynamic = "force-dynamic";
 
-const ratingOptions = [
-  { value: "GOOD", label: "可用" },
-  { value: "NEEDS_EDIT", label: "需修改" },
-  { value: "BAD", label: "不可用" },
-  { value: "UNRATED", label: "暂不评价" }
-];
+const scopeLabels = new Map(marketClawTrainingScopeOptions.map((item) => [item.value, item.label]));
+const reviewStatusLabels = new Map(marketClawTrainingReviewStatusOptions.map((item) => [item.value, item.label]));
 
-const reviewStatusOptions = [
-  { value: "REVIEWED", label: "已复核" },
-  { value: "DISMISSED", label: "弃用" }
-];
+function buildOverviewTabs(tenantSlug: string, role: string) {
+  if (role === "SALES") {
+    return [
+      { key: "overview", label: "总览", href: `/app/${tenantSlug}/market-claw` },
+      { key: "training", label: "我的训练", href: `/app/${tenantSlug}/market-claw/training` },
+      { key: "replies", label: "我的回复记录", href: `/app/${tenantSlug}/market-claw/replies` },
+      { key: "leads", label: "去客户列表", href: `/app/${tenantSlug}/leads` }
+    ];
+  }
 
-export default async function MarketClawTrainingPage({ params }: { params: { tenantSlug: string } }) {
-  const { user, tenant } = await requireTenantAccess(params.tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
+  return [
+    { key: "overview", label: "总览", href: `/app/${tenantSlug}/market-claw` },
+    { key: "knowledge", label: "知识库", href: `/app/${tenantSlug}/market-claw/knowledge` },
+    { key: "training", label: "回复训练场", href: `/app/${tenantSlug}/market-claw/training` },
+    { key: "review", label: "训练审核", href: `/app/${tenantSlug}/market-claw/training/review` },
+    { key: "replies", label: "回复记录", href: `/app/${tenantSlug}/market-claw/replies` }
+  ];
+}
+
+function buildScopeTabs(tenantSlug: string, role: string) {
+  if (role === "SALES") {
+    return [{ key: "SALES_SELF_TRAINING", label: "我的训练", href: `/app/${tenantSlug}/market-claw/training?scope=SALES_SELF_TRAINING` }];
+  }
+
+  return marketClawTrainingScopeOptions.map((item) => ({
+    key: item.value,
+    label: item.label,
+    href: `/app/${tenantSlug}/market-claw/training?scope=${item.value}`
+  }));
+}
+
+export default async function MarketClawTrainingPage({
+  params,
+  searchParams
+}: {
+  params: { tenantSlug: string };
+  searchParams?: Record<string, string | string[] | undefined>;
+}) {
+  const { user, tenant } = await requireTenantAccess(params.tenantSlug, ["TENANT_ADMIN", "OPERATOR", "SALES"]);
   if (!canAccessMarketClawTraining(user.role)) {
     return null;
   }
+
+  const availableScopes =
+    user.role === "SALES" ? ["SALES_SELF_TRAINING"] : marketClawTrainingScopeOptions.map((item) => item.value);
+  const requestedScope = typeof searchParams?.scope === "string" ? searchParams.scope : "";
+  const currentScope = availableScopes.includes(requestedScope) ? requestedScope : availableScopes[0];
 
   const [businessLines, trainingCases] = await Promise.all([
     prisma.businessLine.findMany({
@@ -40,10 +81,18 @@ export default async function MarketClawTrainingPage({ params }: { params: { ten
       orderBy: [{ priority: "asc" }, { updatedAt: "desc" }]
     }),
     prisma.marketClawTrainingCase.findMany({
-      where: { tenantId: tenant.id },
-      include: { businessLine: true, createdBy: true, savedAsKnowledgeItem: true },
-      orderBy: { updatedAt: "desc" },
-      take: 10
+      where: {
+        tenantId: tenant.id,
+        ...(user.role === "SALES" ? { ownerUserId: user.id } : {}),
+        ...(currentScope ? { trainingScope: currentScope as never } : {})
+      },
+      include: {
+        businessLine: true,
+        createdBy: true,
+        promotedKnowledgeItem: true
+      },
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      take: 20
     })
   ]);
 
@@ -52,41 +101,51 @@ export default async function MarketClawTrainingPage({ params }: { params: { ten
   return (
     <PageShell
       tenant={tenant}
-      title="Market Claw 回复训练场"
+      title={user.role === "SALES" ? "Market Claw 我的训练" : "Market Claw 回复训练场"}
       breadcrumbs={[
         { label: "Market Claw", href: `/app/${tenant.slug}/market-claw` },
-        { label: "回复训练场" }
+        { label: user.role === "SALES" ? "我的训练" : "回复训练场" }
       ]}
-      description="在这里模拟客户问题，测试 Market Claw 生成的回复是否准确、像人话、有边界。可用回复可以沉淀为标准话术，不可用回复要记录问题，持续训练。"
+      description={
+        user.role === "SALES"
+          ? "把一线真实客户问题练成自己的常用话术。个人训练默认只供自己使用，提交审核后才可能升级为团队标准或企业标准。"
+          : "在这里区分企业训练、部门训练、业务线训练和销售自我训练，保证训练素材能沉淀，但不会直接污染企业标准知识。"
+      }
     >
-      <SectionTabs
-        current="training"
-        items={[
-          { key: "overview", label: "总览", href: `/app/${tenant.slug}/market-claw` },
-          { key: "knowledge", label: "知识库", href: `/app/${tenant.slug}/market-claw/knowledge` },
-          { key: "training", label: "回复训练场", href: `/app/${tenant.slug}/market-claw/training` },
-          { key: "replies", label: "回复记录", href: `/app/${tenant.slug}/market-claw/replies` }
-        ]}
-        className="mb-6"
-      />
+      <SectionTabs current="training" items={buildOverviewTabs(tenant.slug, user.role)} className="mb-4" />
+      <SectionTabs current={currentScope} items={buildScopeTabs(tenant.slug, user.role)} className="mb-6" />
 
-      <div className="grid gap-6 xl:grid-cols-[380px_1fr]">
+      <Callout title={user.role === "SALES" ? "销售训练原则" : "训练分层原则"} tone={user.role === "SALES" ? "emerald" : "amber"}>
+        {user.role === "SALES"
+          ? "先把客户真实问题练成自己的可用回复，再决定是否提交审核。个人常用话术不会直接进入企业知识库，也不能覆盖不能承诺事项。"
+          : "企业训练、部门训练、业务线训练和销售自我训练必须分层保存。任何个人训练都要经过审核后，才能升级为团队标准或企业标准。"}
+      </Callout>
+
+      <div className="mt-6 grid gap-6 xl:grid-cols-[380px_1fr]">
         <Card>
-          <h2 className="mb-4 text-base font-semibold text-slate-950">测试条件</h2>
+          <h2 className="mb-4 text-base font-semibold text-slate-950">{user.role === "SALES" ? "开始我的训练" : "开始新一轮训练"}</h2>
           <form action={generateAction} className="space-y-4">
-            <Textarea label="客户问题" name="customerQuestion" rows={4} />
+            {user.role === "SALES" ? <input name="trainingScope" type="hidden" value="SALES_SELF_TRAINING" /> : null}
+            {user.role !== "SALES" ? (
+              <Select label="训练类型" name="trainingScope" options={marketClawTrainingScopeOptions} defaultValue={currentScope} />
+            ) : null}
+            <Textarea label="客户真实问题" name="customerQuestion" rows={4} />
             <Select
               label="业务线"
               name="businessLineId"
-              options={businessLines.map((item) => ({ value: item.id, label: item.name }))}
-              defaultValue={businessLines[0]?.id}
+              options={[
+                { value: "", label: "不绑定业务线，按通用训练处理" },
+                ...businessLines.map((item) => ({ value: item.id, label: item.name }))
+              ]}
+              defaultValue={businessLines[0]?.id ?? ""}
             />
-            <Select label="客户类型" name="customerType" options={customerTypeOptions} defaultValue="PLATFORM_GEO_AI_CLIENT" />
+            <Select label="客户类型" name="customerType" options={customerTypeOptions} defaultValue="FACTORY_CLIENT" />
             <Select label="客户阶段" name="customerStage" options={stageOptions} defaultValue="NEW" />
             <Textarea label="客户标签" name="customerTags" rows={2} />
-            <Input label="回复风格备注" name="replyStyle" defaultValue="像销售，不像客服" />
+            <Input label="回复风格备注" name="replyStyle" defaultValue={user.role === "SALES" ? "像销售本人，不像客服" : "像销售，不像客服"} />
             <Input label="回复长度备注" name="replyLength" defaultValue="微信可直接发" />
-            <SubmitButton>生成训练结果</SubmitButton>
+            <Textarea label="销售备注" name="salesNote" rows={3} />
+            <SubmitButton>{user.role === "SALES" ? "生成我的训练回复" : "生成训练结果"}</SubmitButton>
           </form>
         </Card>
 
@@ -96,13 +155,29 @@ export default async function MarketClawTrainingPage({ params }: { params: { ten
               <Card key={item.id}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm text-emerald-700">{item.businessLine.name}</p>
-                    <h2 className="text-lg font-semibold text-slate-950">{item.customerQuestion}</h2>
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      <span className="rounded-md bg-slate-100 px-2.5 py-1 text-slate-700">
+                        {scopeLabels.get(item.trainingScope) ?? item.trainingScope}
+                      </span>
+                      <span className="rounded-md bg-emerald-50 px-2.5 py-1 text-emerald-700">
+                        {reviewStatusLabels.get(item.reviewStatus) ?? item.reviewStatus}
+                      </span>
+                      <span className="rounded-md bg-slate-100 px-2.5 py-1 text-slate-700">{item.departmentName ?? "未标记部门"}</span>
+                      {item.businessLine ? (
+                        <span className="rounded-md bg-slate-100 px-2.5 py-1 text-slate-700">{item.businessLine.name}</span>
+                      ) : null}
+                    </div>
+                    <h2 className="mt-3 text-lg font-semibold text-slate-950">{item.customerQuestion}</h2>
                     <p className="mt-1 text-sm text-slate-500">
-                      生成人：{item.createdBy.name} / 当前状态：{item.reviewStatus}
+                      提交人：{item.createdBy.name} / 更新时间：
+                      {new Intl.DateTimeFormat("zh-CN", { dateStyle: "short", timeStyle: "short" }).format(new Date(item.updatedAt))}
                     </p>
                   </div>
-                  {item.savedAsKnowledgeItem ? <span className="rounded-md bg-emerald-50 px-3 py-1 text-xs text-emerald-700">已沉淀为标准回复</span> : null}
+                  {item.promotedKnowledgeItem ? (
+                    <span className="rounded-md bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700">
+                      已沉淀：{item.promotedKnowledgeItem.scopeLevel}
+                    </span>
+                  ) : null}
                 </div>
 
                 <div className="mt-4 grid gap-4 lg:grid-cols-3">
@@ -112,35 +187,68 @@ export default async function MarketClawTrainingPage({ params }: { params: { ten
                 </div>
 
                 <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                  <ReplyView title="风险提醒" value={item.forbiddenNotes} rows={4} />
-                  <ReplyView title="人工优化版本" value={item.manualOptimizedReply} rows={4} />
+                  <ReplyView title="人工优化版本" value={item.manualOptimizedReply} rows={5} />
+                  <ReplyView title="风险提醒与不能承诺事项" value={item.forbiddenNotes} rows={5} />
                 </div>
 
-                <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                  <form action={reviewMarketClawTrainingCase.bind(null, tenant.slug, item.id)} className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-4">
-                    <h3 className="text-sm font-semibold text-slate-950">评估与训练</h3>
-                    <Select label="训练结论" name="rating" options={ratingOptions} defaultValue={item.rating} />
-                    <Select label="状态" name="reviewStatus" options={reviewStatusOptions} defaultValue="REVIEWED" />
-                    <Textarea label="人工优化版本" name="manualOptimizedReply" defaultValue={item.manualOptimizedReply ?? ""} rows={4} />
-                    <Textarea label="禁止表达或风险提醒" name="forbiddenNotes" defaultValue={item.forbiddenNotes ?? ""} rows={3} />
-                    <SubmitButton>保存训练结论</SubmitButton>
-                  </form>
-
-                  <form action={saveMarketClawTrainingAsKnowledge.bind(null, tenant.slug, item.id)} className="space-y-3 rounded-md border border-slate-200 bg-white p-4">
-                    <h3 className="text-sm font-semibold text-slate-950">沉淀为标准回复</h3>
-                    <Input label="知识标题" name="knowledgeTitle" defaultValue={`标准回复：${item.customerQuestion.slice(0, 24)}`} />
-                    <Textarea label="人工优化版本" name="manualOptimizedReply" defaultValue={item.manualOptimizedReply ?? item.generatedProfessionalReply ?? ""} rows={4} />
-                    <Textarea label="禁止表达列表" name="forbiddenPhraseList" rows={3} />
-                    <Textarea label="风险提醒" name="forbiddenNotes" defaultValue={item.forbiddenNotes ?? ""} rows={3} />
-                    <Select label="训练评分" name="rating" options={ratingOptions} defaultValue={item.rating} />
-                    <SubmitButton>沉淀为标准回复</SubmitButton>
-                  </form>
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4 text-sm">
+                  <Info label="训练类型" value={scopeLabels.get(item.trainingScope) ?? item.trainingScope} />
+                  <Info label="当前状态" value={reviewStatusLabels.get(item.reviewStatus) ?? item.reviewStatus} />
+                  <Info label="审核时间" value={item.reviewedAt ? new Intl.DateTimeFormat("zh-CN", { dateStyle: "short", timeStyle: "short" }).format(new Date(item.reviewedAt)) : "-"} />
+                  <Info label="驳回或审核意见" value={item.reviewComment ?? "-"} />
                 </div>
+
+                {user.role === "SALES" ? (
+                  <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                    <form
+                      action={saveMarketClawTrainingAsPersonalKnowledge.bind(null, tenant.slug, item.id)}
+                      className="space-y-3 rounded-md border border-slate-200 bg-white p-4"
+                    >
+                      <h3 className="text-sm font-semibold text-slate-950">保存为个人常用话术</h3>
+                      <Input label="个人话术标题" name="knowledgeTitle" defaultValue={`个人话术：${item.customerQuestion.slice(0, 24)}`} />
+                      <Textarea
+                        label="最终回复版本"
+                        name="manualOptimizedReply"
+                        defaultValue={item.manualOptimizedReply ?? item.generatedProfessionalReply ?? item.generatedShortReply ?? ""}
+                        rows={4}
+                      />
+                      <Textarea label="风险提醒" name="forbiddenNotes" defaultValue={item.forbiddenNotes ?? ""} rows={3} />
+                      <SubmitButton>保存为个人常用话术</SubmitButton>
+                    </form>
+
+                    <form
+                      action={submitMarketClawTrainingForReview.bind(null, tenant.slug, item.id)}
+                      className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-4"
+                    >
+                      <h3 className="text-sm font-semibold text-slate-950">提交给上级审核</h3>
+                      <Textarea
+                        label="提交审核版本"
+                        name="manualOptimizedReply"
+                        defaultValue={item.manualOptimizedReply ?? item.generatedProfessionalReply ?? item.generatedShortReply ?? ""}
+                        rows={4}
+                      />
+                      <Textarea label="销售备注" name="salesNote" defaultValue={item.salesNote ?? ""} rows={3} />
+                      <Textarea label="风险提醒" name="forbiddenNotes" defaultValue={item.forbiddenNotes ?? ""} rows={3} />
+                      <SubmitButton>提交训练结果审核</SubmitButton>
+                    </form>
+                  </div>
+                ) : canReviewMarketClawTraining(user.role) ? (
+                  <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                    <p className="font-medium text-slate-900">管理提示</p>
+                    <p className="mt-2 leading-6">
+                      这条训练样本可以继续进入“训练审核”页面处理，决定采纳为团队标准、采纳为企业标准，或驳回并填写原因。
+                    </p>
+                  </div>
+                ) : null}
               </Card>
             ))
           ) : (
             <Card>
-              <p className="text-sm text-slate-500">当前还没有训练记录。先用一个真实客户问题跑一轮，看看 Market Claw 给出的边界是否够稳。</p>
+              <p className="text-sm text-slate-500">
+                {user.role === "SALES"
+                  ? "你还没有“我的训练”记录。先拿一个真实客户问题练一轮回复，再决定是保存为个人话术还是提交审核。"
+                  : "当前训练类型下还没有训练记录。先跑一轮问题，再根据回复质量决定是否进入审核。"}
+              </p>
             </Card>
           )}
         </div>
@@ -154,6 +262,15 @@ function ReplyView({ title, value, rows = 6 }: { title: string; value?: string |
     <div className="rounded-md border border-slate-200 bg-white p-4">
       <h3 className="text-sm font-semibold text-slate-950">{title}</h3>
       <textarea className="mt-3 w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-800" rows={rows} readOnly value={value ?? "-"} />
+    </div>
+  );
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-slate-500">{label}</p>
+      <p className="mt-1 font-medium text-slate-900">{value}</p>
     </div>
   );
 }

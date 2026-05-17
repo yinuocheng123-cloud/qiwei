@@ -262,6 +262,29 @@ enum MarketClawKnowledgeStatus {
   ARCHIVED
 }
 
+enum MarketClawKnowledgeScopeLevel {
+  ENTERPRISE
+  DEPARTMENT
+  BUSINESS_LINE
+  PERSONAL
+  PLATFORM_TEMPLATE
+}
+
+enum MarketClawKnowledgeVisibility {
+  PRIVATE
+  DEPARTMENT
+  TENANT
+}
+
+enum MarketClawKnowledgeReviewStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  PAUSED
+  ARCHIVED
+}
+
 enum MarketClawTrainingRating {
   GOOD
   NEEDS_EDIT
@@ -272,9 +295,19 @@ enum MarketClawTrainingRating {
 enum MarketClawTrainingReviewStatus {
   DRAFT
   GENERATED
-  REVIEWED
-  SAVED_AS_STANDARD
+  PERSONAL_SAVED
+  PENDING_REVIEW
+  TEAM_APPROVED
+  ENTERPRISE_APPROVED
+  REJECTED
   DISMISSED
+}
+
+enum MarketClawTrainingScope {
+  ENTERPRISE_TRAINING
+  DEPARTMENT_TRAINING
+  BUSINESS_LINE_TRAINING
+  SALES_SELF_TRAINING
 }
 
 enum MarketClawReplyUseStatus {
@@ -284,11 +317,25 @@ enum MarketClawReplyUseStatus {
   DISMISSED
 }
 
+enum MarketClawReplySourceScope {
+  CUSTOMER_REPLY
+  TRAINING
+  PERSONAL_LIBRARY
+}
+
 enum MarketClawFeedbackStatus {
   USEFUL
   NOT_USEFUL
   NEEDS_EDIT
   UNRATED
+}
+
+enum MarketClawReviewResult {
+  NONE
+  ADOPT_AS_PERSONAL
+  ADOPT_AS_TEAM
+  ADOPT_AS_ENTERPRISE
+  REJECTED
 }
 
 model Tenant {
@@ -676,15 +723,23 @@ model MarketClawKnowledgeItem {
   id                      String                   @id @default(cuid())
   tenantId                String
   tenant                  Tenant                   @relation(fields: [tenantId], references: [id])
-  businessLineId          String
-  businessLine            BusinessLine             @relation(fields: [businessLineId], references: [id])
+  businessLineId          String?
+  businessLine            BusinessLine?            @relation(fields: [businessLineId], references: [id])
   createdById             String
   createdBy               User                     @relation("MarketClawKnowledgeCreator", fields: [createdById], references: [id])
   updatedById             String
   updatedBy               User                     @relation("MarketClawKnowledgeUpdater", fields: [updatedById], references: [id])
+  ownerUserId             String?
+  departmentName          String?
   title                   String
   content                 String
   knowledgeType           MarketClawKnowledgeType
+  scopeLevel              MarketClawKnowledgeScopeLevel  @default(BUSINESS_LINE)
+  visibility              MarketClawKnowledgeVisibility  @default(TENANT)
+  reviewStatus            MarketClawKnowledgeReviewStatus @default(APPROVED)
+  approvedById            String?
+  approvedAt              DateTime?
+  sourceTrainingCaseId    String?
   status                  MarketClawKnowledgeStatus @default(ACTIVE)
   keywords                Json?
   applicableCustomerTypes Json?
@@ -695,20 +750,26 @@ model MarketClawKnowledgeItem {
   sortOrder               Int                      @default(100)
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
-  savedFromTrainingCases  MarketClawTrainingCase[]
+  promotedFromTrainingCases MarketClawTrainingCase[]
 
   @@index([tenantId, businessLineId, knowledgeType, status])
   @@index([tenantId, status, updatedAt])
+  @@index([tenantId, scopeLevel, reviewStatus, updatedAt])
+  @@index([tenantId, departmentName, reviewStatus, updatedAt])
+  @@index([tenantId, ownerUserId, reviewStatus, updatedAt])
 }
 
 model MarketClawTrainingCase {
   id                    String                       @id @default(cuid())
   tenantId              String
   tenant                Tenant                       @relation(fields: [tenantId], references: [id])
-  businessLineId        String
-  businessLine          BusinessLine                 @relation(fields: [businessLineId], references: [id])
+  businessLineId        String?
+  businessLine          BusinessLine?                @relation(fields: [businessLineId], references: [id])
   createdById           String
   createdBy             User                         @relation("MarketClawTrainingCreator", fields: [createdById], references: [id])
+  ownerUserId           String?
+  departmentName        String?
+  trainingScope         MarketClawTrainingScope     @default(BUSINESS_LINE_TRAINING)
   customerQuestion      String
   customerType          CustomerType?
   customerStage         LeadStage?
@@ -719,16 +780,25 @@ model MarketClawTrainingCase {
   generatedProfessionalReply String?
   generatedClosingReply String?
   manualOptimizedReply  String?
+  salesNote             String?
   rating                MarketClawTrainingRating    @default(UNRATED)
   reviewStatus          MarketClawTrainingReviewStatus @default(DRAFT)
+  submittedForReviewAt  DateTime?
+  reviewedById          String?
+  reviewedAt            DateTime?
+  reviewComment         String?
   forbiddenNotes        String?
-  savedAsKnowledgeItemId String?
-  savedAsKnowledgeItem  MarketClawKnowledgeItem?    @relation(fields: [savedAsKnowledgeItemId], references: [id])
+  promotedKnowledgeItemId String?
+  promotedKnowledgeItem MarketClawKnowledgeItem?    @relation(fields: [promotedKnowledgeItemId], references: [id])
   createdAt             DateTime                    @default(now())
   updatedAt             DateTime                    @updatedAt
+  replyDrafts           MarketClawReplyDraft[]
 
   @@index([tenantId, businessLineId, createdAt])
   @@index([tenantId, createdById, createdAt])
+  @@index([tenantId, ownerUserId, reviewStatus, updatedAt])
+  @@index([tenantId, departmentName, reviewStatus, updatedAt])
+  @@index([tenantId, trainingScope, reviewStatus, updatedAt])
 }
 
 model MarketClawReplyDraft {
@@ -741,8 +811,15 @@ model MarketClawReplyDraft {
   businessLine       BusinessLine?             @relation(fields: [businessLineId], references: [id])
   createdById        String
   createdBy          User                      @relation("MarketClawReplyDraftCreator", fields: [createdById], references: [id])
+  departmentName     String?
+  trainingCaseId     String?
+  trainingCase       MarketClawTrainingCase?   @relation(fields: [trainingCaseId], references: [id], onDelete: SetNull)
+  sourceScope        MarketClawReplySourceScope @default(CUSTOMER_REPLY)
   customerQuestion   String
   matchedKnowledgeIds Json?
+  usedPersonalKnowledgeIds Json?
+  usedDepartmentKnowledgeIds Json?
+  usedEnterpriseKnowledgeIds Json?
   shortReply         String?
   professionalReply  String?
   closingReply       String?
@@ -752,6 +829,7 @@ model MarketClawReplyDraft {
   suggestedTask      Json?
   selectedReplyType  String?
   finalReply         String?
+  submittedForReviewAt DateTime?
   useStatus          MarketClawReplyUseStatus   @default(GENERATED)
   feedbackStatus     MarketClawFeedbackStatus   @default(UNRATED)
   createdAt          DateTime                   @default(now())
@@ -761,6 +839,8 @@ model MarketClawReplyDraft {
 
   @@index([tenantId, leadId, createdById, createdAt])
   @@index([tenantId, createdAt])
+  @@index([tenantId, departmentName, sourceScope, createdAt])
+  @@index([tenantId, trainingCaseId, createdAt])
 }
 
 model MarketClawReplyFeedback {
@@ -773,15 +853,22 @@ model MarketClawReplyFeedback {
   lead                   Lead                    @relation(fields: [leadId], references: [id])
   createdById            String
   createdBy              User                    @relation(fields: [createdById], references: [id])
+  departmentName         String?
   feedbackStatus         MarketClawFeedbackStatus
   feedbackNote           String?
   salesEditedReply       String?
   recommendAsTrainingCase Boolean                @default(false)
+  submittedToReview      Boolean                 @default(false)
+  reviewedById           String?
+  reviewedAt             DateTime?
+  reviewResult           MarketClawReviewResult  @default(NONE)
+  reviewComment          String?
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
 
   @@index([tenantId, replyDraftId, createdAt])
   @@index([tenantId, createdById, createdAt])
+  @@index([tenantId, reviewResult, createdAt])
 }
 
 model AuditLog {

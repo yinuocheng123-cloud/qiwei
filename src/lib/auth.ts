@@ -215,6 +215,10 @@ export function canAccessMarketClawKnowledge(role: UserRole) {
 }
 
 export function canAccessMarketClawTraining(role: UserRole) {
+  return role === "TENANT_ADMIN" || role === "OPERATOR" || role === "SALES";
+}
+
+export function canReviewMarketClawTraining(role: UserRole) {
   return role === "TENANT_ADMIN" || role === "OPERATOR";
 }
 

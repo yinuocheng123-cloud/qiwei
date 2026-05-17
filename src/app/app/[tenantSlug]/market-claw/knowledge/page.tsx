@@ -9,7 +9,13 @@
  */
 import { createMarketClawKnowledgeItem, updateMarketClawKnowledgeItem } from "@/lib/actions";
 import { canAccessMarketClawKnowledge, requireTenantAccess } from "@/lib/auth";
-import { marketClawKnowledgeStatusOptions, marketClawKnowledgeTypeOptions } from "@/lib/market-claw";
+import {
+  marketClawKnowledgeReviewStatusOptions,
+  marketClawKnowledgeScopeOptions,
+  marketClawKnowledgeStatusOptions,
+  marketClawKnowledgeTypeOptions,
+  marketClawKnowledgeVisibilityOptions
+} from "@/lib/market-claw";
 import { customerTypeOptions, stageOptions } from "@/lib/options";
 import { prisma } from "@/lib/prisma";
 import { PageShell } from "@/components/Shell";
@@ -83,9 +89,14 @@ function KnowledgeForm({
   businessLines: { id: string; name: string }[];
   materials: { id: string; title: string }[];
   item?: {
-    businessLineId: string;
+    businessLineId: string | null;
+    ownerUserId?: string | null;
+    departmentName?: string | null;
     knowledgeType: string;
     status: string;
+    scopeLevel?: string;
+    visibility?: string;
+    reviewStatus?: string;
     title: string;
     content: string;
     keywords: unknown;
@@ -109,11 +120,15 @@ function KnowledgeForm({
         <Select
           label="业务线"
           name="businessLineId"
-          options={businessLines.map((line) => ({ value: line.id, label: line.name }))}
-          defaultValue={item?.businessLineId ?? businessLines[0]?.id}
+          options={[{ value: "", label: "不绑定业务线" }, ...businessLines.map((line) => ({ value: line.id, label: line.name }))]}
+          defaultValue={item?.businessLineId ?? ""}
         />
         <Select label="知识类型" name="knowledgeType" options={marketClawKnowledgeTypeOptions} defaultValue={item?.knowledgeType ?? "FAQ"} />
         <Select label="状态" name="status" options={marketClawKnowledgeStatusOptions} defaultValue={item?.status ?? "ACTIVE"} />
+        <Select label="知识层级" name="scopeLevel" options={marketClawKnowledgeScopeOptions} defaultValue={item?.scopeLevel ?? "BUSINESS_LINE"} />
+        <Select label="可见范围" name="visibility" options={marketClawKnowledgeVisibilityOptions} defaultValue={item?.visibility ?? "TENANT"} />
+        <Select label="审核状态" name="reviewStatus" options={marketClawKnowledgeReviewStatusOptions} defaultValue={item?.reviewStatus ?? "APPROVED"} />
+        <Input label="部门名称" name="departmentName" defaultValue={item?.departmentName ?? ""} />
         <Input label="排序值" name="sortOrder" type="number" defaultValue={String(item?.sortOrder ?? 100)} />
       </div>
       <Input label="标题" name="title" defaultValue={item?.title} required />
@@ -144,8 +159,12 @@ export default async function MarketClawKnowledgePage({
   const businessLineId = typeof searchParams?.businessLineId === "string" ? searchParams.businessLineId : "";
   const knowledgeType = typeof searchParams?.knowledgeType === "string" ? searchParams.knowledgeType : "";
   const status = typeof searchParams?.status === "string" ? searchParams.status : "";
+  const scopeLevel = typeof searchParams?.scopeLevel === "string" ? searchParams.scopeLevel : "";
+  const reviewStatus = typeof searchParams?.reviewStatus === "string" ? searchParams.reviewStatus : "";
+  const departmentName = typeof searchParams?.departmentName === "string" ? searchParams.departmentName : "";
+  const creatorId = typeof searchParams?.creatorId === "string" ? searchParams.creatorId : "";
 
-  const [businessLines, materials, knowledgeItems] = await Promise.all([
+  const [businessLines, materials, users, knowledgeItems] = await Promise.all([
     prisma.businessLine.findMany({
       where: { tenantId: tenant.id, status: "ACTIVE" },
       orderBy: [{ priority: "asc" }, { updatedAt: "desc" }]
@@ -154,12 +173,20 @@ export default async function MarketClawKnowledgePage({
       where: { tenantId: tenant.id },
       orderBy: { createdAt: "desc" }
     }),
+    prisma.user.findMany({
+      where: { tenantId: tenant.id },
+      orderBy: [{ role: "asc" }, { createdAt: "asc" }]
+    }),
     prisma.marketClawKnowledgeItem.findMany({
       where: {
         tenantId: tenant.id,
         ...(businessLineId ? { businessLineId } : {}),
         ...(knowledgeType ? { knowledgeType: knowledgeType as never } : {}),
-        ...(status ? { status: status as never } : {})
+        ...(status ? { status: status as never } : {}),
+        ...(scopeLevel ? { scopeLevel: scopeLevel as never } : {}),
+        ...(reviewStatus ? { reviewStatus: reviewStatus as never } : {}),
+        ...(departmentName ? { departmentName: { contains: departmentName } } : {}),
+        ...(creatorId ? { createdById: creatorId } : {})
       },
       include: { businessLine: true, createdBy: true, updatedBy: true },
       orderBy: [{ sortOrder: "asc" }, { updatedAt: "desc" }]
@@ -184,6 +211,7 @@ export default async function MarketClawKnowledgePage({
           { key: "overview", label: "总览", href: `/app/${tenant.slug}/market-claw` },
           { key: "knowledge", label: "知识库", href: `/app/${tenant.slug}/market-claw/knowledge` },
           { key: "training", label: "回复训练场", href: `/app/${tenant.slug}/market-claw/training` },
+          { key: "review", label: "训练审核", href: `/app/${tenant.slug}/market-claw/training/review` },
           { key: "replies", label: "回复记录", href: `/app/${tenant.slug}/market-claw/replies` }
         ]}
         className="mb-6"
@@ -197,7 +225,7 @@ export default async function MarketClawKnowledgePage({
       </Card>
 
       <Card>
-        <form className="grid gap-4 md:grid-cols-4">
+        <form className="grid gap-4 md:grid-cols-4 xl:grid-cols-8">
           <Select
             label="业务线筛选"
             name="businessLineId"
@@ -206,6 +234,15 @@ export default async function MarketClawKnowledgePage({
           />
           <Select label="知识类型" name="knowledgeType" options={[{ value: "", label: "全部类型" }, ...marketClawKnowledgeTypeOptions]} defaultValue={knowledgeType} />
           <Select label="状态" name="status" options={[{ value: "", label: "全部状态" }, ...marketClawKnowledgeStatusOptions]} defaultValue={status} />
+          <Select label="知识层级" name="scopeLevel" options={[{ value: "", label: "全部层级" }, ...marketClawKnowledgeScopeOptions]} defaultValue={scopeLevel} />
+          <Select label="审核状态" name="reviewStatus" options={[{ value: "", label: "全部审核状态" }, ...marketClawKnowledgeReviewStatusOptions]} defaultValue={reviewStatus} />
+          <Input label="部门" name="departmentName" defaultValue={departmentName} />
+          <Select
+            label="创建人"
+            name="creatorId"
+            options={[{ value: "", label: "全部创建人" }, ...users.map((item) => ({ value: item.id, label: `${item.name} / ${item.role}` }))]}
+            defaultValue={creatorId}
+          />
           <div className="flex items-end">
             <button className="rounded-md bg-slate-950 px-4 py-2 text-sm font-medium text-white">筛选</button>
           </div>
@@ -227,8 +264,20 @@ export default async function MarketClawKnowledgePage({
                     <p className="text-sm text-amber-700">{marketClawKnowledgeTypeOptions.find((option) => option.value === item.knowledgeType)?.label ?? item.knowledgeType}</p>
                     <h2 className="text-lg font-semibold text-slate-950">{item.title}</h2>
                     <p className="mt-1 text-sm text-slate-500">
-                      {item.businessLine.name} / {marketClawKnowledgeStatusOptions.find((option) => option.value === item.status)?.label ?? item.status}
+                      {(item.businessLine?.name ?? "通用知识")} / {marketClawKnowledgeStatusOptions.find((option) => option.value === item.status)?.label ?? item.status}
                     </p>
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                      <span className="rounded-md bg-slate-100 px-2.5 py-1 text-slate-700">
+                        {marketClawKnowledgeScopeOptions.find((option) => option.value === item.scopeLevel)?.label ?? item.scopeLevel}
+                      </span>
+                      <span className="rounded-md bg-slate-100 px-2.5 py-1 text-slate-700">
+                        {marketClawKnowledgeReviewStatusOptions.find((option) => option.value === item.reviewStatus)?.label ?? item.reviewStatus}
+                      </span>
+                      <span className="rounded-md bg-slate-100 px-2.5 py-1 text-slate-700">
+                        {marketClawKnowledgeVisibilityOptions.find((option) => option.value === item.visibility)?.label ?? item.visibility}
+                      </span>
+                      {item.departmentName ? <span className="rounded-md bg-slate-100 px-2.5 py-1 text-slate-700">{item.departmentName}</span> : null}
+                    </div>
                   </div>
                   <div className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">
                     <p>创建：{item.createdBy.name}</p>

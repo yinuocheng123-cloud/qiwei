@@ -13,8 +13,15 @@ import type {
   CustomerType,
   LeadStage,
   MarketClawKnowledgeItem,
+  MarketClawKnowledgeReviewStatus,
+  MarketClawKnowledgeScopeLevel,
   MarketClawKnowledgeStatus,
   MarketClawKnowledgeType,
+  MarketClawKnowledgeVisibility,
+  MarketClawReplySourceScope,
+  MarketClawReviewResult,
+  MarketClawTrainingReviewStatus,
+  MarketClawTrainingScope,
   Material,
   TagGroup
 } from "@prisma/client";
@@ -37,9 +44,14 @@ type KnowledgeLike = Pick<
   MarketClawKnowledgeItem,
   | "id"
   | "businessLineId"
+  | "createdById"
+  | "departmentName"
   | "title"
   | "content"
   | "knowledgeType"
+  | "scopeLevel"
+  | "visibility"
+  | "reviewStatus"
   | "status"
   | "keywords"
   | "recommendedMaterialIds"
@@ -104,6 +116,29 @@ export const marketClawKnowledgeStatusOptions: { value: MarketClawKnowledgeStatu
   { value: "ARCHIVED", label: "已归档" }
 ];
 
+export const marketClawKnowledgeScopeOptions: { value: MarketClawKnowledgeScopeLevel; label: string }[] = [
+  { value: "ENTERPRISE", label: "企业标准" },
+  { value: "DEPARTMENT", label: "部门知识" },
+  { value: "BUSINESS_LINE", label: "业务线知识" },
+  { value: "PERSONAL", label: "个人话术" },
+  { value: "PLATFORM_TEMPLATE", label: "平台模板预留" }
+];
+
+export const marketClawKnowledgeVisibilityOptions: { value: MarketClawKnowledgeVisibility; label: string }[] = [
+  { value: "PRIVATE", label: "仅自己可见" },
+  { value: "DEPARTMENT", label: "部门可见" },
+  { value: "TENANT", label: "租户内可见" }
+];
+
+export const marketClawKnowledgeReviewStatusOptions: { value: MarketClawKnowledgeReviewStatus; label: string }[] = [
+  { value: "DRAFT", label: "草稿" },
+  { value: "PENDING_REVIEW", label: "待审核" },
+  { value: "APPROVED", label: "已通过" },
+  { value: "REJECTED", label: "已驳回" },
+  { value: "PAUSED", label: "已停用" },
+  { value: "ARCHIVED", label: "已归档" }
+];
+
 export const marketClawReplyTypeOptions = [
   { value: "ALL", label: "全部生成" },
   { value: "SHORT", label: "简短微信版" },
@@ -111,11 +146,43 @@ export const marketClawReplyTypeOptions = [
   { value: "CLOSING", label: "推进成交版" }
 ] as const;
 
+export const marketClawTrainingScopeOptions: { value: MarketClawTrainingScope; label: string }[] = [
+  { value: "ENTERPRISE_TRAINING", label: "企业训练" },
+  { value: "DEPARTMENT_TRAINING", label: "部门训练" },
+  { value: "BUSINESS_LINE_TRAINING", label: "业务线训练" },
+  { value: "SALES_SELF_TRAINING", label: "我的训练" }
+];
+
+export const marketClawTrainingReviewStatusOptions: { value: MarketClawTrainingReviewStatus; label: string }[] = [
+  { value: "DRAFT", label: "个人草稿" },
+  { value: "GENERATED", label: "已生成" },
+  { value: "PERSONAL_SAVED", label: "个人常用" },
+  { value: "PENDING_REVIEW", label: "待审核" },
+  { value: "TEAM_APPROVED", label: "团队可用" },
+  { value: "ENTERPRISE_APPROVED", label: "企业标准" },
+  { value: "REJECTED", label: "已驳回" },
+  { value: "DISMISSED", label: "已停用" }
+];
+
+export const marketClawReplySourceScopeOptions: { value: MarketClawReplySourceScope; label: string }[] = [
+  { value: "CUSTOMER_REPLY", label: "客户详情页" },
+  { value: "TRAINING", label: "训练场" },
+  { value: "PERSONAL_LIBRARY", label: "个人话术库" }
+];
+
 export const marketClawFeedbackOptions = [
   { value: "USEFUL", label: "好用" },
   { value: "NEEDS_EDIT", label: "需要修改" },
   { value: "NOT_USEFUL", label: "不好用" }
 ] as const;
+
+export const marketClawReviewResultOptions: { value: MarketClawReviewResult; label: string }[] = [
+  { value: "NONE", label: "未审核" },
+  { value: "ADOPT_AS_PERSONAL", label: "采纳为个人常用" },
+  { value: "ADOPT_AS_TEAM", label: "采纳为团队标准" },
+  { value: "ADOPT_AS_ENTERPRISE", label: "采纳为企业标准" },
+  { value: "REJECTED", label: "已驳回" }
+];
 
 export const marketClawTagGroupLabels: Record<TagGroup, string> = {
   SOURCE: "来源标签",
@@ -236,26 +303,97 @@ function detectKnowledgeTypeBoost(type: KnowledgeLike["knowledgeType"], signals:
   return 0;
 }
 
+function knowledgeScopeWeight(
+  item: KnowledgeLike,
+  input: { businessLineId?: string | null; departmentName?: string | null; currentUserId?: string | null }
+) {
+  const businessLineMatch = Boolean(input.businessLineId && item.businessLineId === input.businessLineId);
+  const departmentMatch = Boolean(input.departmentName && item.departmentName && item.departmentName === input.departmentName);
+
+  if (item.knowledgeType === "FORBIDDEN_COMMITMENT") {
+    if (item.scopeLevel === "ENTERPRISE") return 30;
+    if (item.scopeLevel === "BUSINESS_LINE" && businessLineMatch) return 28;
+    if (item.scopeLevel === "DEPARTMENT" && departmentMatch) return 24;
+  }
+
+  if (item.scopeLevel === "BUSINESS_LINE" && businessLineMatch) return 20;
+  if (item.scopeLevel === "DEPARTMENT" && departmentMatch) return 16;
+  if (item.scopeLevel === "ENTERPRISE") return 12;
+  if (item.scopeLevel === "PERSONAL" && item.createdById === input.currentUserId) return 8;
+  return 1;
+}
+
+function canUseKnowledgeItem(
+  item: KnowledgeLike,
+  input: { departmentName?: string | null; currentUserId?: string | null }
+) {
+  if (item.status !== "ACTIVE" || item.reviewStatus !== "APPROVED") return false;
+
+  if (item.visibility === "PRIVATE") {
+    return item.createdById === input.currentUserId;
+  }
+
+  if (item.visibility === "DEPARTMENT") {
+    if (!item.departmentName) return false;
+    return item.departmentName === input.departmentName;
+  }
+
+  return true;
+}
+
 export function pickMarketClawKnowledge(input: {
   question: string;
   businessLineId?: string | null;
+  departmentName?: string | null;
+  currentUserId?: string | null;
   knowledgeItems: KnowledgeLike[];
 }) {
   const normalized = normalizeText(input.question);
   const signals = buildSignals(input.question);
   return input.knowledgeItems
-    .filter((item) => item.status === "ACTIVE")
-    .filter((item) => !input.businessLineId || item.businessLineId === input.businessLineId)
+    .filter((item) => canUseKnowledgeItem(item, input))
+    .filter((item) => {
+      if (item.scopeLevel === "BUSINESS_LINE") {
+        return !item.businessLineId || item.businessLineId === input.businessLineId;
+      }
+      if (item.scopeLevel === "DEPARTMENT") {
+        return !item.businessLineId || item.businessLineId === input.businessLineId;
+      }
+      if (item.scopeLevel === "PERSONAL") {
+        return item.createdById === input.currentUserId;
+      }
+      return true;
+    })
     .map((item) => {
       const matchedKeywordCount = parseKnowledgeKeywords(item).filter((keyword) => normalized.includes(normalizeText(keyword))).length;
       const score =
-        matchedKeywordCount * 5 + knowledgeTypeWeight(item.knowledgeType) + detectKnowledgeTypeBoost(item.knowledgeType, signals) - item.sortOrder / 100;
+        matchedKeywordCount * 5 +
+        knowledgeTypeWeight(item.knowledgeType) +
+        detectKnowledgeTypeBoost(item.knowledgeType, signals) +
+        knowledgeScopeWeight(item, input) -
+        item.sortOrder / 100;
       return { item, score, matchedKeywordCount };
     })
     .filter((entry) => entry.matchedKeywordCount > 0 || entry.score >= 5)
     .sort((left, right) => right.score - left.score)
     .slice(0, 6)
     .map((entry) => entry.item);
+}
+
+export function splitKnowledgeIdsByScope(knowledgeItems: KnowledgeLike[]) {
+  return knowledgeItems.reduce(
+    (acc, item) => {
+      if (item.scopeLevel === "PERSONAL") {
+        acc.personal.push(item.id);
+      } else if (item.scopeLevel === "DEPARTMENT") {
+        acc.department.push(item.id);
+      } else {
+        acc.enterprise.push(item.id);
+      }
+      return acc;
+    },
+    { personal: [] as string[], department: [] as string[], enterprise: [] as string[] }
+  );
 }
 
 function appendUniqueTag(tags: MarketClawSuggestedTag[], next: MarketClawSuggestedTag) {
@@ -456,12 +594,16 @@ export function generateMarketClawReply(input: {
   lead: LeadLike;
   question: string;
   businessLine?: BusinessLineLike | null;
+  departmentName?: string | null;
+  currentUserId?: string | null;
   knowledgeItems: KnowledgeLike[];
 }) {
   const signals = buildSignals(input.question);
   const matchedKnowledge = pickMarketClawKnowledge({
     question: input.question,
     businessLineId: input.businessLine?.id,
+    departmentName: input.departmentName,
+    currentUserId: input.currentUserId,
     knowledgeItems: input.knowledgeItems
   });
   const suggestedTask = buildSuggestedTask(signals, input.businessLine);

@@ -14,10 +14,12 @@ import {
   createMarketClawTask,
   generateMarketClawReplyDraft,
   markMarketClawReplyCopied,
-  saveMarketClawReplyDraftAsFollowUp
+  saveMarketClawReplyDraftAsPersonalKnowledge,
+  saveMarketClawReplyDraftAsFollowUp,
+  submitMarketClawReplyDraftForReview
 } from "@/lib/actions";
 import { MarketClawCopyButton } from "@/components/MarketClawCopyButton";
-import { Card, Select, SubmitButton, Textarea } from "@/components/Ui";
+import { Card, Input, Select, SubmitButton, Textarea } from "@/components/Ui";
 import {
   marketClawFeedbackOptions,
   marketClawTagGroupLabels,
@@ -43,8 +45,15 @@ type DraftRecord = Pick<
   | "suggestedMaterials"
   | "suggestedTask"
   | "feedbackStatus"
+  | "selectedReplyType"
+  | "submittedForReviewAt"
   | "createdAt"
->;
+> & {
+  trainingCase?: {
+    reviewStatus: string;
+    reviewComment: string | null;
+  } | null;
+};
 
 const replyTypeOptions = [
   { value: "SHORT", label: "简短微信版" },
@@ -72,6 +81,8 @@ export function MarketClawAssistant({
   const generateAction = generateMarketClawReplyDraft.bind(null, tenantSlug, leadId);
   const copyAction = markMarketClawReplyCopied.bind(null, tenantSlug, leadId);
   const saveAction = saveMarketClawReplyDraftAsFollowUp.bind(null, tenantSlug, leadId);
+  const savePersonalAction = saveMarketClawReplyDraftAsPersonalKnowledge.bind(null, tenantSlug, leadId);
+  const submitTrainingAction = submitMarketClawReplyDraftForReview.bind(null, tenantSlug, leadId);
   const confirmTagsAction = confirmMarketClawDraftTags.bind(null, tenantSlug, leadId);
   const createTaskAction = createMarketClawTask.bind(null, tenantSlug, leadId);
   const feedbackAction = createMarketClawFeedback.bind(null, tenantSlug, leadId);
@@ -120,7 +131,9 @@ export function MarketClawAssistant({
               confirmTagsAction={confirmTagsAction}
               knowledgeItems={knowledgeItems}
               materials={materials}
+              savePersonalAction={savePersonalAction}
               saveAction={saveAction}
+              submitTrainingAction={submitTrainingAction}
             />
           ))
         ) : (
@@ -140,6 +153,8 @@ function MarketClawDraftCard({
   existingTags,
   copyAction,
   saveAction,
+  savePersonalAction,
+  submitTrainingAction,
   confirmTagsAction,
   createTaskAction,
   feedbackAction
@@ -150,6 +165,8 @@ function MarketClawDraftCard({
   existingTags: ExistingTagRecord[];
   copyAction: (formData: FormData) => Promise<void>;
   saveAction: (formData: FormData) => Promise<void>;
+  savePersonalAction: (formData: FormData) => Promise<void>;
+  submitTrainingAction: (formData: FormData) => Promise<void>;
   confirmTagsAction: (formData: FormData) => Promise<void>;
   createTaskAction: (formData: FormData) => Promise<void>;
   feedbackAction: (formData: FormData) => Promise<void>;
@@ -226,13 +243,31 @@ function MarketClawDraftCard({
         )}
       </div>
 
-      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+      <div className="mt-5 grid gap-4 xl:grid-cols-2">
         <form action={saveAction} className="rounded-md border border-slate-200 bg-white p-4 space-y-3">
           <h4 className="text-sm font-semibold text-slate-950">保存为跟进记录</h4>
           <input name="draftId" type="hidden" value={draft.id} />
           <Select label="选用回复版本" name="selectedReplyType" options={replyTypeOptions} defaultValue="SHORT" />
           <Textarea label="销售修改版本" name="salesEditedReply" rows={3} />
           <SubmitButton>保存为跟进记录</SubmitButton>
+        </form>
+
+        <form action={savePersonalAction} className="rounded-md border border-slate-200 bg-white p-4 space-y-3">
+          <h4 className="text-sm font-semibold text-slate-950">保存为个人常用话术</h4>
+          <input name="draftId" type="hidden" value={draft.id} />
+          <Select label="选用回复版本" name="selectedReplyType" options={replyTypeOptions} defaultValue="PROFESSIONAL" />
+          <Input label="个人话术标题" name="knowledgeTitle" defaultValue={`个人话术：${draft.customerQuestion.slice(0, 24)}`} />
+          <Textarea label="销售修改版本" name="salesEditedReply" rows={3} />
+          <SubmitButton>保存为个人常用话术</SubmitButton>
+        </form>
+
+        <form action={submitTrainingAction} className="rounded-md border border-slate-200 bg-slate-50 p-4 space-y-3">
+          <h4 className="text-sm font-semibold text-slate-950">提交为训练样本审核</h4>
+          <input name="draftId" type="hidden" value={draft.id} />
+          <Select label="选用回复版本" name="selectedReplyType" options={replyTypeOptions} defaultValue="PROFESSIONAL" />
+          <Textarea label="销售修改版本" name="salesEditedReply" rows={3} />
+          <Textarea label="销售备注" name="salesNote" rows={3} />
+          <SubmitButton>提交为训练样本审核</SubmitButton>
         </form>
 
         <form action={feedbackAction} className="rounded-md border border-slate-200 bg-white p-4 space-y-3">
@@ -247,6 +282,15 @@ function MarketClawDraftCard({
           </label>
           <SubmitButton>提交反馈</SubmitButton>
         </form>
+      </div>
+
+      <div className="mt-4 rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-700">
+        <p className="font-medium text-slate-900">训练状态</p>
+        <p className="mt-2">
+          {draft.submittedForReviewAt ? "这条回复已经提交审核。" : "这条回复还没有提交审核。"}
+        </p>
+        {draft.trainingCase ? <p className="mt-1">当前训练状态：{draft.trainingCase.reviewStatus}</p> : null}
+        {draft.trainingCase?.reviewComment ? <p className="mt-1">审核意见：{draft.trainingCase.reviewComment}</p> : null}
       </div>
 
       <div className="mt-4 flex flex-wrap gap-3">

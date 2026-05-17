@@ -93,6 +93,14 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
         leadId: lead.id,
         createdById: user.id
       },
+      include: {
+        trainingCase: {
+          select: {
+            reviewStatus: true,
+            reviewComment: true
+          }
+        }
+      },
       orderBy: { createdAt: "desc" },
       take: 3
     }),
