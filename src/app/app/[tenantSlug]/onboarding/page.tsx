@@ -1,6 +1,6 @@
 /*
- * 文件说明：该页面实现 V2.0.9 企业开通与初始化向导。
- * 功能说明：帮助新企业按七个步骤完成基础配置、业务线、客户、资料投喂、销售使用准备和上线检查。
+ * 文件说明：该页面实现 V2.0.9 企业开通与初始化向导，并在 V2.1.4 增加初始化路径推荐。
+ * 功能说明：帮助新企业先判断企业画像、阶段和推荐启动路线，再按七个步骤完成基础配置、业务线、客户、资料投喂、销售使用准备和上线检查。
  *
  * 结构概览：
  *   第一部分：导入依赖与静态配置
@@ -65,6 +65,94 @@ type StageAssessment = {
   nextActions: string[];
 };
 
+const businessScenarios = {
+  SALES_DRIVEN: {
+    label: "销售型企业",
+    description: "重点是客户、销售、跟进任务。"
+  },
+  CHANNEL_DRIVEN: {
+    label: "渠道型企业",
+    description: "重点是渠道客户、合作政策、合作资料、跟进节奏。"
+  },
+  PROJECT_DRIVEN: {
+    label: "项目型企业",
+    description: "重点是项目阶段、需求判断、方案推进、关键节点。"
+  },
+  SERVICE_DRIVEN: {
+    label: "服务型企业",
+    description: "重点是服务流程、FAQ、交付边界、售后说明。"
+  },
+  INVESTMENT_DRIVEN: {
+    label: "招商型企业",
+    description: "重点是政策、案例、异议处理、价格边界。"
+  },
+  MANUFACTURING_DRIVEN: {
+    label: "制造型企业",
+    description: "重点是产品资料、供应能力、交付流程、质量边界。"
+  },
+  CONSULTING_DELIVERY: {
+    label: "咨询交付型企业",
+    description: "重点是需求诊断、方案说明、案例、交付流程。"
+  },
+  PLATFORM_MEMBERSHIP: {
+    label: "平台会员型企业",
+    description: "重点是会员权益、资源说明、转化话术、服务边界。"
+  },
+  GENERAL: {
+    label: "通用企业",
+    description: "适合尚未明确分类的企业，默认走最小启动路径。"
+  }
+} as const;
+
+const recommendedPaths = {
+  MINIMUM_START: {
+    label: "最小启动路径",
+    description: "先做 1 条业务线、20 个客户、1 份资料、10 个 FAQ、1 名销售试用。"
+  },
+  CUSTOMER_IMPORT_FIRST: {
+    label: "客户导入优先路径",
+    description: "先导入客户、分配负责人、建立跟进任务，再补资料和话术。"
+  },
+  KNOWLEDGE_INGESTION_FIRST: {
+    label: "资料投喂优先路径",
+    description: "先投喂资料、生成候选知识、审核入库，再给销售使用。"
+  },
+  SALES_TRAINING_FIRST: {
+    label: "销售训练优先路径",
+    description: "先开通销售、建立客户跟进、提交训练，再沉淀标准话术。"
+  },
+  CHANNEL_PARTNER_PATH: {
+    label: "渠道招商路径",
+    description: "重点配置招商政策、合作条件、案例、异议处理和价格边界。"
+  },
+  PROJECT_SERVICE_PATH: {
+    label: "项目服务路径",
+    description: "重点配置项目阶段、需求判断、方案说明、交付流程和服务边界。"
+  },
+  PLATFORM_MEMBERSHIP_PATH: {
+    label: "平台会员路径",
+    description: "重点配置会员权益、资源说明、服务边界和转化话术。"
+  },
+  STANDARDIZATION_PATH: {
+    label: "标准化运营路径",
+    description: "重点做知识去重、风险边界、训练复盘和标准化运营。"
+  }
+} as const;
+
+type BusinessScenario = keyof typeof businessScenarios;
+type RecommendedPath = keyof typeof recommendedPaths;
+
+type OnboardingProfile = {
+  businessScenario: BusinessScenario;
+  onboardingStage: StageAssessment["stage"];
+  recommendedPath: RecommendedPath;
+  rationale: string[];
+  missingItems: string[];
+  weeklyActions: string[];
+  preparationChecklist: string[];
+  readinessExplanation: string;
+};
+
 type ChecklistItem = {
   title: string;
   done: boolean;
@@ -89,6 +177,99 @@ function checklistReadiness(items: ChecklistItem[]) {
   if (doneCount <= 6) return "基本可试用";
   if (doneCount <= 8) return "适合小范围试运行";
   return "适合正式内部使用";
+}
+
+function normalizeBusinessScenario(value?: string): BusinessScenario {
+  if (value && value in businessScenarios) {
+    return value as BusinessScenario;
+  }
+  return "GENERAL";
+}
+
+function pathFromScenario(scenario: BusinessScenario): RecommendedPath | null {
+  if (scenario === "CHANNEL_DRIVEN" || scenario === "INVESTMENT_DRIVEN") return "CHANNEL_PARTNER_PATH";
+  if (scenario === "PROJECT_DRIVEN" || scenario === "SERVICE_DRIVEN" || scenario === "CONSULTING_DELIVERY") return "PROJECT_SERVICE_PATH";
+  if (scenario === "PLATFORM_MEMBERSHIP") return "PLATFORM_MEMBERSHIP_PATH";
+  return null;
+}
+
+function recommendPath(snapshot: OnboardingSnapshot, scenario: BusinessScenario): RecommendedPath {
+  const scenarioPath = pathFromScenario(scenario);
+  if (scenarioPath) return scenarioPath;
+
+  if (snapshot.activeBusinessLineCount === 0 || snapshot.leadCount < 20) return "MINIMUM_START";
+  if (snapshot.leadCount >= 50 && snapshot.ingestionBatchCount === 0) return "CUSTOMER_IMPORT_FIRST";
+  if (snapshot.ingestionBatchCount > 0 && snapshot.adoptedKnowledgeCount < 5) return "KNOWLEDGE_INGESTION_FIRST";
+  if (snapshot.activeSalesCount >= 2 && snapshot.salesTrainingSampleCount < 3) return "SALES_TRAINING_FIRST";
+  if (snapshot.salesScriptCount >= 6 && snapshot.teamKnowledgeCount < 4) return "STANDARDIZATION_PATH";
+  if (snapshot.candidateCount >= 8 && snapshot.riskBoundaryCount + snapshot.priceBoundaryCount < 3) return "STANDARDIZATION_PATH";
+  if (snapshot.ingestionBatchCount === 0) return "KNOWLEDGE_INGESTION_FIRST";
+  return "STANDARDIZATION_PATH";
+}
+
+function buildMissingItems(snapshot: OnboardingSnapshot) {
+  const missingItems = [
+    snapshot.activeBusinessLineCount < 1 ? "第一条核心业务线" : null,
+    snapshot.leadCount < 20 ? "第一批有效客户" : null,
+    snapshot.ingestionBatchCount < 1 ? "第一份企业资料" : null,
+    snapshot.faqCount < 10 ? "第一批常见问题" : null,
+    snapshot.activeSalesCount < 1 ? "第一名试用销售" : null,
+    snapshot.riskBoundaryCount + snapshot.priceBoundaryCount < 3 ? "第一批价格边界与风险边界" : null,
+    snapshot.salesTrainingSampleCount < 1 ? "第一条销售训练样本" : null
+  ].filter(Boolean);
+
+  return missingItems.length ? (missingItems as string[]) : ["当前基础内容较完整，建议进入知识治理与训练复盘。"];
+}
+
+function weeklyActionsForPath(path: RecommendedPath) {
+  const actions: Record<RecommendedPath, string[]> = {
+    MINIMUM_START: ["建立 1 条核心业务线。", "导入 20 个有效客户。", "投喂 1 份企业介绍或产品说明。", "生成 10 条基础 FAQ。", "安排 1 名销售完成一次客户回复测试。"],
+    CUSTOMER_IMPORT_FIRST: ["整理第一批客户名单。", "导入 50～100 个有效客户。", "分配负责人。", "建立跟进任务。", "用 Market Claw 测试 3 个真实客户问题。"],
+    KNOWLEDGE_INGESTION_FIRST: ["准备企业介绍、产品说明、百问百答。", "投喂 1～3 份核心资料。", "生成候选知识。", "采纳 5～10 条标准知识。", "补齐价格边界和风险提醒。"],
+    SALES_TRAINING_FIRST: ["开通销售账号。", "分配客户。", "让销售在客户详情页生成回复。", "保存个人话术。", "提交 1 条训练给管理员审核。"],
+    CHANNEL_PARTNER_PATH: ["整理合作政策和合作条件。", "准备第一批合作案例。", "补齐价格边界和常见异议。", "导入渠道或招商线索。", "安排销售测试 3 个合作咨询问题。"],
+    PROJECT_SERVICE_PATH: ["整理项目阶段和需求判断问题。", "准备方案说明和交付流程。", "补齐服务边界。", "导入第一批项目客户。", "用 Market Claw 测试项目推进话术。"],
+    PLATFORM_MEMBERSHIP_PATH: ["梳理会员权益和资源说明。", "准备服务边界和续费说明。", "整理转化话术。", "导入第一批会员或意向客户。", "测试权益说明与异议处理回复。"],
+    STANDARDIZATION_PATH: ["查看训练复盘。", "整理高频问题。", "合并重复知识。", "补齐风险边界。", "将优秀个人话术升级为团队标准。"]
+  };
+  return actions[path];
+}
+
+function preparationChecklistForPath(path: RecommendedPath) {
+  const baseItems = ["第一批客户", "第一批业务线", "第一批企业资料", "第一批常见问题", "第一批销售人员", "第一批风险边界", "第一批案例", "第一批跟进任务"];
+  const pathItems: Partial<Record<RecommendedPath, string[]>> = {
+    CHANNEL_PARTNER_PATH: ["招商政策", "合作条件", "合作案例", "异议处理", "价格边界"],
+    PROJECT_SERVICE_PATH: ["项目阶段", "需求判断问题", "方案说明", "交付流程", "服务边界"],
+    PLATFORM_MEMBERSHIP_PATH: ["会员权益", "资源说明", "服务边界", "转化话术", "续费说明"]
+  };
+  return [...(pathItems[path] ?? []), ...baseItems].slice(0, 10);
+}
+
+function readinessExplanationForPath(path: RecommendedPath) {
+  if (path === "MINIMUM_START") return "建议先不要追求完整配置，先完成 1 条业务线、20 个客户、1 份资料、1 名销售试用。";
+  if (path === "KNOWLEDGE_INGESTION_FIRST") return "当前资料准备是关键，建议先把企业介绍、产品说明、百问百答投喂并完成第一批候选知识审核。";
+  if (path === "CUSTOMER_IMPORT_FIRST") return "当前客户数据是关键，建议先导入有效客户、分配负责人并建立跟进任务。";
+  if (path === "SALES_TRAINING_FIRST") return "当前销售使用是关键，建议让销售在真实客户场景中生成回复、保存话术并提交训练。";
+  return "当前更适合围绕知识、话术、风险边界和训练复盘做标准化运营。";
+}
+
+function buildOnboardingProfile(snapshot: OnboardingSnapshot, scenario: BusinessScenario, stageAssessment: StageAssessment): OnboardingProfile {
+  const recommendedPath = recommendPath(snapshot, scenario);
+  return {
+    businessScenario: scenario,
+    onboardingStage: stageAssessment.stage,
+    recommendedPath,
+    rationale: [
+      `当前业务线 ${snapshot.activeBusinessLineCount} 条，客户 ${snapshot.leadCount} 个。`,
+      `资料投喂 ${snapshot.ingestionBatchCount} 批，已采纳知识 ${snapshot.adoptedKnowledgeCount} 条。`,
+      `销售用户 ${snapshot.activeSalesCount} 名，训练样本 ${snapshot.salesTrainingSampleCount} 条。`,
+      `当前选择的企业使用场景是：${businessScenarios[scenario].label}。`
+    ],
+    missingItems: buildMissingItems(snapshot),
+    weeklyActions: weeklyActionsForPath(recommendedPath),
+    preparationChecklist: preparationChecklistForPath(recommendedPath),
+    readinessExplanation: readinessExplanationForPath(recommendedPath)
+  };
 }
 
 function buildStageAssessment(snapshot: OnboardingSnapshot): StageAssessment {
@@ -283,7 +464,7 @@ function ActionRow({
   );
 }
 
-export default async function TenantOnboardingPage({ params }: { params: { tenantSlug: string } }) {
+export default async function TenantOnboardingPage({ params, searchParams }: { params: { tenantSlug: string }; searchParams?: { businessScenario?: string } }) {
   const { user, tenant } = await requireTenantAccess(params.tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
   if (!canAccessTenantOnboarding(user.role)) {
     return null;
@@ -390,6 +571,8 @@ export default async function TenantOnboardingPage({ params }: { params: { tenan
   };
 
   const stageAssessment = buildStageAssessment(snapshot);
+  const selectedScenario = normalizeBusinessScenario(searchParams?.businessScenario);
+  const onboardingProfile = buildOnboardingProfile(snapshot, selectedScenario, stageAssessment);
   const checklist = buildChecklist(snapshot);
   const readiness = checklistReadiness(checklist);
   const base = `/app/${tenant.slug}`;
@@ -404,16 +587,106 @@ export default async function TenantOnboardingPage({ params }: { params: { tenan
       description="这不是给老用户日常使用的页面，而是给新企业第一次启用系统时的七步引导。目标是先把最小基础跑起来，再逐步进入资料投喂、销售训练和知识治理。"
     >
       <Callout title="本轮意图摘要" tone="amber">
-        初始化向导优先解决“新企业第一天先做什么”的问题，不扩展外部接入，不处理客户侧消息，不做复杂租户开通后台，只基于现有数据给出阶段判断、推荐动作和上线检查清单。
+        初始化向导不是让企业把系统配置满，而是帮企业用最小动作先跑起来。系统会先判断企业画像和当前阶段，再推荐本周优先启动路线，最后仍保留七步完整初始化框架。
       </Callout>
 
       <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <StatCard label="当前建议阶段" value={stageAssessment.stage} />
-        <StatCard label="推荐初始化路径" value={stageAssessment.path} />
+        <StatCard label="推荐初始化路径" value={recommendedPaths[onboardingProfile.recommendedPath].label} />
         <StatCard label="启用业务线" value={snapshot.activeBusinessLineCount} />
         <StatCard label="客户数量" value={snapshot.leadCount} />
         <StatCard label="上线准备度" value={readiness} />
       </div>
+
+      <section className="mt-6 grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
+        <Card>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">企业画像</p>
+              <h2 className="mt-2 text-xl font-semibold text-slate-950">
+                {businessScenarios[onboardingProfile.businessScenario].label} · {onboardingProfile.onboardingStage}
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-slate-600">{businessScenarios[onboardingProfile.businessScenario].description}</p>
+            </div>
+            <form className="flex flex-wrap items-end gap-2" method="get">
+              <label className="text-sm font-medium text-slate-700">
+                临时预览企业场景
+                <select
+                  className="mt-2 block rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
+                  name="businessScenario"
+                  defaultValue={onboardingProfile.businessScenario}
+                >
+                  {Object.entries(businessScenarios).map(([key, item]) => (
+                    <option key={key} value={key}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button className="rounded-md bg-slate-950 px-3 py-2 text-sm font-medium text-white" type="submit">
+                预览路径
+              </button>
+            </form>
+          </div>
+          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <InfoCard label="当前阶段" value={onboardingProfile.onboardingStage} />
+            <InfoCard label="推荐初始化路径" value={recommendedPaths[onboardingProfile.recommendedPath].label} />
+            <InfoCard label="路径说明" value={recommendedPaths[onboardingProfile.recommendedPath].description} />
+            <InfoCard label="当前最缺内容" value={onboardingProfile.missingItems.join("、")} />
+            <InfoCard label="上线准备度解释" value={onboardingProfile.readinessExplanation} />
+            <InfoCard label="判断方式" value="规则版动态判断，不引入复杂 AI，不新增初始化画像表。" />
+          </div>
+          <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <p className="text-sm font-semibold text-slate-950">判断依据</p>
+            <div className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
+              {onboardingProfile.rationale.map((item) => (
+                <p key={item}>- {item}</p>
+              ))}
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">启动路线说明</p>
+          <h2 className="mt-2 text-lg font-semibold text-slate-950">七步是完整框架，推荐路径是优先启动路线</h2>
+          <p className="mt-3 text-sm leading-6 text-slate-600">
+            不同企业不一定第一天完成七步。推荐路径只回答“本周先做什么最值”，七步初始化继续作为后续补齐和上线检查的完整框架。
+          </p>
+          <div className="mt-4 space-y-2 text-sm leading-6 text-slate-600">
+            <p>- 低数据量企业优先跑最小启动。</p>
+            <p>- 客户较多企业优先整理客户和负责人。</p>
+            <p>- 资料较多企业优先资料投喂和候选审核。</p>
+            <p>- 已经开始使用的企业优先训练复盘和标准化。</p>
+          </div>
+        </Card>
+      </section>
+
+      <section className="mt-6 grid gap-4 xl:grid-cols-2">
+        <Card>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">本周优先动作</p>
+          <h2 className="mt-2 text-lg font-semibold text-slate-950">{recommendedPaths[onboardingProfile.recommendedPath].label}</h2>
+          <div className="mt-4 space-y-3">
+            {onboardingProfile.weeklyActions.map((item, index) => (
+              <div key={item} className="rounded-lg border border-slate-200 bg-white p-3 text-sm leading-6 text-slate-700">
+                <span className="mr-2 font-semibold text-emerald-700">{index + 1}.</span>
+                {item}
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">第一批准备清单</p>
+          <h2 className="mt-2 text-lg font-semibold text-slate-950">先准备能跑通闭环的内容</h2>
+          <div className="mt-4 grid gap-2 md:grid-cols-2">
+            {onboardingProfile.preparationChecklist.map((item) => (
+              <p key={item} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                {item}
+              </p>
+            ))}
+          </div>
+        </Card>
+      </section>
 
       <section className="mt-6">
         <div className="grid gap-4 xl:grid-cols-4">
@@ -472,7 +745,8 @@ export default async function TenantOnboardingPage({ params }: { params: { tenan
           <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-5">
             <p className="text-sm font-medium uppercase tracking-[0.16em] text-slate-500">当前建议阶段</p>
             <h2 className="mt-2 text-2xl font-semibold text-slate-950">{stageAssessment.stage}</h2>
-            <p className="mt-2 text-sm text-emerald-700">推荐初始化路径：{stageAssessment.path}</p>
+            <p className="mt-2 text-sm text-emerald-700">推荐初始化路径：{recommendedPaths[onboardingProfile.recommendedPath].label}</p>
+            <p className="mt-2 text-sm text-slate-600">{recommendedPaths[onboardingProfile.recommendedPath].description}</p>
             <div className="mt-4 grid gap-6 xl:grid-cols-2">
               <div>
                 <p className="text-sm font-semibold text-slate-950">判断依据</p>
@@ -640,6 +914,7 @@ export default async function TenantOnboardingPage({ params }: { params: { tenan
           <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
             <p className="text-sm font-medium uppercase tracking-[0.16em] text-slate-500">当前上线准备度</p>
             <h2 className="mt-2 text-2xl font-semibold text-slate-950">{readiness}</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{onboardingProfile.readinessExplanation}</p>
           </div>
           <div className="mt-4 space-y-3">
             {checklist.map((item) => (
