@@ -1544,3 +1544,19 @@ V2.1.4 统一修订 `/app/[tenantSlug]/onboarding` 初始化向导。初始化�
 本轮正式记录：
 
 - `custom/notes/v2.1.4-onboarding-path-recommendation.md`
+
+## V2.1.5 AI Provider 基础配置与安全调用框架
+
+V2.1.5 新增租户级 AI Provider 配置入口 `/app/[tenantSlug]/ai-settings`，先解决“AI 能力如何安全配置、测试、记录和降级”的问题，再为后续资料投喂增强、测试沙盒和 Agent Library 调用留出基础能力。
+
+本轮优先支持 DeepSeek，因为 DeepSeek API 支持 OpenAI-compatible 的 Chat Completions 调用格式，便于用统一服务层承接后续模型扩展。页面默认给出 `https://api.deepseek.com` 作为基础地址，但模型名称不写死，仍由后台配置维护，并应以官方模型列表或官方文档为准。
+
+同时保留 `OPENAI_COMPATIBLE` 与 `MOCK` 配置空间。`OPENAI_COMPATIBLE` 用于后续接入兼容 Chat Completions 的服务；`MOCK` 用于无真实 API Key 时做内部测试和页面验证。
+
+AI 输出在本系统中只作为建议：候选知识仍需人工审核，客户回复仍由销售确认，风险等级仍受 V2.1.2 规则和人工确认约束。没有 AI 配置、未启用或调用失败时，系统会记录 `SKIPPED` 或 `FAILED`，并继续使用规则版能力。
+
+本轮只新增配置页、最小调用服务、测试连接、调用日志和审计动作，不直接改 Market Claw 资料投喂、客户详情页回复生成、销售训练或候选知识审核主链路，也不让 AI 直接写入正式知识库、直接执行系统动作或自动对外发送。
+
+本轮正式记录：
+
+- `custom/notes/v2.1.5-ai-provider-deepseek-config.md`

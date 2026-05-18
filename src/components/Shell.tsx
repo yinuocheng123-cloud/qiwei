@@ -137,6 +137,7 @@ function buildTenantNavGroups(tenant: Tenant, role: UserRole): NavGroup[] {
             { label: "策略库", href: `${base}/strategies` },
             { label: "任务模板", href: `${base}/task-templates` },
             { label: "企业微信提醒配置", href: `${base}/wecom` },
+            { label: "AI 能力配置", href: `${base}/ai-settings` },
             { label: "合规配置", href: `${base}/communication-compliance` }
           ]
         : [
@@ -144,6 +145,7 @@ function buildTenantNavGroups(tenant: Tenant, role: UserRole): NavGroup[] {
             { label: "资料包", href: `${base}/materials` },
             { label: "策略库", href: `${base}/strategies` },
             { label: "任务模板", href: `${base}/task-templates` },
+            { label: "AI 能力配置", href: `${base}/ai-settings` },
             { label: "合规配置", href: `${base}/communication-compliance` }
           ]
   };

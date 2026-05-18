@@ -158,6 +158,27 @@ enum WecomNotificationEventType {
   SYSTEM_NOTICE
 }
 
+enum AiProvider {
+  DEEPSEEK
+  OPENAI_COMPATIBLE
+  MOCK
+}
+
+enum AiCallStatus {
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+
+enum AiCallPurpose {
+  TEST_CONNECTION
+  KNOWLEDGE_INGESTION_PREVIEW
+  MARKET_CLAW_SANDBOX
+  AGENT_LIBRARY_TEST
+  REPLY_DRAFT_PREVIEW
+  TRAINING_PREVIEW
+}
+
 enum FollowTaskType {
   FIRST_FOLLOW
   SEND_MATERIAL
@@ -415,6 +436,8 @@ model Tenant {
   weComConfig WeComConfig?
   userWecomBindings UserWecomBinding[]
   wecomNotificationLogs WecomNotificationLog[]
+  aiProviderConfig AiProviderConfig?
+  aiCallLogs AiCallLog[]
   auditLogs   AuditLog[]
   followTasks FollowTask[]
   taskTemplates TaskTemplate[]
@@ -465,6 +488,7 @@ model User {
   createdMarketClawKnowledgeCandidates  MarketClawKnowledgeCandidate[]   @relation("MarketClawKnowledgeCandidateCreator")
   wecomBinding                           UserWecomBinding?
   wecomNotificationLogs                  WecomNotificationLog[]
+  aiCallLogs                             AiCallLog[]
 
   @@index([tenantId, role])
 }
@@ -773,6 +797,51 @@ model WecomNotificationLog {
   @@index([tenantId, eventType, createdAt])
   @@index([tenantId, status, createdAt])
   @@index([tenantId, recipientUserId, createdAt])
+}
+
+model AiProviderConfig {
+  id              String       @id @default(cuid())
+  tenantId        String       @unique
+  tenant          Tenant       @relation(fields: [tenantId], references: [id])
+  provider        AiProvider   @default(DEEPSEEK)
+  baseUrl         String       @default("https://api.deepseek.com")
+  model           String       @default("deepseek-chat")
+  apiKeyEncrypted String?
+  enabled         Boolean      @default(false)
+  temperature     Float        @default(0.2)
+  maxTokens       Int          @default(512)
+  lastTestAt      DateTime?
+  lastTestStatus  AiCallStatus?
+  lastTestMessage String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([tenantId, enabled])
+  @@index([tenantId, provider])
+}
+
+model AiCallLog {
+  id               String        @id @default(cuid())
+  tenantId         String
+  tenant           Tenant        @relation(fields: [tenantId], references: [id])
+  provider         AiProvider
+  model            String
+  purpose          AiCallPurpose
+  status           AiCallStatus
+  errorMessage     String?
+  promptTokens     Int?
+  completionTokens Int?
+  totalTokens      Int?
+  latencyMs        Int?
+  createdById      String?
+  createdBy        User?         @relation(fields: [createdById], references: [id])
+  createdAt        DateTime      @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, purpose, createdAt])
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, provider, createdAt])
+  @@index([tenantId, createdById, createdAt])
 }
 
 model CommunicationComplianceConfig {

@@ -11,6 +11,7 @@
  *   第四部分：策略、资料和企业微信动作
  */
 import {
+  AiProvider,
   BusinessLineCategory,
   BusinessLineStatus,
   CommunicationComplianceChannel,
@@ -59,6 +60,8 @@ import {
   canAccessMarketClawKnowledge,
   canAccessMarketClawReplies,
   canAccessMarketClawTraining,
+  canManageTenantAiSettings,
+  canTestTenantAiSettings,
   canReviewMarketClawTraining,
   canImportTenantLeads,
   canManageCommunicationCompliance,
@@ -66,6 +69,7 @@ import {
   requirePlatformAdmin,
   requireTenantAccess
 } from "@/lib/auth";
+import { testAiProviderConnection } from "@/lib/ai-provider";
 import { buildBusinessLineSlug, parseBusinessLineRecommendedTagText } from "@/lib/business-lines";
 import {
   CNAS_BUSINESS_LINE_NAME,
@@ -4048,6 +4052,144 @@ export async function triggerWecomInternalNotification(tenantSlug: string, formD
   if (relatedLeadId) revalidatePath(`/app/${tenantSlug}/leads/${relatedLeadId}`);
   if (relatedTaskId) revalidatePath(`/app/${tenantSlug}/todos`);
   revalidatePath(`/app/${tenantSlug}/wecom`);
+  revalidatePath(`/app/${tenantSlug}/audit-logs`);
+}
+
+export async function upsertAiProviderConfig(tenantSlug: string, formData: FormData) {
+  const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN"]);
+  if (!canManageTenantAiSettings(user.role)) {
+    redirect("/forbidden");
+  }
+
+  const existingConfig = await prisma.aiProviderConfig.findUnique({ where: { tenantId: tenant.id } });
+  const apiKeyInput = text(formData, "apiKeyEncrypted");
+  const clearApiKey = checkbox(formData, "clearApiKey");
+  const provider = enumValue(AiProvider, text(formData, "provider"), AiProvider.DEEPSEEK);
+  const baseUrl = text(formData, "baseUrl") ?? (provider === AiProvider.DEEPSEEK ? "https://api.deepseek.com" : "https://api.deepseek.com");
+  const model = text(formData, "model") ?? existingConfig?.model ?? "deepseek-chat";
+  const temperature = Math.max(0, Math.min(2, parseNumber(text(formData, "temperature"), existingConfig?.temperature ?? 0.2)));
+  const maxTokens = Math.max(64, Math.min(8192, Math.round(parseNumber(text(formData, "maxTokens"), existingConfig?.maxTokens ?? 512))));
+  const enabled = checkbox(formData, "enabled");
+
+  const config = await prisma.aiProviderConfig.upsert({
+    where: { tenantId: tenant.id },
+    update: {
+      provider,
+      baseUrl,
+      model,
+      apiKeyEncrypted: clearApiKey ? null : apiKeyInput ?? existingConfig?.apiKeyEncrypted,
+      enabled,
+      temperature,
+      maxTokens
+    },
+    create: {
+      tenantId: tenant.id,
+      provider,
+      baseUrl,
+      model,
+      apiKeyEncrypted: clearApiKey ? null : apiKeyInput,
+      enabled,
+      temperature,
+      maxTokens
+    }
+  });
+
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: existingConfig ? "ai_provider_config_updated" : "ai_provider_config_created",
+    entityType: "AiProviderConfig",
+    entityId: config.id,
+    metadata: {
+      tenantId: tenant.id,
+      provider: config.provider,
+      model: config.model,
+      enabled: config.enabled,
+      hasApiKey: Boolean(config.apiKeyEncrypted)
+    }
+  });
+
+  revalidatePath(`/app/${tenantSlug}/ai-settings`);
+  revalidatePath(`/app/${tenantSlug}/audit-logs`);
+}
+
+export async function clearAiProviderConfig(tenantSlug: string) {
+  const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN"]);
+  if (!canManageTenantAiSettings(user.role)) {
+    redirect("/forbidden");
+  }
+
+  const existingConfig = await prisma.aiProviderConfig.findUnique({ where: { tenantId: tenant.id } });
+  if (!existingConfig) {
+    revalidatePath(`/app/${tenantSlug}/ai-settings`);
+    return;
+  }
+
+  const config = await prisma.aiProviderConfig.update({
+    where: { tenantId: tenant.id },
+    data: {
+      apiKeyEncrypted: null,
+      enabled: false,
+      lastTestAt: null,
+      lastTestStatus: null,
+      lastTestMessage: null
+    }
+  });
+
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "ai_provider_config_cleared",
+    entityType: "AiProviderConfig",
+    entityId: config.id,
+    metadata: {
+      tenantId: tenant.id,
+      provider: config.provider,
+      model: config.model,
+      enabled: config.enabled
+    }
+  });
+
+  revalidatePath(`/app/${tenantSlug}/ai-settings`);
+  revalidatePath(`/app/${tenantSlug}/audit-logs`);
+}
+
+export async function testTenantAiProviderConfig(tenantSlug: string) {
+  const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
+  if (!canTestTenantAiSettings(user.role)) {
+    redirect("/forbidden");
+  }
+
+  const result = await testAiProviderConnection({
+    tenantId: tenant.id,
+    createdById: user.id
+  });
+
+  await prisma.aiProviderConfig.updateMany({
+    where: { tenantId: tenant.id },
+    data: {
+      lastTestAt: new Date(),
+      lastTestStatus: result.status,
+      lastTestMessage: result.errorMessage ?? result.text ?? "AI Provider 测试已记录。"
+    }
+  });
+
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "ai_provider_config_tested",
+    entityType: "AiProviderConfig",
+    entityId: tenant.id,
+    metadata: {
+      tenantId: tenant.id,
+      purpose: "TEST_CONNECTION",
+      status: result.status,
+      latencyMs: result.latencyMs ?? null,
+      createdById: user.id
+    }
+  });
+
+  revalidatePath(`/app/${tenantSlug}/ai-settings`);
   revalidatePath(`/app/${tenantSlug}/audit-logs`);
 }
 

@@ -202,6 +202,18 @@ export function canViewTenantWeComLogs(role: UserRole) {
   return role === "TENANT_ADMIN" || role === "OPERATOR";
 }
 
+export function canAccessTenantAiSettings(role: UserRole) {
+  return role === "TENANT_ADMIN" || role === "OPERATOR";
+}
+
+export function canManageTenantAiSettings(role: UserRole) {
+  return role === "TENANT_ADMIN";
+}
+
+export function canTestTenantAiSettings(role: UserRole) {
+  return role === "TENANT_ADMIN" || role === "OPERATOR";
+}
+
 export function canExportTenantLeads(role: UserRole) {
   return role === "TENANT_ADMIN";
 }
