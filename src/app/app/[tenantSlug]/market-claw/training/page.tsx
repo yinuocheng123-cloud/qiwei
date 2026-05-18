@@ -14,6 +14,8 @@ import {
 } from "@/lib/actions";
 import { canAccessMarketClawTraining, canReviewMarketClawTraining, requireTenantAccess } from "@/lib/auth";
 import {
+  marketClawReplyRiskLevelLabels,
+  marketClawSendModeLabels,
   marketClawTrainingReviewStatusOptions,
   marketClawTrainingScopeOptions
 } from "@/lib/market-claw";
@@ -166,6 +168,13 @@ export default async function MarketClawTrainingPage({
                         {reviewStatusLabels.get(item.reviewStatus) ?? item.reviewStatus}
                       </span>
                       <span className="rounded-md bg-slate-100 px-2.5 py-1 text-slate-700">{item.departmentName ?? "未标记部门"}</span>
+                      <span className="rounded-md bg-amber-50 px-2.5 py-1 text-amber-700">
+                        {marketClawReplyRiskLevelLabels[item.replyRiskLevel]}
+                      </span>
+                      <span className="rounded-md bg-sky-50 px-2.5 py-1 text-sky-700">
+                        {marketClawSendModeLabels[item.sendMode]}
+                      </span>
+                      {item.requiresReview ? <span className="rounded-md bg-rose-50 px-2.5 py-1 text-rose-700">建议边界确认</span> : null}
                       {item.businessLine ? (
                         <span className="rounded-md bg-slate-100 px-2.5 py-1 text-slate-700">{item.businessLine.name}</span>
                       ) : null}
@@ -197,6 +206,9 @@ export default async function MarketClawTrainingPage({
                 <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4 text-sm">
                   <Info label="训练类型" value={scopeLabels.get(item.trainingScope) ?? item.trainingScope} />
                   <Info label="当前状态" value={reviewStatusLabels.get(item.reviewStatus) ?? item.reviewStatus} />
+                  <Info label="建议风险等级" value={marketClawReplyRiskLevelLabels[item.replyRiskLevel]} />
+                  <Info label="建议使用模式" value={marketClawSendModeLabels[item.sendMode]} />
+                  <Info label="风险原因" value={item.riskReason ?? "-"} />
                   <Info label="审核时间" value={item.reviewedAt ? new Intl.DateTimeFormat("zh-CN", { dateStyle: "short", timeStyle: "short" }).format(new Date(item.reviewedAt)) : "-"} />
                   <Info label="驳回或审核意见" value={item.reviewComment ?? "-"} />
                 </div>
@@ -223,7 +235,7 @@ export default async function MarketClawTrainingPage({
                       action={submitMarketClawTrainingForReview.bind(null, tenant.slug, item.id)}
                       className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-4"
                     >
-                      <h3 className="text-sm font-semibold text-slate-950">提交给上级审核</h3>
+                      <h3 className="text-sm font-semibold text-slate-950">提交训练审核</h3>
                       <Textarea
                         label="提交审核版本"
                         name="manualOptimizedReply"

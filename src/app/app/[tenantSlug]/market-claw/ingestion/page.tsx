@@ -23,6 +23,10 @@ import {
   marketClawKnowledgeCandidateReviewStatusOptions,
   marketClawKnowledgeScopeOptions,
   marketClawKnowledgeTypeOptions,
+  marketClawReplyRiskLevelLabels,
+  marketClawReplyRiskLevelOptions,
+  marketClawSendModeLabels,
+  marketClawSendModeOptions,
   parseMarketClawSimilarityHints,
   parseMarketClawTextArray
 } from "@/lib/market-claw";
@@ -401,6 +405,13 @@ export default async function MarketClawIngestionPage({
                       <span className="rounded-md bg-slate-100 px-2.5 py-1 text-slate-700">
                         建议层级：{scopeLabels.get(candidate.suggestedScopeLevel) ?? candidate.suggestedScopeLevel}
                       </span>
+                      <span className="rounded-md bg-amber-50 px-2.5 py-1 text-amber-700">
+                        建议风险：{marketClawReplyRiskLevelLabels[candidate.suggestedReplyRiskLevel]}
+                      </span>
+                      <span className="rounded-md bg-sky-50 px-2.5 py-1 text-sky-700">
+                        使用模式：{marketClawSendModeLabels[candidate.suggestedSendMode]}
+                      </span>
+                      {candidate.requiresReview ? <span className="rounded-md bg-rose-50 px-2.5 py-1 text-rose-700">建议审核</span> : null}
                       {candidate.businessLine ? (
                         <span className="rounded-md bg-slate-100 px-2.5 py-1 text-slate-700">{candidate.businessLine.name}</span>
                       ) : null}
@@ -428,6 +439,15 @@ export default async function MarketClawIngestionPage({
                   <CandidatePanel title="建议关键词" value={parseMarketClawTextArray(candidate.suggestedKeywords).join("\n")} />
                   <CandidatePanel title="建议不能承诺事项" value={parseMarketClawTextArray(candidate.suggestedForbiddenPhrases).join("\n")} />
                   <CandidatePanel title="风险提醒" value={candidate.suggestedRiskNotes} />
+                </div>
+
+                <div className="mt-4 grid gap-4 md:grid-cols-3">
+                  <CandidatePanel title="建议风险原因" value={candidate.suggestedRiskReason} />
+                  <CandidatePanel title="内部建议备注" value={candidate.internalOnlyNote} />
+                  <CandidatePanel
+                    title="建议确认策略"
+                    value={`${marketClawReplyRiskLevelLabels[candidate.suggestedReplyRiskLevel]} / ${marketClawSendModeLabels[candidate.suggestedSendMode]}`}
+                  />
                 </div>
 
                 <div className="mt-4 grid gap-4 lg:grid-cols-3">
@@ -481,6 +501,8 @@ export default async function MarketClawIngestionPage({
                       options={marketClawKnowledgeScopeOptions.filter((item) => ["ENTERPRISE", "DEPARTMENT", "BUSINESS_LINE"].includes(item.value))}
                       defaultValue={candidate.suggestedScopeLevel}
                     />
+                    <Select label="回复风险等级" name="replyRiskLevel" options={marketClawReplyRiskLevelOptions} defaultValue={candidate.suggestedReplyRiskLevel} />
+                    <Select label="使用模式" name="sendMode" options={marketClawSendModeOptions} defaultValue={candidate.suggestedSendMode} />
                     <Textarea label="知识正文" name="content" defaultValue={candidate.content} rows={6} />
                     <Textarea label="建议关键词" name="keywords" defaultValue={parseMarketClawTextArray(candidate.suggestedKeywords).join("\n")} rows={3} />
                     <Textarea
@@ -490,6 +512,8 @@ export default async function MarketClawIngestionPage({
                       rows={3}
                     />
                     <Textarea label="风险提醒" name="riskNotes" defaultValue={candidate.suggestedRiskNotes ?? ""} rows={3} />
+                    <Textarea label="风险原因" name="riskReason" defaultValue={candidate.suggestedRiskReason ?? ""} rows={2} />
+                    <Textarea label="内部建议备注" name="internalOnlyNote" defaultValue={candidate.internalOnlyNote ?? ""} rows={2} />
                     <Textarea label="审核备注" name="reviewComment" defaultValue="" rows={2} />
                     <SubmitButton>采纳为新知识</SubmitButton>
                   </form>

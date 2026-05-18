@@ -21,8 +21,10 @@ import type {
   MarketClawKnowledgeStatus,
   MarketClawKnowledgeType,
   MarketClawKnowledgeVisibility,
+  MarketClawReplyRiskLevel,
   MarketClawReplySourceScope,
   MarketClawReviewResult,
+  MarketClawSendMode,
   MarketClawTrainingReviewStatus,
   MarketClawTrainingScope,
   Material,
@@ -62,6 +64,11 @@ type KnowledgeLike = Pick<
   | "recommendedMaterialIds"
   | "forbiddenPhrases"
   | "riskNotes"
+  | "replyRiskLevel"
+  | "sendMode"
+  | "riskReason"
+  | "requiresReview"
+  | "internalOnlyNote"
   | "sortOrder"
 >;
 
@@ -83,10 +90,29 @@ export type MarketClawReplyResult = {
   professionalReply: string;
   closingReply: string;
   riskWarnings: string[];
+  replyRiskLevel: MarketClawReplyRiskLevel;
+  sendMode: MarketClawSendMode;
+  riskReason: string | null;
+  requiresReview: boolean;
+  internalOnlyNote: string | null;
+  highRiskKnowledgeIds: string[];
+  internalAdviceKnowledgeIds: string[];
+  riskKeywordHits: string[];
   matchedKnowledgeIds: string[];
   suggestedTags: MarketClawSuggestedTag[];
   suggestedMaterialIds: string[];
   suggestedTask: MarketClawSuggestedTask | null;
+};
+
+export type MarketClawReplyPolicy = {
+  replyRiskLevel: MarketClawReplyRiskLevel;
+  sendMode: MarketClawSendMode;
+  riskReason: string | null;
+  requiresReview: boolean;
+  internalOnlyNote: string | null;
+  highRiskKnowledgeIds: string[];
+  internalAdviceKnowledgeIds: string[];
+  riskKeywordHits: string[];
 };
 
 type MarketClawSignal = {
@@ -109,6 +135,11 @@ export type MarketClawKnowledgeCandidateDraft = {
   suggestedKeywords: string[];
   suggestedForbiddenPhrases: string[];
   suggestedRiskNotes: string | null;
+  suggestedReplyRiskLevel: MarketClawReplyRiskLevel;
+  suggestedSendMode: MarketClawSendMode;
+  suggestedRiskReason: string | null;
+  requiresReview: boolean;
+  internalOnlyNote: string | null;
   suggestedReplyShort: string;
   suggestedReplyProfessional: string;
   suggestedReplyClosing: string;
@@ -366,6 +397,34 @@ export const marketClawKnowledgeCandidateMergeActionOptions: {
   { value: "REJECT_AS_DUPLICATE", label: "标记重复并驳回" }
 ];
 
+export const marketClawReplyRiskLevelOptions: { value: MarketClawReplyRiskLevel; label: string }[] = [
+  { value: "LOW", label: "低风险承接" },
+  { value: "MEDIUM", label: "销售确认" },
+  { value: "HIGH", label: "风险边界确认" },
+  { value: "BLOCKED", label: "仅内部建议" }
+];
+
+export const marketClawSendModeOptions: { value: MarketClawSendMode; label: string }[] = [
+  { value: "AUTO_ALLOWED", label: "可低风险承接" },
+  { value: "SALES_CONFIRM_REQUIRED", label: "需销售确认" },
+  { value: "RISK_CONFIRM_REQUIRED", label: "风险边界确认后使用" },
+  { value: "INTERNAL_ADVICE_ONLY", label: "仅内部建议" }
+];
+
+export const marketClawReplyRiskLevelLabels: Record<MarketClawReplyRiskLevel, string> = {
+  LOW: "低风险承接",
+  MEDIUM: "销售确认",
+  HIGH: "风险边界确认",
+  BLOCKED: "仅内部建议"
+};
+
+export const marketClawSendModeLabels: Record<MarketClawSendMode, string> = {
+  AUTO_ALLOWED: "可低风险承接",
+  SALES_CONFIRM_REQUIRED: "需销售确认",
+  RISK_CONFIRM_REQUIRED: "风险边界确认后使用",
+  INTERNAL_ADVICE_ONLY: "仅内部建议"
+};
+
 export const marketClawTagGroupLabels: Record<TagGroup, string> = {
   SOURCE: "来源标签",
   CUSTOMER_TYPE: "客户类型标签",
@@ -390,6 +449,10 @@ const riskKeywords = ["价格", "周期", "保证", "通过", "奖项", "名额"
 const processKeywords = ["流程", "步骤", "周期", "准备", "交付", "启动", "推进"];
 const objectionKeywords = ["太贵", "没预算", "先了解", "再看看", "别人也能做", "没效果"];
 const forbiddenCommitmentKeywords = ["保证", "一定", "肯定", "包过", "包推荐", "名额", "排名", "奖项", "效果"];
+const autoAllowedKeywords = ["收到", "已收到", "我先看看", "补充资料", "发你资料", "稍后跟进", "安排时间", "先了解"];
+const contractKeywords = ["合同", "责任", "赔付", "违约", "法务", "争议", "条款"];
+const blockedKeywords = ["保证", "一定", "肯定", "包过", "包推荐", "必上", "绝对", "稳赚", "100%"];
+const riskLevelPriority: MarketClawReplyRiskLevel[] = ["LOW", "MEDIUM", "HIGH", "BLOCKED"];
 const marketClawKnowledgeTypeLabelMap = new Map(marketClawKnowledgeTypeOptions.map((item) => [item.value, item.label]));
 
 const marketClawInsightQuestionThemes = [
@@ -577,6 +640,243 @@ export function parseMarketClawSuggestedTask(value: unknown) {
   return { title, description, priority: priority as MarketClawSuggestedTask["priority"], dueDays };
 }
 
+function riskLevelWeight(level: MarketClawReplyRiskLevel) {
+  return riskLevelPriority.indexOf(level);
+}
+
+function sendModeWeight(mode: MarketClawSendMode) {
+  switch (mode) {
+    case "AUTO_ALLOWED":
+      return 0;
+    case "SALES_CONFIRM_REQUIRED":
+      return 1;
+    case "RISK_CONFIRM_REQUIRED":
+      return 2;
+    case "INTERNAL_ADVICE_ONLY":
+      return 3;
+    default:
+      return 0;
+  }
+}
+
+function defaultSendModeForRiskLevel(level: MarketClawReplyRiskLevel) {
+  switch (level) {
+    case "LOW":
+      return "AUTO_ALLOWED" satisfies MarketClawSendMode;
+    case "MEDIUM":
+      return "SALES_CONFIRM_REQUIRED" satisfies MarketClawSendMode;
+    case "HIGH":
+      return "RISK_CONFIRM_REQUIRED" satisfies MarketClawSendMode;
+    case "BLOCKED":
+      return "INTERNAL_ADVICE_ONLY" satisfies MarketClawSendMode;
+    default:
+      return "SALES_CONFIRM_REQUIRED" satisfies MarketClawSendMode;
+  }
+}
+
+function clampSendMode(level: MarketClawReplyRiskLevel, preferred?: MarketClawSendMode | null) {
+  const baseline = defaultSendModeForRiskLevel(level);
+  if (!preferred) return baseline;
+  return sendModeWeight(preferred) >= sendModeWeight(baseline) ? preferred : baseline;
+}
+
+function summarizeRiskReasons(reasons: Array<string | null | undefined>) {
+  const values = dedupeStrings(reasons.filter((item): item is string => Boolean(item?.trim())).map((item) => item.trim()));
+  return values.length ? values.join("；") : null;
+}
+
+function pickRiskKeywordHits(text: string) {
+  const normalized = normalizeText(text);
+  const keywordGroups = [
+    ...priceKeywords,
+    ...effectKeywords,
+    ...riskKeywords,
+    ...contractKeywords,
+    ...blockedKeywords,
+    ...autoAllowedKeywords
+  ];
+  return dedupeStrings(keywordGroups.filter((keyword) => normalized.includes(keyword.toLowerCase())));
+}
+
+function baseRiskLevelByKnowledgeType(type?: MarketClawKnowledgeType | null) {
+  switch (type) {
+    case "FORBIDDEN_COMMITMENT":
+      return "BLOCKED" satisfies MarketClawReplyRiskLevel;
+    case "PRICE_BOUNDARY":
+      return "HIGH" satisfies MarketClawReplyRiskLevel;
+    case "RISK_NOTICE":
+      return "HIGH" satisfies MarketClawReplyRiskLevel;
+    case "FAQ":
+    case "STANDARD_REPLY":
+    case "SERVICE_INTRO":
+    case "CASE_STUDY":
+    case "DELIVERY_PROCESS":
+    case "OBJECTION_HANDLING":
+    case "SALES_SCRIPT":
+      return "MEDIUM" satisfies MarketClawReplyRiskLevel;
+    default:
+      return "MEDIUM" satisfies MarketClawReplyRiskLevel;
+  }
+}
+
+function nextHigherRiskLevel(current: MarketClawReplyRiskLevel, next: MarketClawReplyRiskLevel) {
+  return riskLevelWeight(next) > riskLevelWeight(current) ? next : current;
+}
+
+export function inferMarketClawPolicy(input: {
+  knowledgeType?: MarketClawKnowledgeType | null;
+  content: string;
+  forbiddenPhrases?: string[];
+  riskNotes?: string | null;
+  replyRiskLevel?: MarketClawReplyRiskLevel | null;
+  sendMode?: MarketClawSendMode | null;
+  riskReason?: string | null;
+  internalOnlyNote?: string | null;
+  allowLowRisk?: boolean;
+  personalScope?: boolean;
+}) {
+  const combinedText = [input.content, input.riskNotes, ...(input.forbiddenPhrases ?? [])].filter(Boolean).join("\n");
+  const normalized = normalizeText(combinedText);
+  const riskKeywordHits = pickRiskKeywordHits(combinedText);
+  let replyRiskLevel = input.replyRiskLevel ?? baseRiskLevelByKnowledgeType(input.knowledgeType);
+  const reasons: string[] = [];
+  let internalOnlyNote = input.internalOnlyNote?.trim() || null;
+
+  switch (input.knowledgeType) {
+    case "FORBIDDEN_COMMITMENT":
+      replyRiskLevel = "BLOCKED";
+      reasons.push("命中不能承诺事项");
+      internalOnlyNote = internalOnlyNote ?? "这类内容只能提醒内部边界，不能直接发给客户。";
+      break;
+    case "PRICE_BOUNDARY":
+      replyRiskLevel = nextHigherRiskLevel(replyRiskLevel, "HIGH");
+      reasons.push("涉及价格、费用或报价边界");
+      break;
+    case "RISK_NOTICE":
+      replyRiskLevel = nextHigherRiskLevel(replyRiskLevel, "HIGH");
+      reasons.push("属于风险边界提醒");
+      break;
+    case "FAQ":
+    case "STANDARD_REPLY":
+      reasons.push("默认作为业务回复参考，使用前需销售确认");
+      break;
+    default:
+      break;
+  }
+
+  if ((input.forbiddenPhrases ?? []).length > 0) {
+    replyRiskLevel = nextHigherRiskLevel(replyRiskLevel, "BLOCKED");
+    reasons.push("包含不能承诺事项");
+    internalOnlyNote = internalOnlyNote ?? "命中不能承诺表达，只能作为内部提醒或审核参考。";
+  }
+
+  if (includesKeyword(normalized, blockedKeywords)) {
+    replyRiskLevel = nextHigherRiskLevel(replyRiskLevel, "BLOCKED");
+    reasons.push("命中绝对承诺或保证类词汇");
+    internalOnlyNote = internalOnlyNote ?? "含有绝对承诺表达，不应直接用于对外回复。";
+  } else if (includesKeyword(normalized, contractKeywords)) {
+    replyRiskLevel = nextHigherRiskLevel(replyRiskLevel, "HIGH");
+    reasons.push("涉及合同、责任或赔付边界");
+  } else if (includesKeyword(normalized, priceKeywords) || includesKeyword(normalized, effectKeywords) || includesKeyword(normalized, riskKeywords)) {
+    replyRiskLevel = nextHigherRiskLevel(replyRiskLevel, "HIGH");
+    reasons.push("涉及价格、效果、周期或服务边界");
+  } else if (input.allowLowRisk && includesKeyword(normalized, autoAllowedKeywords)) {
+    replyRiskLevel = "LOW";
+    reasons.push("属于低风险承接或资料引导表达");
+  }
+
+  if (input.personalScope && replyRiskLevel === "LOW") {
+    replyRiskLevel = "MEDIUM";
+    reasons.push("个人话术默认不能直接设为低风险承接");
+  }
+
+  const sendMode = clampSendMode(replyRiskLevel, input.sendMode ?? null);
+  const requiresReview = replyRiskLevel === "HIGH" || sendMode === "RISK_CONFIRM_REQUIRED";
+  const riskReason = summarizeRiskReasons([input.riskReason, ...reasons]);
+
+  return {
+    replyRiskLevel,
+    sendMode,
+    riskReason,
+    requiresReview,
+    internalOnlyNote: replyRiskLevel === "BLOCKED" ? internalOnlyNote ?? "仅内部建议，不应直接发给客户。" : internalOnlyNote,
+    highRiskKnowledgeIds: [] as string[],
+    internalAdviceKnowledgeIds: [] as string[],
+    riskKeywordHits
+  } satisfies MarketClawReplyPolicy;
+}
+
+export function resolveMarketClawKnowledgePolicy(item: {
+  knowledgeType: MarketClawKnowledgeType;
+  content: string;
+  forbiddenPhrases?: unknown;
+  riskNotes?: string | null;
+  replyRiskLevel?: MarketClawReplyRiskLevel | null;
+  sendMode?: MarketClawSendMode | null;
+  riskReason?: string | null;
+  internalOnlyNote?: string | null;
+}) {
+  return inferMarketClawPolicy({
+    knowledgeType: item.knowledgeType,
+    content: item.content,
+    forbiddenPhrases: parseMarketClawTextArray(item.forbiddenPhrases),
+    riskNotes: item.riskNotes,
+    replyRiskLevel: item.replyRiskLevel,
+    sendMode: item.sendMode,
+    riskReason: item.riskReason,
+    internalOnlyNote: item.internalOnlyNote
+  });
+}
+
+export function buildMarketClawReplyPolicy(input: { question: string; matchedKnowledge: KnowledgeLike[] }) {
+  const questionPolicy = inferMarketClawPolicy({
+    content: input.question,
+    knowledgeType: "OTHER",
+    allowLowRisk: true
+  });
+  const matchedPolicies = input.matchedKnowledge.map((item) => ({
+    item,
+    policy: resolveMarketClawKnowledgePolicy(item)
+  }));
+  const topLevel = matchedPolicies.reduce(
+    (current, entry) =>
+      riskLevelWeight(entry.policy.replyRiskLevel) > riskLevelWeight(current.replyRiskLevel) ? entry.policy : current,
+    questionPolicy
+  );
+  const highRiskKnowledgeIds = matchedPolicies
+    .filter((entry) => ["HIGH", "BLOCKED"].includes(entry.policy.replyRiskLevel))
+    .map((entry) => entry.item.id);
+  const internalAdviceKnowledgeIds = matchedPolicies
+    .filter((entry) => entry.policy.sendMode === "INTERNAL_ADVICE_ONLY" || entry.policy.replyRiskLevel === "BLOCKED")
+    .map((entry) => entry.item.id);
+  const matchedReasons = matchedPolicies
+    .filter((entry) => riskLevelWeight(entry.policy.replyRiskLevel) >= riskLevelWeight(topLevel.replyRiskLevel) - 1)
+    .map((entry) => entry.policy.riskReason);
+  const riskReason = summarizeRiskReasons([topLevel.riskReason, ...matchedReasons]);
+
+  return {
+    replyRiskLevel: topLevel.replyRiskLevel,
+    sendMode: clampSendMode(topLevel.replyRiskLevel, topLevel.sendMode),
+    riskReason,
+    requiresReview:
+      topLevel.requiresReview ||
+      matchedPolicies.some((entry) => entry.policy.requiresReview || entry.policy.sendMode === "RISK_CONFIRM_REQUIRED"),
+    internalOnlyNote:
+      topLevel.replyRiskLevel === "BLOCKED"
+        ? summarizeRiskReasons([
+            topLevel.internalOnlyNote,
+            ...matchedPolicies.map((entry) => entry.policy.internalOnlyNote)
+          ]) ?? "仅内部建议，不应直接发给客户。"
+        : topLevel.internalOnlyNote,
+    highRiskKnowledgeIds,
+    internalAdviceKnowledgeIds,
+    riskKeywordHits: dedupeStrings([
+      ...questionPolicy.riskKeywordHits,
+      ...matchedPolicies.flatMap((entry) => entry.policy.riskKeywordHits)
+    ])
+  } satisfies MarketClawReplyPolicy;
+}
+
 function extractCandidateKeywords(...values: string[]) {
   const tokens = values
     .flatMap((value) =>
@@ -694,7 +994,17 @@ function parseFaqCandidates(rawText: string) {
 function pushCandidate(
   candidates: MarketClawKnowledgeCandidateDraft[],
   seenKeys: Set<string>,
-  draft: Omit<MarketClawKnowledgeCandidateDraft, "suggestedReplyShort" | "suggestedReplyProfessional" | "suggestedReplyClosing">
+  draft: Omit<
+    MarketClawKnowledgeCandidateDraft,
+    | "suggestedReplyShort"
+    | "suggestedReplyProfessional"
+    | "suggestedReplyClosing"
+    | "suggestedReplyRiskLevel"
+    | "suggestedSendMode"
+    | "suggestedRiskReason"
+    | "requiresReview"
+    | "internalOnlyNote"
+  >
 ) {
   const content = draft.content.trim();
   if (!draft.title.trim() || !content) return;
@@ -702,12 +1012,24 @@ function pushCandidate(
   if (seenKeys.has(uniqueKey)) return;
   seenKeys.add(uniqueKey);
   const replies = buildCandidateReplies(draft.title.trim(), content, draft.knowledgeType);
+  const policy = inferMarketClawPolicy({
+    knowledgeType: draft.knowledgeType,
+    content,
+    forbiddenPhrases: draft.suggestedForbiddenPhrases,
+    riskNotes: draft.suggestedRiskNotes,
+    allowLowRisk: true
+  });
   candidates.push({
     ...draft,
     title: draft.title.trim(),
     content,
     suggestedKeywords: dedupeStrings(draft.suggestedKeywords),
     suggestedForbiddenPhrases: dedupeStrings(draft.suggestedForbiddenPhrases),
+    suggestedReplyRiskLevel: policy.replyRiskLevel,
+    suggestedSendMode: policy.sendMode,
+    suggestedRiskReason: policy.riskReason,
+    requiresReview: policy.requiresReview,
+    internalOnlyNote: policy.internalOnlyNote,
     suggestedReplyShort: replies.shortReply,
     suggestedReplyProfessional: replies.professionalReply,
     suggestedReplyClosing: replies.closingReply
@@ -932,7 +1254,7 @@ function buildSuggestedTask(signals: MarketClawSignal, businessLine?: BusinessLi
     : null;
 }
 
-function buildRiskWarnings(question: string, knowledgeItems: KnowledgeLike[]) {
+function buildRiskWarnings(question: string, knowledgeItems: KnowledgeLike[], policy: MarketClawReplyPolicy) {
   const normalized = normalizeText(question);
   const warnings = new Set<string>();
 
@@ -951,6 +1273,16 @@ function buildRiskWarnings(question: string, knowledgeItems: KnowledgeLike[]) {
     for (const forbiddenPhrase of toStringArray(item.forbiddenPhrases)) {
       warnings.add(`避免使用“${forbiddenPhrase}”这类绝对承诺表达。`);
     }
+  }
+
+  if (policy.replyRiskLevel === "MEDIUM") {
+    warnings.add("本次回复属于业务表达，建议销售确认后再使用。");
+  }
+  if (policy.replyRiskLevel === "HIGH") {
+    warnings.add("本次回复涉及高风险边界，建议先确认条件和边界，必要时请负责人介入。");
+  }
+  if (policy.replyRiskLevel === "BLOCKED") {
+    warnings.add(policy.internalOnlyNote ?? "本次内容只能作为内部建议，不能直接发给客户。");
   }
 
   return [...warnings];
@@ -1063,13 +1395,25 @@ export function generateMarketClawReply(input: {
     currentUserId: input.currentUserId,
     knowledgeItems: input.knowledgeItems
   });
+  const replyPolicy = buildMarketClawReplyPolicy({
+    question: input.question,
+    matchedKnowledge
+  });
   const suggestedTask = buildSuggestedTask(signals, input.businessLine);
 
   return {
     shortReply: buildShortReply(input.lead, input.question, matchedKnowledge, signals, input.businessLine),
     professionalReply: buildProfessionalReply(input.lead, matchedKnowledge, signals, input.businessLine),
     closingReply: buildClosingReply(signals, suggestedTask),
-    riskWarnings: buildRiskWarnings(input.question, matchedKnowledge),
+    riskWarnings: buildRiskWarnings(input.question, matchedKnowledge, replyPolicy),
+    replyRiskLevel: replyPolicy.replyRiskLevel,
+    sendMode: replyPolicy.sendMode,
+    riskReason: replyPolicy.riskReason,
+    requiresReview: replyPolicy.requiresReview,
+    internalOnlyNote: replyPolicy.internalOnlyNote,
+    highRiskKnowledgeIds: replyPolicy.highRiskKnowledgeIds,
+    internalAdviceKnowledgeIds: replyPolicy.internalAdviceKnowledgeIds,
+    riskKeywordHits: replyPolicy.riskKeywordHits,
     matchedKnowledgeIds: matchedKnowledge.map((item) => item.id),
     suggestedTags: buildSuggestedTags(signals),
     suggestedMaterialIds: pickSuggestedMaterials(input.businessLine, matchedKnowledge),

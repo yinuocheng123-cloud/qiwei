@@ -11,6 +11,10 @@ import { reviewMarketClawTrainingCase, saveMarketClawTrainingAsKnowledge } from 
 import { canReviewMarketClawTraining, requireTenantAccess } from "@/lib/auth";
 import {
   marketClawKnowledgeScopeOptions,
+  marketClawReplyRiskLevelLabels,
+  marketClawReplyRiskLevelOptions,
+  marketClawSendModeLabels,
+  marketClawSendModeOptions,
   marketClawTrainingReviewStatusOptions,
   marketClawTrainingScopeOptions
 } from "@/lib/market-claw";
@@ -89,6 +93,13 @@ export default async function MarketClawTrainingReviewPage({
                       {reviewStatusLabels.get(item.reviewStatus) ?? item.reviewStatus}
                     </span>
                     <span className="rounded-md bg-slate-100 px-2.5 py-1 text-slate-700">{item.departmentName ?? "未标记部门"}</span>
+                    <span className="rounded-md bg-amber-50 px-2.5 py-1 text-amber-700">
+                      {marketClawReplyRiskLevelLabels[item.replyRiskLevel]}
+                    </span>
+                    <span className="rounded-md bg-sky-50 px-2.5 py-1 text-sky-700">
+                      {marketClawSendModeLabels[item.sendMode]}
+                    </span>
+                    {item.requiresReview ? <span className="rounded-md bg-rose-50 px-2.5 py-1 text-rose-700">建议边界确认</span> : null}
                     {item.businessLine ? <span className="rounded-md bg-slate-100 px-2.5 py-1 text-slate-700">{item.businessLine.name}</span> : null}
                   </div>
                   <h2 className="mt-3 text-lg font-semibold text-slate-950">{item.customerQuestion}</h2>
@@ -116,6 +127,13 @@ export default async function MarketClawTrainingReviewPage({
                 <Panel title="风险提醒" value={item.forbiddenNotes ?? "-"} rows={4} />
               </div>
 
+              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4 text-sm">
+                <Info label="系统建议风险等级" value={marketClawReplyRiskLevelLabels[item.replyRiskLevel]} />
+                <Info label="建议使用模式" value={marketClawSendModeLabels[item.sendMode]} />
+                <Info label="是否建议负责人介入" value={item.replyRiskLevel === "BLOCKED" ? "是" : item.requiresReview ? "必要时介入" : "否"} />
+                <Info label="风险原因" value={item.riskReason ?? "-"} />
+              </div>
+
               <div className="mt-4 grid gap-4 xl:grid-cols-3">
                 <form
                   action={reviewMarketClawTrainingCase.bind(null, tenant.slug, item.id)}
@@ -133,8 +151,12 @@ export default async function MarketClawTrainingReviewPage({
                     defaultValue={item.reviewStatus}
                   />
                   <Textarea label="审核后回复版本" name="manualOptimizedReply" defaultValue={item.manualOptimizedReply ?? item.generatedProfessionalReply ?? ""} rows={4} />
+                  <Select label="回复风险等级" name="replyRiskLevel" options={marketClawReplyRiskLevelOptions} defaultValue={item.replyRiskLevel} />
+                  <Select label="使用模式" name="sendMode" options={marketClawSendModeOptions} defaultValue={item.sendMode} />
                   <Textarea label="审核意见或驳回原因" name="reviewComment" defaultValue={item.reviewComment ?? ""} rows={3} />
                   <Textarea label="风险提醒" name="forbiddenNotes" defaultValue={item.forbiddenNotes ?? ""} rows={3} />
+                  <Textarea label="风险原因" name="riskReason" defaultValue={item.riskReason ?? ""} rows={2} />
+                  <Textarea label="内部建议备注" name="internalOnlyNote" defaultValue={item.internalOnlyNote ?? ""} rows={2} />
                   <SubmitButton>保存审核结论</SubmitButton>
                 </form>
 
@@ -146,8 +168,11 @@ export default async function MarketClawTrainingReviewPage({
                   <input name="scopeLevel" type="hidden" value={item.businessLineId ? "BUSINESS_LINE" : "DEPARTMENT"} />
                   <input name="reviewComment" type="hidden" value="采纳为团队标准" />
                   <Textarea label="最终采纳版本" name="manualOptimizedReply" defaultValue={item.manualOptimizedReply ?? item.generatedProfessionalReply ?? ""} rows={4} />
+                  <Select label="回复风险等级" name="replyRiskLevel" options={marketClawReplyRiskLevelOptions} defaultValue={item.replyRiskLevel} />
+                  <Select label="使用模式" name="sendMode" options={marketClawSendModeOptions} defaultValue={item.sendMode} />
                   <Textarea label="不能承诺事项" name="forbiddenPhraseList" rows={3} />
                   <Textarea label="风险提醒" name="forbiddenNotes" defaultValue={item.forbiddenNotes ?? ""} rows={3} />
+                  <Textarea label="风险原因" name="riskReason" defaultValue={item.riskReason ?? ""} rows={2} />
                   <SubmitButton>采纳为团队标准</SubmitButton>
                 </form>
 
@@ -163,9 +188,12 @@ export default async function MarketClawTrainingReviewPage({
                     defaultValue="ENTERPRISE"
                   />
                   <Textarea label="最终采纳版本" name="manualOptimizedReply" defaultValue={item.manualOptimizedReply ?? item.generatedProfessionalReply ?? ""} rows={4} />
+                  <Select label="回复风险等级" name="replyRiskLevel" options={marketClawReplyRiskLevelOptions} defaultValue={item.replyRiskLevel} />
+                  <Select label="使用模式" name="sendMode" options={marketClawSendModeOptions} defaultValue={item.sendMode} />
                   <Textarea label="不能承诺事项" name="forbiddenPhraseList" rows={3} />
                   <Textarea label="审核意见" name="reviewComment" defaultValue="采纳为企业标准" rows={3} />
                   <Textarea label="风险提醒" name="forbiddenNotes" defaultValue={item.forbiddenNotes ?? ""} rows={3} />
+                  <Textarea label="风险原因" name="riskReason" defaultValue={item.riskReason ?? ""} rows={2} />
                   <SubmitButton>采纳为企业标准</SubmitButton>
                 </form>
               </div>
@@ -186,6 +214,15 @@ function Panel({ title, value, rows = 6 }: { title: string; value: string; rows?
     <div className="rounded-md border border-slate-200 bg-white p-4">
       <h3 className="text-sm font-semibold text-slate-950">{title}</h3>
       <textarea className="mt-3 w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-800" rows={rows} readOnly value={value} />
+    </div>
+  );
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-slate-500">{label}</p>
+      <p className="mt-1 font-medium text-slate-900">{value}</p>
     </div>
   );
 }

@@ -15,6 +15,10 @@ import {
   marketClawKnowledgeStatusOptions,
   marketClawKnowledgeTypeOptions,
   marketClawKnowledgeVisibilityOptions,
+  marketClawReplyRiskLevelLabels,
+  marketClawReplyRiskLevelOptions,
+  marketClawSendModeLabels,
+  marketClawSendModeOptions,
   parseMarketClawTextArray
 } from "@/lib/market-claw";
 import { customerTypeOptions, stageOptions } from "@/lib/options";
@@ -119,6 +123,11 @@ function KnowledgeForm({
     recommendedMaterialIds: unknown;
     forbiddenPhrases: unknown;
     riskNotes: string | null;
+    replyRiskLevel?: string;
+    sendMode?: string;
+    riskReason?: string | null;
+    requiresReview?: boolean;
+    internalOnlyNote?: string | null;
     sortOrder: number;
   };
 }) {
@@ -142,6 +151,8 @@ function KnowledgeForm({
         <Select label="知识层级" name="scopeLevel" options={marketClawKnowledgeScopeOptions} defaultValue={item?.scopeLevel ?? "BUSINESS_LINE"} />
         <Select label="可见范围" name="visibility" options={marketClawKnowledgeVisibilityOptions} defaultValue={item?.visibility ?? "TENANT"} />
         <Select label="审核状态" name="reviewStatus" options={marketClawKnowledgeReviewStatusOptions} defaultValue={item?.reviewStatus ?? "APPROVED"} />
+        <Select label="回复风险等级" name="replyRiskLevel" options={marketClawReplyRiskLevelOptions} defaultValue={item?.replyRiskLevel ?? "MEDIUM"} />
+        <Select label="使用模式" name="sendMode" options={marketClawSendModeOptions} defaultValue={item?.sendMode ?? "SALES_CONFIRM_REQUIRED"} />
         <Input label="部门名称" name="departmentName" defaultValue={item?.departmentName ?? ""} />
         <Input label="排序值" name="sortOrder" type="number" defaultValue={String(item?.sortOrder ?? 100)} />
       </div>
@@ -153,6 +164,12 @@ function KnowledgeForm({
       <MaterialCheckboxes materials={materials} selectedIds={selectedMaterialIds} />
       <Textarea label="不能承诺事项" name="forbiddenPhrases" defaultValue={forbiddenText} rows={3} />
       <Textarea label="风险提醒" name="riskNotes" defaultValue={item?.riskNotes ?? ""} rows={3} />
+      <Textarea label="风险原因" name="riskReason" defaultValue={item?.riskReason ?? ""} rows={2} />
+      <Textarea label="内部建议备注" name="internalOnlyNote" defaultValue={item?.internalOnlyNote ?? ""} rows={2} />
+      <label className="flex items-center gap-2 text-sm text-slate-700">
+        <input defaultChecked={item?.requiresReview ?? false} name="requiresReview" type="checkbox" value="true" />
+        <span>需要风险边界确认，必要时负责人介入</span>
+      </label>
       <SubmitButton>{item ? "保存知识条目" : "新增知识条目"}</SubmitButton>
     </form>
   );
@@ -177,6 +194,10 @@ export default async function MarketClawKnowledgePage({
   const reviewStatus = typeof searchParams?.reviewStatus === "string" ? searchParams.reviewStatus : "";
   const departmentName = typeof searchParams?.departmentName === "string" ? searchParams.departmentName : "";
   const creatorId = typeof searchParams?.creatorId === "string" ? searchParams.creatorId : "";
+  const replyRiskLevel = typeof searchParams?.replyRiskLevel === "string" ? searchParams.replyRiskLevel : "";
+  const sendMode = typeof searchParams?.sendMode === "string" ? searchParams.sendMode : "";
+  const internalOnly = typeof searchParams?.internalOnly === "string" ? searchParams.internalOnly : "";
+  const requiresReview = typeof searchParams?.requiresReview === "string" ? searchParams.requiresReview : "";
 
   const [businessLines, materials, users, knowledgeItems] = await Promise.all([
     prisma.businessLine.findMany({
@@ -199,6 +220,11 @@ export default async function MarketClawKnowledgePage({
         ...(status ? { status: status as never } : {}),
         ...(scopeLevel ? { scopeLevel: scopeLevel as never } : {}),
         ...(reviewStatus ? { reviewStatus: reviewStatus as never } : {}),
+        ...(replyRiskLevel ? { replyRiskLevel: replyRiskLevel as never } : {}),
+        ...(sendMode ? { sendMode: sendMode as never } : {}),
+        ...(internalOnly === "yes" ? { sendMode: "INTERNAL_ADVICE_ONLY" as never } : {}),
+        ...(requiresReview === "yes" ? { requiresReview: true } : {}),
+        ...(requiresReview === "no" ? { requiresReview: false } : {}),
         ...(departmentName ? { departmentName: { contains: departmentName } } : {}),
         ...(creatorId ? { createdById: creatorId } : {})
       },
@@ -252,6 +278,27 @@ export default async function MarketClawKnowledgePage({
           <Select label="状态" name="status" options={[{ value: "", label: "全部状态" }, ...marketClawKnowledgeStatusOptions]} defaultValue={status} />
           <Select label="知识层级" name="scopeLevel" options={[{ value: "", label: "全部层级" }, ...marketClawKnowledgeScopeOptions]} defaultValue={scopeLevel} />
           <Select label="审核状态" name="reviewStatus" options={[{ value: "", label: "全部审核状态" }, ...marketClawKnowledgeReviewStatusOptions]} defaultValue={reviewStatus} />
+          <Select label="风险等级" name="replyRiskLevel" options={[{ value: "", label: "全部风险等级" }, ...marketClawReplyRiskLevelOptions]} defaultValue={replyRiskLevel} />
+          <Select label="使用模式" name="sendMode" options={[{ value: "", label: "全部使用模式" }, ...marketClawSendModeOptions]} defaultValue={sendMode} />
+          <Select
+            label="仅内部建议"
+            name="internalOnly"
+            options={[
+              { value: "", label: "全部" },
+              { value: "yes", label: "仅内部建议" }
+            ]}
+            defaultValue={internalOnly}
+          />
+          <Select
+            label="是否需审核"
+            name="requiresReview"
+            options={[
+              { value: "", label: "全部" },
+              { value: "yes", label: "需边界确认" },
+              { value: "no", label: "无需边界确认" }
+            ]}
+            defaultValue={requiresReview}
+          />
           <Input label="部门" name="departmentName" defaultValue={departmentName} />
           <Select
             label="创建人"
@@ -292,6 +339,14 @@ export default async function MarketClawKnowledgePage({
                       <span className="rounded-md bg-slate-100 px-2.5 py-1 text-slate-700">
                         {marketClawKnowledgeVisibilityOptions.find((option) => option.value === item.visibility)?.label ?? item.visibility}
                       </span>
+                      <span className="rounded-md bg-amber-50 px-2.5 py-1 text-amber-700">
+                        {marketClawReplyRiskLevelLabels[item.replyRiskLevel]}
+                      </span>
+                      <span className="rounded-md bg-sky-50 px-2.5 py-1 text-sky-700">
+                        {marketClawSendModeLabels[item.sendMode]}
+                      </span>
+                      {item.requiresReview ? <span className="rounded-md bg-rose-50 px-2.5 py-1 text-rose-700">需边界确认</span> : null}
+                      {item.sendMode === "INTERNAL_ADVICE_ONLY" ? <span className="rounded-md bg-rose-50 px-2.5 py-1 text-rose-700">仅内部建议</span> : null}
                       {item.departmentName ? <span className="rounded-md bg-slate-100 px-2.5 py-1 text-slate-700">{item.departmentName}</span> : null}
                     </div>
                   </div>
@@ -301,6 +356,12 @@ export default async function MarketClawKnowledgePage({
                   </div>
                 </div>
                 <p className="mt-4 text-sm leading-6 text-slate-700">{item.content}</p>
+                <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                  <p className="font-medium text-amber-900">回复使用边界</p>
+                  <p className="mt-2">风险原因：{item.riskReason ?? item.riskNotes ?? "-"}</p>
+                  <p className="mt-1">内部建议：{item.internalOnlyNote ?? "-"}</p>
+                  <p className="mt-1">可作为销售回复参考：{item.sendMode === "INTERNAL_ADVICE_ONLY" ? "否" : "是"}</p>
+                </div>
                 <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
                   <h3 className="text-sm font-semibold text-slate-950">来源提示</h3>
                   <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">

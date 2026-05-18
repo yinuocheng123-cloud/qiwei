@@ -1,11 +1,11 @@
 /*
- * 文件说明：该文件实现客户详情页中的麻虾智能回复模块。
- * 功能说明：支持生成三版回复草稿、查看命中知识与风险提醒，并完成标签确认、保存跟进、创建任务和反馈沉淀。
+ * 文件说明：该文件实现客户详情页中的 Market Claw 智能回复模块。
+ * 功能说明：支持生成回复草稿、展示风险分级与使用模式，并按风险等级提供复制、保存、审核和内部备注入口。
  *
  * 结构概览：
  *   第一部分：导入依赖与类型
- *   第二部分：麻虾主组件
- *   第三部分：草稿卡片与辅助展示
+ *   第二部分：主组件与草稿卡片
+ *   第三部分：回复块、信息块和风险展示辅助组件
  */
 import type { BusinessLine, LeadTag, MarketClawKnowledgeItem, MarketClawReplyDraft, Material } from "@prisma/client";
 import {
@@ -14,14 +14,16 @@ import {
   createMarketClawTask,
   generateMarketClawReplyDraft,
   markMarketClawReplyCopied,
-  saveMarketClawReplyDraftAsPersonalKnowledge,
   saveMarketClawReplyDraftAsFollowUp,
+  saveMarketClawReplyDraftAsPersonalKnowledge,
   submitMarketClawReplyDraftForReview
 } from "@/lib/actions";
 import { MarketClawCopyButton } from "@/components/MarketClawCopyButton";
 import { Card, Input, Select, SubmitButton, Textarea } from "@/components/Ui";
 import {
   marketClawFeedbackOptions,
+  marketClawReplyRiskLevelLabels,
+  marketClawSendModeLabels,
   marketClawTagGroupLabels,
   parseMarketClawSuggestedTags,
   parseMarketClawSuggestedTask,
@@ -40,6 +42,13 @@ type DraftRecord = Pick<
   | "professionalReply"
   | "closingReply"
   | "riskWarnings"
+  | "replyRiskLevel"
+  | "sendMode"
+  | "riskReason"
+  | "requiresReview"
+  | "internalOnlyNote"
+  | "highRiskKnowledgeIds"
+  | "internalAdviceKnowledgeIds"
   | "matchedKnowledgeIds"
   | "suggestedTags"
   | "suggestedMaterials"
@@ -60,6 +69,20 @@ const replyTypeOptions = [
   { value: "PROFESSIONAL", label: "专业说明版" },
   { value: "CLOSING", label: "推进成交版" }
 ];
+
+function riskTone(level: DraftRecord["replyRiskLevel"]) {
+  if (level === "LOW") return "bg-emerald-50 text-emerald-700";
+  if (level === "HIGH") return "bg-amber-50 text-amber-800";
+  if (level === "BLOCKED") return "bg-rose-50 text-rose-700";
+  return "bg-sky-50 text-sky-700";
+}
+
+function sendModeTone(mode: DraftRecord["sendMode"]) {
+  if (mode === "AUTO_ALLOWED") return "bg-emerald-50 text-emerald-700";
+  if (mode === "RISK_CONFIRM_REQUIRED") return "bg-amber-50 text-amber-800";
+  if (mode === "INTERNAL_ADVICE_ONLY") return "bg-rose-50 text-rose-700";
+  return "bg-slate-100 text-slate-700";
+}
 
 export function MarketClawAssistant({
   tenantSlug,
@@ -93,11 +116,11 @@ export function MarketClawAssistant({
         <div>
           <h2 className="text-base font-semibold text-slate-950">Market Claw 智能回复</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            客户问问题时，Market Claw 会根据企业知识库、业务线、客户阶段和已有标签生成回复草稿。回复不会自动发送，只支持复制、保存为跟进和记录反馈。
+            客户提问后，系统会结合企业知识库、业务线、客户阶段和已有标签生成回复草稿，并给出风险等级和确认策略。本轮仍不做真实自动对外发送。
           </p>
         </div>
         <div className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          <p>当前版本不接企业微信上下文</p>
+          <p>当前版本不接外部沟通入口</p>
           <p className="mt-1">当前版本不自动发送客户消息</p>
         </div>
       </div>
@@ -123,22 +146,22 @@ export function MarketClawAssistant({
           drafts.map((draft) => (
             <MarketClawDraftCard
               key={draft.id}
+              confirmTagsAction={confirmTagsAction}
               copyAction={copyAction}
               createTaskAction={createTaskAction}
               draft={draft}
               existingTags={existingTags}
               feedbackAction={feedbackAction}
-              confirmTagsAction={confirmTagsAction}
               knowledgeItems={knowledgeItems}
               materials={materials}
-              savePersonalAction={savePersonalAction}
               saveAction={saveAction}
+              savePersonalAction={savePersonalAction}
               submitTrainingAction={submitTrainingAction}
             />
           ))
         ) : (
           <div className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-sm text-slate-500">
-            还没有生成 Market Claw 回复草稿。先输入客户问题，系统会生成简短微信版、专业说明版和推进成交版三种回复。
+            还没有生成 Market Claw 回复草稿。先输入客户问题，系统会生成三种回复，并标记风险等级和使用模式。
           </div>
         )}
       </div>
@@ -174,6 +197,12 @@ function MarketClawDraftCard({
   const matchedKnowledgeTitles = parseMarketClawTextArray(draft.matchedKnowledgeIds)
     .map((id) => knowledgeItems.find((item) => item.id === id)?.title)
     .filter((value): value is string => Boolean(value));
+  const highRiskKnowledgeTitles = parseMarketClawTextArray(draft.highRiskKnowledgeIds)
+    .map((id) => knowledgeItems.find((item) => item.id === id)?.title)
+    .filter((value): value is string => Boolean(value));
+  const internalAdviceTitles = parseMarketClawTextArray(draft.internalAdviceKnowledgeIds)
+    .map((id) => knowledgeItems.find((item) => item.id === id)?.title)
+    .filter((value): value is string => Boolean(value));
   const suggestedMaterialTitles = parseMarketClawTextArray(draft.suggestedMaterials)
     .map((id) => materials.find((item) => item.id === id)?.title)
     .filter((value): value is string => Boolean(value));
@@ -181,6 +210,9 @@ function MarketClawDraftCard({
   const suggestedTask = parseMarketClawSuggestedTask(draft.suggestedTask);
   const riskWarnings = parseMarketClawTextArray(draft.riskWarnings);
   const existingTagKeys = new Set(existingTags.map((item) => `${item.tagGroup}::${item.tagName}`));
+  const isBlocked = draft.replyRiskLevel === "BLOCKED";
+  const isHighRisk = draft.replyRiskLevel === "HIGH";
+  const isMediumRisk = draft.replyRiskLevel === "MEDIUM";
 
   return (
     <div className="rounded-md border border-slate-200 bg-slate-50/50 p-4">
@@ -189,17 +221,52 @@ function MarketClawDraftCard({
           <h3 className="text-sm font-semibold text-slate-950">客户问题：{draft.customerQuestion}</h3>
           <p className="mt-1 text-xs text-slate-500">{new Intl.DateTimeFormat("zh-CN", { dateStyle: "short", timeStyle: "short" }).format(new Date(draft.createdAt))}</p>
         </div>
-        <span className="rounded-md bg-white px-3 py-1 text-xs text-slate-600">反馈状态：{draft.feedbackStatus}</span>
+        <div className="flex flex-wrap gap-2 text-xs">
+          <span className={`rounded-md px-3 py-1 font-medium ${riskTone(draft.replyRiskLevel)}`}>{marketClawReplyRiskLevelLabels[draft.replyRiskLevel]}</span>
+          <span className={`rounded-md px-3 py-1 font-medium ${sendModeTone(draft.sendMode)}`}>{marketClawSendModeLabels[draft.sendMode]}</span>
+          <span className="rounded-md bg-white px-3 py-1 text-slate-600">反馈状态：{draft.feedbackStatus}</span>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4 text-sm">
+        <PolicyInfo label="风险等级" value={marketClawReplyRiskLevelLabels[draft.replyRiskLevel]} />
+        <PolicyInfo label="使用模式" value={marketClawSendModeLabels[draft.sendMode]} />
+        <PolicyInfo label="是否需要边界确认" value={draft.requiresReview ? "是" : "否"} />
+        <PolicyInfo label="风险原因" value={draft.riskReason ?? "-"} />
+      </div>
+
+      {draft.internalOnlyNote ? (
+        <div className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-3 text-sm text-rose-700">
+          <p className="font-medium text-rose-800">内部建议说明</p>
+          <p className="mt-1 leading-6">{draft.internalOnlyNote}</p>
+        </div>
+      ) : null}
+
+      <div className="mt-3 flex flex-wrap gap-2 text-xs">
+        {isHighRisk ? (
+          <>
+            <span className="rounded-md bg-amber-50 px-3 py-1 font-medium text-amber-800">查看边界提醒</span>
+            <span className="rounded-md bg-amber-50 px-3 py-1 font-medium text-amber-800">确认条件后使用</span>
+          </>
+        ) : null}
+        {isBlocked ? (
+          <>
+            <span className="rounded-md bg-rose-50 px-3 py-1 font-medium text-rose-700">仅内部建议</span>
+            <span className="rounded-md bg-rose-50 px-3 py-1 font-medium text-rose-700">查看不建议承诺事项</span>
+          </>
+        ) : null}
       </div>
 
       <div className="mt-4 grid gap-4">
-        <ReplyBlock action={copyAction} draftId={draft.id} replyType="SHORT" title="简短微信版" text={draft.shortReply ?? "-"} />
-        <ReplyBlock action={copyAction} draftId={draft.id} replyType="PROFESSIONAL" title="专业说明版" text={draft.professionalReply ?? "-"} />
-        <ReplyBlock action={copyAction} draftId={draft.id} replyType="CLOSING" title="推进成交版" text={draft.closingReply ?? "-"} />
+        <ReplyBlock action={copyAction} allowCopy={!isBlocked} draftId={draft.id} replyType="SHORT" title="简短微信版" text={draft.shortReply ?? "-"} />
+        <ReplyBlock action={copyAction} allowCopy={!isBlocked} draftId={draft.id} replyType="PROFESSIONAL" title="专业说明版" text={draft.professionalReply ?? "-"} />
+        <ReplyBlock action={copyAction} allowCopy={!isBlocked} draftId={draft.id} replyType="CLOSING" title="推进成交版" text={draft.closingReply ?? "-"} />
       </div>
 
-      <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <InfoList title="命中知识依据" values={matchedKnowledgeTitles} emptyText="本次未命中特定知识条目。" />
+      <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <InfoList title="命中知识依据" values={matchedKnowledgeTitles} emptyText="本次没有命中特定知识条目。" />
+        <InfoList title="命中的高风险知识" values={highRiskKnowledgeTitles} emptyText="本次没有命中高风险知识。" />
+        <InfoList title="命中的内部建议" values={internalAdviceTitles} emptyText="本次没有命中内部建议知识。" />
         <InfoList title="推荐资料" values={suggestedMaterialTitles} emptyText="本次没有强匹配资料。" />
       </div>
 
@@ -244,30 +311,50 @@ function MarketClawDraftCard({
       </div>
 
       <div className="mt-5 grid gap-4 xl:grid-cols-2">
-        <form action={saveAction} className="rounded-md border border-slate-200 bg-white p-4 space-y-3">
-          <h4 className="text-sm font-semibold text-slate-950">保存为跟进记录</h4>
-          <input name="draftId" type="hidden" value={draft.id} />
-          <Select label="选用回复版本" name="selectedReplyType" options={replyTypeOptions} defaultValue="SHORT" />
-          <Textarea label="销售修改版本" name="salesEditedReply" rows={3} />
-          <SubmitButton>保存为跟进记录</SubmitButton>
-        </form>
+        {!isBlocked ? (
+          <form action={saveAction} className="rounded-md border border-slate-200 bg-white p-4 space-y-3">
+            <h4 className="text-sm font-semibold text-slate-950">{draft.replyRiskLevel === "LOW" ? "保存为跟进" : "保存为跟进记录"}</h4>
+            <input name="draftId" type="hidden" value={draft.id} />
+            <Select label="选用回复版本" name="selectedReplyType" options={replyTypeOptions} defaultValue="SHORT" />
+            <Textarea label="销售修改版本" name="salesEditedReply" rows={3} />
+            <SubmitButton>{draft.replyRiskLevel === "LOW" ? "保存为跟进" : "保存为跟进记录"}</SubmitButton>
+          </form>
+        ) : (
+          <div className="rounded-md border border-rose-200 bg-rose-50 p-4 space-y-3">
+            <h4 className="text-sm font-semibold text-rose-800">仅内部建议</h4>
+            <p className="text-sm leading-6 text-rose-700">这条内容只能作为内部建议或边界提醒，不应直接作为客户回复使用。</p>
+          </div>
+        )}
 
-        <form action={savePersonalAction} className="rounded-md border border-slate-200 bg-white p-4 space-y-3">
-          <h4 className="text-sm font-semibold text-slate-950">保存为个人常用话术</h4>
-          <input name="draftId" type="hidden" value={draft.id} />
-          <Select label="选用回复版本" name="selectedReplyType" options={replyTypeOptions} defaultValue="PROFESSIONAL" />
-          <Input label="个人话术标题" name="knowledgeTitle" defaultValue={`个人话术：${draft.customerQuestion.slice(0, 24)}`} />
-          <Textarea label="销售修改版本" name="salesEditedReply" rows={3} />
-          <SubmitButton>保存为个人常用话术</SubmitButton>
-        </form>
+        {!isBlocked ? (
+          <form action={savePersonalAction} className="rounded-md border border-slate-200 bg-white p-4 space-y-3">
+            <h4 className="text-sm font-semibold text-slate-950">{draft.replyRiskLevel === "LOW" ? "设为低风险承接模板" : "保存为个人常用话术"}</h4>
+            <input name="draftId" type="hidden" value={draft.id} />
+            <Select label="选用回复版本" name="selectedReplyType" options={replyTypeOptions} defaultValue="PROFESSIONAL" />
+            <Input label="个人话术标题" name="knowledgeTitle" defaultValue={`个人话术：${draft.customerQuestion.slice(0, 24)}`} />
+            <Textarea label="销售修改版本" name="salesEditedReply" rows={3} />
+            <SubmitButton>{draft.replyRiskLevel === "LOW" ? "设为低风险承接模板" : "保存为个人常用话术"}</SubmitButton>
+          </form>
+        ) : (
+          <form action={feedbackAction} className="rounded-md border border-slate-200 bg-white p-4 space-y-3">
+            <h4 className="text-sm font-semibold text-slate-950">保存内部备注</h4>
+            <input name="draftId" type="hidden" value={draft.id} />
+            <input name="feedbackStatus" type="hidden" value="NEEDS_EDIT" />
+            <Textarea label="内部备注" name="feedbackNote" rows={4} />
+            <Textarea label="销售备注" name="salesEditedReply" rows={3} />
+            <SubmitButton>保存内部备注</SubmitButton>
+          </form>
+        )}
 
         <form action={submitTrainingAction} className="rounded-md border border-slate-200 bg-slate-50 p-4 space-y-3">
-          <h4 className="text-sm font-semibold text-slate-950">提交为训练样本审核</h4>
+          <h4 className="text-sm font-semibold text-slate-950">
+            {isBlocked ? "仅内部建议" : isHighRisk ? "确认条件后使用 / 提交优化" : isMediumRisk ? "销售确认后使用 / 提交优化" : "提交为训练样本审核"}
+          </h4>
           <input name="draftId" type="hidden" value={draft.id} />
           <Select label="选用回复版本" name="selectedReplyType" options={replyTypeOptions} defaultValue="PROFESSIONAL" />
           <Textarea label="销售修改版本" name="salesEditedReply" rows={3} />
-          <Textarea label="销售备注" name="salesNote" rows={3} />
-          <SubmitButton>提交为训练样本审核</SubmitButton>
+          <Textarea label={isBlocked ? "内部备注" : "销售备注"} name="salesNote" rows={3} />
+          <SubmitButton>{isBlocked ? "保存内部建议" : isHighRisk ? "确认条件后使用 / 提交优化" : isMediumRisk ? "销售确认后使用 / 提交优化" : "提交为训练样本审核"}</SubmitButton>
         </form>
 
         <form action={feedbackAction} className="rounded-md border border-slate-200 bg-white p-4 space-y-3">
@@ -286,9 +373,7 @@ function MarketClawDraftCard({
 
       <div className="mt-4 rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-700">
         <p className="font-medium text-slate-900">训练状态</p>
-        <p className="mt-2">
-          {draft.submittedForReviewAt ? "这条回复已经提交审核。" : "这条回复还没有提交审核。"}
-        </p>
+        <p className="mt-2">{draft.submittedForReviewAt ? "这条回复已经提交审核。" : "这条回复还没有提交审核。"}</p>
         {draft.trainingCase ? <p className="mt-1">当前训练状态：{draft.trainingCase.reviewStatus}</p> : null}
         {draft.trainingCase?.reviewComment ? <p className="mt-1">审核意见：{draft.trainingCase.reviewComment}</p> : null}
       </div>
@@ -297,7 +382,7 @@ function MarketClawDraftCard({
         {suggestedTask ? (
           <form action={createTaskAction}>
             <input name="draftId" type="hidden" value={draft.id} />
-            <SubmitButton>创建下一步任务</SubmitButton>
+            <SubmitButton>{isBlocked || isHighRisk ? "创建负责人任务" : "创建下一步任务"}</SubmitButton>
           </form>
         ) : null}
       </div>
@@ -310,19 +395,21 @@ function ReplyBlock({
   text,
   draftId,
   replyType,
-  action
+  action,
+  allowCopy
 }: {
   title: string;
   text: string;
   draftId: string;
   replyType: string;
   action: (formData: FormData) => Promise<void>;
+  allowCopy: boolean;
 }) {
   return (
     <div className="rounded-md border border-slate-200 bg-white p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h4 className="text-sm font-semibold text-slate-950">{title}</h4>
-        <MarketClawCopyButton action={action} draftId={draftId} selectedReplyType={replyType} text={text} />
+        {allowCopy ? <MarketClawCopyButton action={action} draftId={draftId} selectedReplyType={replyType} text={text} /> : null}
       </div>
       <textarea className="mt-3 w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-800" rows={4} readOnly value={text} />
     </div>
@@ -336,6 +423,15 @@ function InfoList({ title, values, emptyText }: { title: string; values: string[
       <div className="mt-2 space-y-2 text-sm text-slate-700">
         {values.length ? values.map((value) => <p key={value}>{value}</p>) : <p className="text-slate-500">{emptyText}</p>}
       </div>
+    </div>
+  );
+}
+
+function PolicyInfo({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-slate-500">{label}</p>
+      <p className="mt-1 font-medium text-slate-900">{value}</p>
     </div>
   );
 }

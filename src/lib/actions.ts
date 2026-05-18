@@ -33,9 +33,11 @@ import {
   MarketClawKnowledgeStatus,
   MarketClawKnowledgeType,
   MarketClawKnowledgeVisibility,
+  MarketClawReplyRiskLevel,
   MarketClawReplySourceScope,
   MarketClawReplyUseStatus,
   MarketClawReviewResult,
+  MarketClawSendMode,
   MarketClawTrainingRating,
   MarketClawTrainingReviewStatus,
   MarketClawTrainingScope,
@@ -92,7 +94,9 @@ import {
   findSimilarKnowledgeItems,
   generateMarketClawKnowledgeCandidates,
   generateMarketClawReply,
+  inferMarketClawPolicy,
   materialTitlesFromIds,
+  resolveMarketClawKnowledgePolicy,
   type MarketClawKnowledgeCandidateMergeAction,
   parseMarketClawSuggestedTags,
   parseMarketClawSuggestedTask,
@@ -1389,6 +1393,14 @@ function parseMarketClawKnowledgeVisibility(formData: FormData, fallback: Market
   return enumValue(MarketClawKnowledgeVisibility, text(formData, "visibility"), fallback);
 }
 
+function parseMarketClawReplyRiskLevel(formData: FormData, key: string, fallback: MarketClawReplyRiskLevel) {
+  return enumValue(MarketClawReplyRiskLevel, text(formData, key), fallback);
+}
+
+function parseMarketClawSendMode(formData: FormData, key: string, fallback: MarketClawSendMode) {
+  return enumValue(MarketClawSendMode, text(formData, key), fallback);
+}
+
 function marketClawVisibilityFromScope(scopeLevel: MarketClawKnowledgeScopeLevel) {
   if (scopeLevel === MarketClawKnowledgeScopeLevel.PERSONAL) {
     return MarketClawKnowledgeVisibility.PRIVATE;
@@ -1421,6 +1433,12 @@ function parseMarketClawCandidateKeywords(formData: FormData, key: string) {
   return parseMarketClawStringArray(formData, key);
 }
 
+function parseBooleanField(formData: FormData, key: string, fallback = false) {
+  const value = text(formData, key);
+  if (!value) return fallback;
+  return ["true", "1", "yes", "on"].includes(value.toLowerCase());
+}
+
 function parseMarketClawCandidateMergeAction(
   formData: FormData,
   key: string,
@@ -1439,6 +1457,32 @@ function mergeMarketClawJsonTextArray(existing: unknown, nextValues: Array<strin
 function mergeMarketClawRiskNotes(existing: string | null | undefined, next: string | null | undefined) {
   const values = [existing?.trim(), next?.trim()].filter((item): item is string => Boolean(item));
   return [...new Set(values)].join("\n\n");
+}
+
+function normalizeMarketClawPolicyInput(input: {
+  knowledgeType?: MarketClawKnowledgeType | null;
+  content: string;
+  forbiddenPhrases?: string[];
+  riskNotes?: string | null;
+  replyRiskLevel?: MarketClawReplyRiskLevel | null;
+  sendMode?: MarketClawSendMode | null;
+  riskReason?: string | null;
+  internalOnlyNote?: string | null;
+  allowLowRisk?: boolean;
+  personalScope?: boolean;
+}) {
+  return inferMarketClawPolicy({
+    knowledgeType: input.knowledgeType,
+    content: input.content,
+    forbiddenPhrases: input.forbiddenPhrases,
+    riskNotes: input.riskNotes,
+    replyRiskLevel: input.replyRiskLevel,
+    sendMode: input.sendMode,
+    riskReason: input.riskReason,
+    internalOnlyNote: input.internalOnlyNote,
+    allowLowRisk: input.allowLowRisk,
+    personalScope: input.personalScope
+  });
 }
 
 function hasTextDiff(left: string | null | undefined, right: string | null | undefined) {
@@ -1594,10 +1638,22 @@ function buildMarketClawKnowledgePayload(formData: FormData) {
 
   const keywords = parseMarketClawStringArray(formData, "keywords");
   const forbiddenPhrases = parseMarketClawStringArray(formData, "forbiddenPhrases");
+  const knowledgeType = enumValue(MarketClawKnowledgeType, text(formData, "knowledgeType"), MarketClawKnowledgeType.OTHER);
   const recommendedMaterialIds = formData
     .getAll("recommendedMaterialIds")
     .map((value) => (typeof value === "string" ? value.trim() : ""))
     .filter(Boolean);
+  const normalizedPolicy = normalizeMarketClawPolicyInput({
+    knowledgeType,
+    content,
+    forbiddenPhrases,
+    riskNotes: text(formData, "riskNotes"),
+    replyRiskLevel: parseMarketClawReplyRiskLevel(formData, "replyRiskLevel", MarketClawReplyRiskLevel.MEDIUM),
+    sendMode: parseMarketClawSendMode(formData, "sendMode", MarketClawSendMode.SALES_CONFIRM_REQUIRED),
+    riskReason: text(formData, "riskReason"),
+    internalOnlyNote: text(formData, "internalOnlyNote"),
+    allowLowRisk: parseBooleanField(formData, "allowLowRisk", false)
+  });
 
   return {
     businessLineId: businessLineId || null,
@@ -1605,7 +1661,7 @@ function buildMarketClawKnowledgePayload(formData: FormData) {
     departmentName: text(formData, "departmentName"),
     title,
     content,
-    knowledgeType: enumValue(MarketClawKnowledgeType, text(formData, "knowledgeType"), MarketClawKnowledgeType.OTHER),
+    knowledgeType,
     status: enumValue(MarketClawKnowledgeStatus, text(formData, "status"), MarketClawKnowledgeStatus.ACTIVE),
     scopeLevel: parseMarketClawKnowledgeScope(formData, MarketClawKnowledgeScopeLevel.BUSINESS_LINE),
     visibility: parseMarketClawKnowledgeVisibility(formData, MarketClawKnowledgeVisibility.TENANT),
@@ -1622,6 +1678,11 @@ function buildMarketClawKnowledgePayload(formData: FormData) {
     recommendedMaterialIds,
     forbiddenPhrases,
     riskNotes: text(formData, "riskNotes"),
+    replyRiskLevel: normalizedPolicy.replyRiskLevel,
+    sendMode: normalizedPolicy.sendMode,
+    riskReason: normalizedPolicy.riskReason,
+    requiresReview: normalizedPolicy.requiresReview,
+    internalOnlyNote: normalizedPolicy.internalOnlyNote,
     sortOrder: parseNumber(text(formData, "sortOrder"), 100)
   };
 }
@@ -1711,9 +1772,41 @@ export async function createMarketClawKnowledgeItem(tenantSlug: string, formData
       status: knowledgeItem.status,
       scopeLevel: knowledgeItem.scopeLevel,
       reviewStatus: knowledgeItem.reviewStatus,
-      departmentName: knowledgeItem.departmentName
+      departmentName: knowledgeItem.departmentName,
+      replyRiskLevel: knowledgeItem.replyRiskLevel,
+      sendMode: knowledgeItem.sendMode
     }
   });
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "market_claw_reply_risk_level_assigned",
+    entityType: "MarketClawKnowledgeItem",
+    entityId: knowledgeItem.id,
+    metadata: {
+      knowledgeItemId: knowledgeItem.id,
+      replyRiskLevel: knowledgeItem.replyRiskLevel,
+      sendMode: knowledgeItem.sendMode,
+      riskReason: knowledgeItem.riskReason,
+      updatedById: user.id
+    }
+  });
+  if (knowledgeItem.replyRiskLevel === MarketClawReplyRiskLevel.BLOCKED) {
+    await safeWriteAuditLog({
+      tenantId: tenant.id,
+      userId: user.id,
+      action: "market_claw_internal_advice_created",
+      entityType: "MarketClawKnowledgeItem",
+      entityId: knowledgeItem.id,
+      metadata: {
+        knowledgeItemId: knowledgeItem.id,
+        replyRiskLevel: knowledgeItem.replyRiskLevel,
+        sendMode: knowledgeItem.sendMode,
+        riskReason: knowledgeItem.riskReason,
+        updatedById: user.id
+      }
+    });
+  }
 
   revalidatePath(`/app/${tenantSlug}/market-claw/knowledge`);
   revalidatePath(`/app/${tenantSlug}/leads`);
@@ -1753,7 +1846,9 @@ export async function updateMarketClawKnowledgeItem(tenantSlug: string, knowledg
       status: knowledgeItem.status,
       scopeLevel: knowledgeItem.scopeLevel,
       reviewStatus: knowledgeItem.reviewStatus,
-      departmentName: knowledgeItem.departmentName
+      departmentName: knowledgeItem.departmentName,
+      replyRiskLevel: knowledgeItem.replyRiskLevel,
+      sendMode: knowledgeItem.sendMode
     }
   });
   if (
@@ -1774,6 +1869,38 @@ export async function updateMarketClawKnowledgeItem(tenantSlug: string, knowledg
         nextReviewStatus: knowledgeItem.reviewStatus,
         previousDepartmentName: existing.departmentName,
         nextDepartmentName: knowledgeItem.departmentName
+      }
+    });
+  }
+  if (existing.replyRiskLevel !== knowledgeItem.replyRiskLevel) {
+    await safeWriteAuditLog({
+      tenantId: tenant.id,
+      userId: user.id,
+      action: "market_claw_reply_risk_level_updated",
+      entityType: "MarketClawKnowledgeItem",
+      entityId: knowledgeItem.id,
+      metadata: {
+        knowledgeItemId: knowledgeItem.id,
+        previousReplyRiskLevel: existing.replyRiskLevel,
+        replyRiskLevel: knowledgeItem.replyRiskLevel,
+        riskReason: knowledgeItem.riskReason,
+        updatedById: user.id
+      }
+    });
+  }
+  if (existing.sendMode !== knowledgeItem.sendMode) {
+    await safeWriteAuditLog({
+      tenantId: tenant.id,
+      userId: user.id,
+      action: "market_claw_send_mode_updated",
+      entityType: "MarketClawKnowledgeItem",
+      entityId: knowledgeItem.id,
+      metadata: {
+        knowledgeItemId: knowledgeItem.id,
+        previousSendMode: existing.sendMode,
+        sendMode: knowledgeItem.sendMode,
+        riskReason: knowledgeItem.riskReason,
+        updatedById: user.id
       }
     });
   }
@@ -1833,6 +1960,11 @@ export async function createMarketClawIngestionBatch(tenantSlug: string, formDat
           suggestedKeywords: candidate.suggestedKeywords,
           suggestedForbiddenPhrases: candidate.suggestedForbiddenPhrases,
           suggestedRiskNotes: candidate.suggestedRiskNotes,
+          suggestedReplyRiskLevel: candidate.suggestedReplyRiskLevel,
+          suggestedSendMode: candidate.suggestedSendMode,
+          suggestedRiskReason: candidate.suggestedRiskReason,
+          requiresReview: candidate.requiresReview,
+          internalOnlyNote: candidate.internalOnlyNote,
           suggestedReplyShort: candidate.suggestedReplyShort,
           suggestedReplyProfessional: candidate.suggestedReplyProfessional,
           suggestedReplyClosing: candidate.suggestedReplyClosing,
@@ -1913,6 +2045,17 @@ export async function adoptMarketClawKnowledgeCandidate(tenantSlug: string, cand
   const keywords = parseMarketClawCandidateKeywords(formData, "keywords");
   const forbiddenPhrases = parseMarketClawCandidateKeywords(formData, "forbiddenPhrases");
   const riskNotes = text(formData, "riskNotes") ?? candidate.suggestedRiskNotes;
+  const normalizedPolicy = normalizeMarketClawPolicyInput({
+    knowledgeType,
+    content,
+    forbiddenPhrases,
+    riskNotes,
+    replyRiskLevel: parseMarketClawReplyRiskLevel(formData, "replyRiskLevel", candidate.suggestedReplyRiskLevel),
+    sendMode: parseMarketClawSendMode(formData, "sendMode", candidate.suggestedSendMode),
+    riskReason: text(formData, "riskReason") ?? candidate.suggestedRiskReason,
+    internalOnlyNote: text(formData, "internalOnlyNote") ?? candidate.internalOnlyNote,
+    allowLowRisk: parseBooleanField(formData, "allowLowRisk", false)
+  });
   const reviewComment = text(formData, "reviewComment");
   const modified =
     hasTextDiff(title, candidate.title) ||
@@ -1921,7 +2064,11 @@ export async function adoptMarketClawKnowledgeCandidate(tenantSlug: string, cand
     scopeLevel !== candidate.suggestedScopeLevel ||
     hasStringArrayDiff(keywords, parseMarketClawTextArray(candidate.suggestedKeywords)) ||
     hasStringArrayDiff(forbiddenPhrases, parseMarketClawTextArray(candidate.suggestedForbiddenPhrases)) ||
-    hasTextDiff(riskNotes, candidate.suggestedRiskNotes);
+    hasTextDiff(riskNotes, candidate.suggestedRiskNotes) ||
+    normalizedPolicy.replyRiskLevel !== candidate.suggestedReplyRiskLevel ||
+    normalizedPolicy.sendMode !== candidate.suggestedSendMode ||
+    hasTextDiff(normalizedPolicy.riskReason, candidate.suggestedRiskReason) ||
+    hasTextDiff(normalizedPolicy.internalOnlyNote, candidate.internalOnlyNote);
 
   const knowledgeItem = await prisma.marketClawKnowledgeItem.create({
     data: {
@@ -1945,6 +2092,11 @@ export async function adoptMarketClawKnowledgeCandidate(tenantSlug: string, cand
       keywords,
       forbiddenPhrases,
       riskNotes,
+      replyRiskLevel: normalizedPolicy.replyRiskLevel,
+      sendMode: normalizedPolicy.sendMode,
+      riskReason: normalizedPolicy.riskReason,
+      requiresReview: normalizedPolicy.requiresReview,
+      internalOnlyNote: normalizedPolicy.internalOnlyNote,
       sortOrder: knowledgeType === MarketClawKnowledgeType.FORBIDDEN_COMMITMENT ? 40 : 85
     }
   });
@@ -1958,7 +2110,12 @@ export async function adoptMarketClawKnowledgeCandidate(tenantSlug: string, cand
       reviewComment,
       adoptedKnowledgeItemId: knowledgeItem.id,
       mergeAction: "ADOPT_AS_NEW",
-      mergeReason: reviewComment
+      mergeReason: reviewComment,
+      suggestedReplyRiskLevel: normalizedPolicy.replyRiskLevel,
+      suggestedSendMode: normalizedPolicy.sendMode,
+      suggestedRiskReason: normalizedPolicy.riskReason,
+      requiresReview: normalizedPolicy.requiresReview,
+      internalOnlyNote: normalizedPolicy.internalOnlyNote
     }
   });
   await refreshMarketClawIngestionBatch(candidate.batchId);
@@ -1976,9 +2133,42 @@ export async function adoptMarketClawKnowledgeCandidate(tenantSlug: string, cand
       scopeLevel: knowledgeItem.scopeLevel,
       reviewStatus: knowledgeItem.reviewStatus,
       sourceIngestionBatchId: candidate.batchId,
-      sourceKnowledgeCandidateId: candidate.id
+      sourceKnowledgeCandidateId: candidate.id,
+      replyRiskLevel: knowledgeItem.replyRiskLevel,
+      sendMode: knowledgeItem.sendMode
     }
   });
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "market_claw_reply_risk_level_assigned",
+    entityType: "MarketClawKnowledgeCandidate",
+    entityId: candidate.id,
+    metadata: {
+      knowledgeItemId: knowledgeItem.id,
+      replyRiskLevel: knowledgeItem.replyRiskLevel,
+      sendMode: knowledgeItem.sendMode,
+      riskReason: knowledgeItem.riskReason,
+      updatedById: user.id
+    }
+  });
+  if (knowledgeItem.replyRiskLevel === MarketClawReplyRiskLevel.BLOCKED) {
+    await safeWriteAuditLog({
+      tenantId: tenant.id,
+      userId: user.id,
+      action: "market_claw_internal_advice_created",
+      entityType: "MarketClawKnowledgeItem",
+      entityId: knowledgeItem.id,
+      metadata: {
+        knowledgeItemId: knowledgeItem.id,
+        sourceKnowledgeCandidateId: candidate.id,
+        replyRiskLevel: knowledgeItem.replyRiskLevel,
+        sendMode: knowledgeItem.sendMode,
+        riskReason: knowledgeItem.riskReason,
+        updatedById: user.id
+      }
+    });
+  }
   await safeWriteAuditLog({
     tenantId: tenant.id,
     userId: user.id,
@@ -2086,6 +2276,48 @@ export async function mergeMarketClawKnowledgeCandidate(tenantSlug: string, cand
     targetKnowledgeItem.forbiddenPhrases,
     parseMarketClawTextArray(candidate.suggestedForbiddenPhrases)
   );
+  const nextRiskNotes = mergeMarketClawRiskNotes(targetKnowledgeItem.riskNotes, candidate.suggestedRiskNotes);
+  const targetPolicy = resolveMarketClawKnowledgePolicy(targetKnowledgeItem);
+  const candidatePolicy = normalizeMarketClawPolicyInput({
+    knowledgeType: candidate.knowledgeType,
+    content: candidate.content,
+    forbiddenPhrases: parseMarketClawTextArray(candidate.suggestedForbiddenPhrases),
+    riskNotes: candidate.suggestedRiskNotes,
+    replyRiskLevel: candidate.suggestedReplyRiskLevel,
+    sendMode: candidate.suggestedSendMode,
+    riskReason: candidate.suggestedRiskReason,
+    internalOnlyNote: candidate.internalOnlyNote
+  });
+  const mergedPolicy = normalizeMarketClawPolicyInput({
+    knowledgeType: targetKnowledgeItem.knowledgeType,
+    content: mergedContent,
+    forbiddenPhrases: nextForbiddenPhrases,
+    riskNotes: nextRiskNotes,
+    replyRiskLevel:
+      targetPolicy.replyRiskLevel === MarketClawReplyRiskLevel.BLOCKED ||
+      candidatePolicy.replyRiskLevel === MarketClawReplyRiskLevel.BLOCKED
+        ? MarketClawReplyRiskLevel.BLOCKED
+        : targetPolicy.replyRiskLevel === MarketClawReplyRiskLevel.HIGH ||
+            candidatePolicy.replyRiskLevel === MarketClawReplyRiskLevel.HIGH
+          ? MarketClawReplyRiskLevel.HIGH
+          : targetPolicy.replyRiskLevel === MarketClawReplyRiskLevel.MEDIUM ||
+              candidatePolicy.replyRiskLevel === MarketClawReplyRiskLevel.MEDIUM
+            ? MarketClawReplyRiskLevel.MEDIUM
+            : MarketClawReplyRiskLevel.LOW,
+    sendMode:
+      targetPolicy.sendMode === MarketClawSendMode.INTERNAL_ADVICE_ONLY ||
+      candidatePolicy.sendMode === MarketClawSendMode.INTERNAL_ADVICE_ONLY
+        ? MarketClawSendMode.INTERNAL_ADVICE_ONLY
+        : targetPolicy.sendMode === MarketClawSendMode.RISK_CONFIRM_REQUIRED ||
+            candidatePolicy.sendMode === MarketClawSendMode.RISK_CONFIRM_REQUIRED
+          ? MarketClawSendMode.RISK_CONFIRM_REQUIRED
+          : targetPolicy.sendMode === MarketClawSendMode.SALES_CONFIRM_REQUIRED ||
+              candidatePolicy.sendMode === MarketClawSendMode.SALES_CONFIRM_REQUIRED
+            ? MarketClawSendMode.SALES_CONFIRM_REQUIRED
+            : MarketClawSendMode.AUTO_ALLOWED,
+    riskReason: [targetPolicy.riskReason, candidatePolicy.riskReason].filter(Boolean).join("；"),
+    internalOnlyNote: targetPolicy.internalOnlyNote ?? candidatePolicy.internalOnlyNote
+  });
   const nextSourceCandidateIds = mergeMarketClawJsonTextArray(targetKnowledgeItem.sourceCandidateIds, [
     targetKnowledgeItem.sourceKnowledgeCandidateId,
     candidate.id
@@ -2110,7 +2342,12 @@ export async function mergeMarketClawKnowledgeCandidate(tenantSlug: string, cand
         lastMergedById: user.id,
         keywords: nextKeywords,
         forbiddenPhrases: nextForbiddenPhrases,
-        riskNotes: mergeMarketClawRiskNotes(targetKnowledgeItem.riskNotes, candidate.suggestedRiskNotes)
+        riskNotes: nextRiskNotes,
+        replyRiskLevel: mergedPolicy.replyRiskLevel,
+        sendMode: mergedPolicy.sendMode,
+        riskReason: mergedPolicy.riskReason,
+        requiresReview: mergedPolicy.requiresReview,
+        internalOnlyNote: mergedPolicy.internalOnlyNote
       }
     }),
     prisma.marketClawKnowledgeCandidate.update({
@@ -2122,6 +2359,11 @@ export async function mergeMarketClawKnowledgeCandidate(tenantSlug: string, cand
         mergeTargetKnowledgeItemId: targetKnowledgeItem.id,
         mergeAction,
         mergeReason,
+        suggestedReplyRiskLevel: mergedPolicy.replyRiskLevel,
+        suggestedSendMode: mergedPolicy.sendMode,
+        suggestedRiskReason: mergedPolicy.riskReason,
+        requiresReview: mergedPolicy.requiresReview,
+        internalOnlyNote: mergedPolicy.internalOnlyNote,
         mergedAt,
         mergedById: user.id
       }
@@ -2159,7 +2401,9 @@ export async function mergeMarketClawKnowledgeCandidate(tenantSlug: string, cand
       businessLineId: knowledgeItem.businessLineId,
       mergeAction,
       sourceCandidateCount: nextSourceCandidateIds.length,
-      sourceBatchCount: nextSourceBatchIds.length
+      sourceBatchCount: nextSourceBatchIds.length,
+      replyRiskLevel: knowledgeItem.replyRiskLevel,
+      sendMode: knowledgeItem.sendMode
     }
   });
 
@@ -2233,6 +2477,11 @@ export async function generateMarketClawTrainingCase(tenantSlug: string, formDat
       generatedClosingReply: reply.closingReply,
       salesNote: text(formData, "salesNote"),
       forbiddenNotes: reply.riskWarnings.join("\n"),
+      replyRiskLevel: reply.replyRiskLevel,
+      sendMode: reply.sendMode,
+      riskReason: reply.riskReason,
+      requiresReview: reply.requiresReview,
+      internalOnlyNote: reply.internalOnlyNote,
       reviewStatus: MarketClawTrainingReviewStatus.GENERATED
     }
   });
@@ -2250,6 +2499,9 @@ export async function generateMarketClawTrainingCase(tenantSlug: string, formDat
       knowledgeItemIds: reply.matchedKnowledgeIds,
       suggestedTagsCount: reply.suggestedTags.length,
       riskWarningCount: reply.riskWarnings.length,
+      replyRiskLevel: reply.replyRiskLevel,
+      sendMode: reply.sendMode,
+      riskReason: reply.riskReason,
       suggestedMaterials: materialTitlesFromIds(materials, reply.suggestedMaterialIds)
     }
   });
@@ -2262,6 +2514,27 @@ export async function generateMarketClawTrainingCase(tenantSlug: string, formDat
 
 export async function reviewMarketClawTrainingCase(tenantSlug: string, trainingCaseId: string, formData: FormData) {
   const { user, tenant } = await requireMarketClawTrainingReviewAccess(tenantSlug);
+  const existing = await prisma.marketClawTrainingCase.findFirst({
+    where: { id: trainingCaseId, tenantId: tenant.id }
+  });
+  if (!existing) return;
+  const content =
+    text(formData, "manualOptimizedReply") ??
+    existing.manualOptimizedReply ??
+    existing.generatedProfessionalReply ??
+    existing.generatedShortReply ??
+    existing.generatedClosingReply ??
+    existing.customerQuestion;
+  const normalizedPolicy = normalizeMarketClawPolicyInput({
+    knowledgeType: MarketClawKnowledgeType.STANDARD_REPLY,
+    content,
+    forbiddenPhrases: parseMarketClawStringArray(formData, "forbiddenPhraseList"),
+    riskNotes: text(formData, "forbiddenNotes") ?? existing.forbiddenNotes,
+    replyRiskLevel: parseMarketClawReplyRiskLevel(formData, "replyRiskLevel", existing.replyRiskLevel),
+    sendMode: parseMarketClawSendMode(formData, "sendMode", existing.sendMode),
+    riskReason: text(formData, "riskReason") ?? existing.riskReason,
+    internalOnlyNote: text(formData, "internalOnlyNote") ?? existing.internalOnlyNote
+  });
 
   const trainingCase = await prisma.marketClawTrainingCase.update({
     where: { id: trainingCaseId, tenantId: tenant.id },
@@ -2269,6 +2542,11 @@ export async function reviewMarketClawTrainingCase(tenantSlug: string, trainingC
       manualOptimizedReply: text(formData, "manualOptimizedReply"),
       salesNote: text(formData, "salesNote"),
       forbiddenNotes: text(formData, "forbiddenNotes"),
+      replyRiskLevel: normalizedPolicy.replyRiskLevel,
+      sendMode: normalizedPolicy.sendMode,
+      riskReason: normalizedPolicy.riskReason,
+      requiresReview: normalizedPolicy.requiresReview,
+      internalOnlyNote: normalizedPolicy.internalOnlyNote,
       rating: enumValue(MarketClawTrainingRating, text(formData, "rating"), MarketClawTrainingRating.UNRATED),
       reviewStatus: enumValue(MarketClawTrainingReviewStatus, text(formData, "reviewStatus"), MarketClawTrainingReviewStatus.GENERATED),
       reviewedById: user.id,
@@ -2290,9 +2568,44 @@ export async function reviewMarketClawTrainingCase(tenantSlug: string, trainingC
       departmentName: trainingCase.departmentName,
       reviewStatus: trainingCase.reviewStatus,
       rating: trainingCase.rating,
-      reviewedById: user.id
+      reviewedById: user.id,
+      replyRiskLevel: trainingCase.replyRiskLevel,
+      sendMode: trainingCase.sendMode,
+      riskReason: trainingCase.riskReason
     }
   });
+  if (existing.replyRiskLevel !== trainingCase.replyRiskLevel) {
+    await safeWriteAuditLog({
+      tenantId: tenant.id,
+      userId: user.id,
+      action: "market_claw_reply_risk_level_updated",
+      entityType: "MarketClawTrainingCase",
+      entityId: trainingCase.id,
+      metadata: {
+        trainingCaseId: trainingCase.id,
+        previousReplyRiskLevel: existing.replyRiskLevel,
+        replyRiskLevel: trainingCase.replyRiskLevel,
+        riskReason: trainingCase.riskReason,
+        reviewedById: user.id
+      }
+    });
+  }
+  if (existing.sendMode !== trainingCase.sendMode) {
+    await safeWriteAuditLog({
+      tenantId: tenant.id,
+      userId: user.id,
+      action: "market_claw_send_mode_updated",
+      entityType: "MarketClawTrainingCase",
+      entityId: trainingCase.id,
+      metadata: {
+        trainingCaseId: trainingCase.id,
+        previousSendMode: existing.sendMode,
+        sendMode: trainingCase.sendMode,
+        riskReason: trainingCase.riskReason,
+        reviewedById: user.id
+      }
+    });
+  }
 
   revalidatePath(`/app/${tenantSlug}/market-claw/training`);
   revalidatePath(`/app/${tenantSlug}/market-claw/training/review`);
@@ -2320,6 +2633,18 @@ export async function saveMarketClawTrainingAsKnowledge(tenantSlug: string, trai
   const visibility = marketClawVisibilityFromScope(scopeLevel);
   const nextReviewStatus = marketClawTrainingStatusFromScope(scopeLevel);
   const reviewComment = text(formData, "reviewComment");
+  const forbiddenPhrases = parseMarketClawStringArray(formData, "forbiddenPhraseList");
+  const riskNotes = text(formData, "forbiddenNotes") ?? trainingCase.forbiddenNotes;
+  const normalizedPolicy = normalizeMarketClawPolicyInput({
+    knowledgeType: MarketClawKnowledgeType.STANDARD_REPLY,
+    content,
+    forbiddenPhrases,
+    riskNotes,
+    replyRiskLevel: parseMarketClawReplyRiskLevel(formData, "replyRiskLevel", trainingCase.replyRiskLevel),
+    sendMode: parseMarketClawSendMode(formData, "sendMode", trainingCase.sendMode),
+    riskReason: text(formData, "riskReason") ?? trainingCase.riskReason,
+    internalOnlyNote: text(formData, "internalOnlyNote") ?? trainingCase.internalOnlyNote
+  });
 
   const knowledgeItem = await prisma.marketClawKnowledgeItem.create({
     data: {
@@ -2342,8 +2667,13 @@ export async function saveMarketClawTrainingAsKnowledge(tenantSlug: string, trai
       keywords: splitLines(trainingCase.customerQuestion),
       applicableCustomerTypes: trainingCase.customerType ? [trainingCase.customerType] : [],
       applicableStages: trainingCase.customerStage ? [trainingCase.customerStage] : [],
-      forbiddenPhrases: parseMarketClawStringArray(formData, "forbiddenPhraseList"),
-      riskNotes: text(formData, "forbiddenNotes") ?? trainingCase.forbiddenNotes,
+      forbiddenPhrases,
+      riskNotes,
+      replyRiskLevel: normalizedPolicy.replyRiskLevel,
+      sendMode: normalizedPolicy.sendMode,
+      riskReason: normalizedPolicy.riskReason,
+      requiresReview: normalizedPolicy.requiresReview,
+      internalOnlyNote: normalizedPolicy.internalOnlyNote,
       sortOrder: 80
     }
   });
@@ -2352,7 +2682,12 @@ export async function saveMarketClawTrainingAsKnowledge(tenantSlug: string, trai
     where: { id: trainingCase.id },
     data: {
       manualOptimizedReply: text(formData, "manualOptimizedReply") ?? trainingCase.manualOptimizedReply,
-      forbiddenNotes: text(formData, "forbiddenNotes") ?? trainingCase.forbiddenNotes,
+      forbiddenNotes: riskNotes,
+      replyRiskLevel: normalizedPolicy.replyRiskLevel,
+      sendMode: normalizedPolicy.sendMode,
+      riskReason: normalizedPolicy.riskReason,
+      requiresReview: normalizedPolicy.requiresReview,
+      internalOnlyNote: normalizedPolicy.internalOnlyNote,
       rating: enumValue(MarketClawTrainingRating, text(formData, "rating"), MarketClawTrainingRating.GOOD),
       reviewStatus: nextReviewStatus,
       promotedKnowledgeItemId: knowledgeItem.id,
@@ -2375,7 +2710,9 @@ export async function saveMarketClawTrainingAsKnowledge(tenantSlug: string, trai
       scopeLevel: knowledgeItem.scopeLevel,
       reviewStatus: knowledgeItem.reviewStatus,
       departmentName: knowledgeItem.departmentName,
-      sourceTrainingCaseId: trainingCase.id
+      sourceTrainingCaseId: trainingCase.id,
+      replyRiskLevel: knowledgeItem.replyRiskLevel,
+      sendMode: knowledgeItem.sendMode
     }
   });
   await safeWriteAuditLog({
@@ -2421,6 +2758,19 @@ export async function saveMarketClawTrainingAsPersonalKnowledge(tenantSlug: stri
     trainingCase.generatedShortReply ??
     trainingCase.generatedClosingReply;
   if (!content) return;
+  const forbiddenPhrases = parseMarketClawStringArray(formData, "forbiddenPhraseList");
+  const riskNotes = text(formData, "forbiddenNotes") ?? trainingCase.forbiddenNotes;
+  const normalizedPolicy = normalizeMarketClawPolicyInput({
+    knowledgeType: MarketClawKnowledgeType.SALES_SCRIPT,
+    content,
+    forbiddenPhrases,
+    riskNotes,
+    replyRiskLevel: trainingCase.replyRiskLevel,
+    sendMode: trainingCase.sendMode,
+    riskReason: trainingCase.riskReason,
+    internalOnlyNote: trainingCase.internalOnlyNote,
+    personalScope: true
+  });
 
   const knowledgeItem = await prisma.marketClawKnowledgeItem.create({
     data: {
@@ -2443,8 +2793,13 @@ export async function saveMarketClawTrainingAsPersonalKnowledge(tenantSlug: stri
       keywords: splitLines(trainingCase.customerQuestion),
       applicableCustomerTypes: trainingCase.customerType ? [trainingCase.customerType] : [],
       applicableStages: trainingCase.customerStage ? [trainingCase.customerStage] : [],
-      forbiddenPhrases: parseMarketClawStringArray(formData, "forbiddenPhraseList"),
-      riskNotes: text(formData, "forbiddenNotes") ?? trainingCase.forbiddenNotes,
+      forbiddenPhrases,
+      riskNotes,
+      replyRiskLevel: normalizedPolicy.replyRiskLevel,
+      sendMode: normalizedPolicy.sendMode,
+      riskReason: normalizedPolicy.riskReason,
+      requiresReview: normalizedPolicy.requiresReview,
+      internalOnlyNote: normalizedPolicy.internalOnlyNote,
       sortOrder: 90
     }
   });
@@ -2454,7 +2809,12 @@ export async function saveMarketClawTrainingAsPersonalKnowledge(tenantSlug: stri
     data: {
       manualOptimizedReply: text(formData, "manualOptimizedReply") ?? trainingCase.manualOptimizedReply,
       salesNote: text(formData, "salesNote") ?? trainingCase.salesNote,
-      forbiddenNotes: text(formData, "forbiddenNotes") ?? trainingCase.forbiddenNotes,
+      forbiddenNotes: riskNotes,
+      replyRiskLevel: normalizedPolicy.replyRiskLevel,
+      sendMode: normalizedPolicy.sendMode,
+      riskReason: normalizedPolicy.riskReason,
+      requiresReview: normalizedPolicy.requiresReview,
+      internalOnlyNote: normalizedPolicy.internalOnlyNote,
       reviewStatus: MarketClawTrainingReviewStatus.PERSONAL_SAVED,
       promotedKnowledgeItemId: knowledgeItem.id
     }
@@ -2471,9 +2831,28 @@ export async function saveMarketClawTrainingAsPersonalKnowledge(tenantSlug: stri
       businessLineId: trainingCase.businessLineId,
       departmentName: trainingCase.departmentName,
       scopeLevel: MarketClawKnowledgeScopeLevel.PERSONAL,
-      reviewStatus: MarketClawTrainingReviewStatus.PERSONAL_SAVED
+      reviewStatus: MarketClawTrainingReviewStatus.PERSONAL_SAVED,
+      replyRiskLevel: knowledgeItem.replyRiskLevel,
+      sendMode: knowledgeItem.sendMode
     }
   });
+  if (knowledgeItem.replyRiskLevel === MarketClawReplyRiskLevel.BLOCKED) {
+    await safeWriteAuditLog({
+      tenantId: tenant.id,
+      userId: user.id,
+      action: "market_claw_internal_advice_created",
+      entityType: "MarketClawKnowledgeItem",
+      entityId: knowledgeItem.id,
+      metadata: {
+        trainingCaseId: trainingCase.id,
+        knowledgeItemId: knowledgeItem.id,
+        replyRiskLevel: knowledgeItem.replyRiskLevel,
+        sendMode: knowledgeItem.sendMode,
+        riskReason: knowledgeItem.riskReason,
+        updatedById: user.id
+      }
+    });
+  }
 
   revalidatePath(`/app/${tenantSlug}/market-claw/training`);
   revalidatePath(`/app/${tenantSlug}/market-claw/replies`);
@@ -2491,17 +2870,34 @@ export async function submitMarketClawTrainingForReview(tenantSlug: string, trai
     }
   });
   if (!trainingCase) return;
+  const manualOptimizedReply =
+    text(formData, "manualOptimizedReply") ??
+    trainingCase.manualOptimizedReply ??
+    trainingCase.generatedProfessionalReply ??
+    trainingCase.generatedShortReply;
+  const forbiddenNotes = text(formData, "forbiddenNotes") ?? trainingCase.forbiddenNotes;
+  const normalizedPolicy = normalizeMarketClawPolicyInput({
+    knowledgeType: MarketClawKnowledgeType.STANDARD_REPLY,
+    content: manualOptimizedReply ?? trainingCase.customerQuestion,
+    riskNotes: forbiddenNotes,
+    replyRiskLevel: trainingCase.replyRiskLevel,
+    sendMode: trainingCase.sendMode,
+    riskReason: trainingCase.riskReason,
+    internalOnlyNote: trainingCase.internalOnlyNote,
+    personalScope: user.role === "SALES"
+  });
 
   const updated = await prisma.marketClawTrainingCase.update({
     where: { id: trainingCase.id, tenantId: tenant.id },
     data: {
-      manualOptimizedReply:
-        text(formData, "manualOptimizedReply") ??
-        trainingCase.manualOptimizedReply ??
-        trainingCase.generatedProfessionalReply ??
-        trainingCase.generatedShortReply,
+      manualOptimizedReply,
       salesNote: text(formData, "salesNote") ?? trainingCase.salesNote,
-      forbiddenNotes: text(formData, "forbiddenNotes") ?? trainingCase.forbiddenNotes,
+      forbiddenNotes,
+      replyRiskLevel: normalizedPolicy.replyRiskLevel,
+      sendMode: normalizedPolicy.sendMode,
+      riskReason: normalizedPolicy.riskReason,
+      requiresReview: normalizedPolicy.requiresReview,
+      internalOnlyNote: normalizedPolicy.internalOnlyNote,
       reviewStatus: MarketClawTrainingReviewStatus.PENDING_REVIEW,
       submittedForReviewAt: new Date()
     }
@@ -2518,9 +2914,44 @@ export async function submitMarketClawTrainingForReview(tenantSlug: string, trai
       departmentName: updated.departmentName,
       trainingScope: updated.trainingScope,
       reviewStatus: updated.reviewStatus,
-      createdById: updated.createdById
+      createdById: updated.createdById,
+      replyRiskLevel: updated.replyRiskLevel,
+      sendMode: updated.sendMode,
+      riskReason: updated.riskReason
     }
   });
+  if (updated.replyRiskLevel === MarketClawReplyRiskLevel.HIGH) {
+    await safeWriteAuditLog({
+      tenantId: tenant.id,
+      userId: user.id,
+      action: "market_claw_high_risk_reply_submitted",
+      entityType: "MarketClawTrainingCase",
+      entityId: updated.id,
+      metadata: {
+        trainingCaseId: updated.id,
+        replyRiskLevel: updated.replyRiskLevel,
+        sendMode: updated.sendMode,
+        riskReason: updated.riskReason,
+        updatedById: user.id
+      }
+    });
+  }
+  if (updated.replyRiskLevel === MarketClawReplyRiskLevel.BLOCKED) {
+    await safeWriteAuditLog({
+      tenantId: tenant.id,
+      userId: user.id,
+      action: "market_claw_blocked_reply_detected",
+      entityType: "MarketClawTrainingCase",
+      entityId: updated.id,
+      metadata: {
+        trainingCaseId: updated.id,
+        replyRiskLevel: updated.replyRiskLevel,
+        sendMode: updated.sendMode,
+        riskReason: updated.riskReason,
+        updatedById: user.id
+      }
+    });
+  }
 
   revalidatePath(`/app/${tenantSlug}/market-claw/training`);
   revalidatePath(`/app/${tenantSlug}/market-claw/training/review`);
@@ -2587,6 +3018,13 @@ export async function generateMarketClawReplyDraft(tenantSlug: string, leadId: s
       professionalReply: reply.professionalReply,
       closingReply: reply.closingReply,
       riskWarnings: reply.riskWarnings,
+      replyRiskLevel: reply.replyRiskLevel,
+      sendMode: reply.sendMode,
+      riskReason: reply.riskReason,
+      requiresReview: reply.requiresReview,
+      internalOnlyNote: reply.internalOnlyNote,
+      highRiskKnowledgeIds: reply.highRiskKnowledgeIds,
+      internalAdviceKnowledgeIds: reply.internalAdviceKnowledgeIds,
       suggestedTags: reply.suggestedTags,
       suggestedMaterials: reply.suggestedMaterialIds,
       suggestedTask: reply.suggestedTask ?? undefined,
@@ -2612,9 +3050,29 @@ export async function generateMarketClawReplyDraft(tenantSlug: string, leadId: s
       suggestedTagsCount: reply.suggestedTags.length,
       hasTask: Boolean(reply.suggestedTask),
       riskWarningCount: reply.riskWarnings.length,
+      replyRiskLevel: reply.replyRiskLevel,
+      sendMode: reply.sendMode,
+      riskReason: reply.riskReason,
       suggestedMaterials: materialTitlesFromIds(materials, reply.suggestedMaterialIds)
     }
   });
+  if (reply.replyRiskLevel === MarketClawReplyRiskLevel.BLOCKED) {
+    await safeWriteAuditLog({
+      tenantId: tenant.id,
+      userId: user.id,
+      action: "market_claw_blocked_reply_detected",
+      entityType: "MarketClawReplyDraft",
+      entityId: draft.id,
+      metadata: {
+        leadId: lead.id,
+        replyDraftId: draft.id,
+        replyRiskLevel: reply.replyRiskLevel,
+        sendMode: reply.sendMode,
+        riskReason: reply.riskReason,
+        updatedById: user.id
+      }
+    });
+  }
 
   revalidatePath(`/app/${tenantSlug}/leads/${leadId}`);
   revalidatePath(`/app/${tenantSlug}/market-claw/replies`);
@@ -2635,6 +3093,16 @@ export async function saveMarketClawReplyDraftAsPersonalKnowledge(tenantSlug: st
   const salesEditedReply = text(formData, "salesEditedReply");
   const finalReply = pickMarketClawReplyText(draft, selectedReplyType, salesEditedReply);
   if (!finalReply) return;
+  const normalizedPolicy = normalizeMarketClawPolicyInput({
+    knowledgeType: MarketClawKnowledgeType.SALES_SCRIPT,
+    content: finalReply,
+    riskNotes: draft.riskReason,
+    replyRiskLevel: draft.replyRiskLevel,
+    sendMode: draft.sendMode,
+    riskReason: draft.riskReason,
+    internalOnlyNote: draft.internalOnlyNote,
+    personalScope: true
+  });
 
   const knowledgeItem = await prisma.marketClawKnowledgeItem.create({
     data: {
@@ -2654,7 +3122,13 @@ export async function saveMarketClawReplyDraftAsPersonalKnowledge(tenantSlug: st
       approvedAt: new Date(),
       status: MarketClawKnowledgeStatus.ACTIVE,
       keywords: splitLines(draft.customerQuestion),
-      forbiddenPhrases: parseMarketClawTextArray(draft.riskWarnings),
+      forbiddenPhrases: [],
+      riskNotes: draft.riskReason,
+      replyRiskLevel: normalizedPolicy.replyRiskLevel,
+      sendMode: normalizedPolicy.sendMode,
+      riskReason: normalizedPolicy.riskReason,
+      requiresReview: normalizedPolicy.requiresReview,
+      internalOnlyNote: normalizedPolicy.internalOnlyNote,
       sortOrder: 90
     }
   });
@@ -2663,7 +3137,12 @@ export async function saveMarketClawReplyDraftAsPersonalKnowledge(tenantSlug: st
     where: { id: draft.id },
     data: {
       selectedReplyType,
-      finalReply
+      finalReply,
+      replyRiskLevel: normalizedPolicy.replyRiskLevel,
+      sendMode: normalizedPolicy.sendMode,
+      riskReason: normalizedPolicy.riskReason,
+      requiresReview: normalizedPolicy.requiresReview,
+      internalOnlyNote: normalizedPolicy.internalOnlyNote
     }
   });
 
@@ -2678,9 +3157,29 @@ export async function saveMarketClawReplyDraftAsPersonalKnowledge(tenantSlug: st
       replyDraftId: draft.id,
       businessLineId: draft.businessLineId,
       departmentName: draft.departmentName,
-      scopeLevel: MarketClawKnowledgeScopeLevel.PERSONAL
+      scopeLevel: MarketClawKnowledgeScopeLevel.PERSONAL,
+      replyRiskLevel: knowledgeItem.replyRiskLevel,
+      sendMode: knowledgeItem.sendMode
     }
   });
+  if (knowledgeItem.replyRiskLevel === MarketClawReplyRiskLevel.BLOCKED) {
+    await safeWriteAuditLog({
+      tenantId: tenant.id,
+      userId: user.id,
+      action: "market_claw_internal_advice_created",
+      entityType: "MarketClawKnowledgeItem",
+      entityId: knowledgeItem.id,
+      metadata: {
+        leadId: lead.id,
+        replyDraftId: draft.id,
+        knowledgeItemId: knowledgeItem.id,
+        replyRiskLevel: knowledgeItem.replyRiskLevel,
+        sendMode: knowledgeItem.sendMode,
+        riskReason: knowledgeItem.riskReason,
+        updatedById: user.id
+      }
+    });
+  }
 
   revalidatePath(`/app/${tenantSlug}/leads/${leadId}`);
   revalidatePath(`/app/${tenantSlug}/market-claw/replies`);
@@ -2701,6 +3200,17 @@ export async function submitMarketClawReplyDraftForReview(tenantSlug: string, le
   const salesEditedReply = text(formData, "salesEditedReply");
   const finalReply = pickMarketClawReplyText(draft, selectedReplyType, salesEditedReply);
   if (!finalReply) return;
+  const normalizedPolicy = normalizeMarketClawPolicyInput({
+    knowledgeType: MarketClawKnowledgeType.STANDARD_REPLY,
+    content: finalReply,
+    riskNotes: draft.riskReason,
+    replyRiskLevel: draft.replyRiskLevel,
+    sendMode: draft.sendMode,
+    riskReason: draft.riskReason,
+    internalOnlyNote: draft.internalOnlyNote,
+    personalScope: true
+  });
+  const forbiddenNotes = parseMarketClawTextArray(draft.riskWarnings).join("\n");
 
   const trainingCase =
     draft.trainingCaseId
@@ -2719,7 +3229,12 @@ export async function submitMarketClawReplyDraftForReview(tenantSlug: string, le
             generatedClosingReply: draft.closingReply,
             manualOptimizedReply: finalReply,
             salesNote: text(formData, "salesNote"),
-            forbiddenNotes: parseMarketClawTextArray(draft.riskWarnings).join("\n"),
+            forbiddenNotes,
+            replyRiskLevel: normalizedPolicy.replyRiskLevel,
+            sendMode: normalizedPolicy.sendMode,
+            riskReason: normalizedPolicy.riskReason,
+            requiresReview: normalizedPolicy.requiresReview,
+            internalOnlyNote: normalizedPolicy.internalOnlyNote,
             reviewStatus: MarketClawTrainingReviewStatus.PENDING_REVIEW,
             submittedForReviewAt: new Date()
           }
@@ -2740,7 +3255,12 @@ export async function submitMarketClawReplyDraftForReview(tenantSlug: string, le
             generatedClosingReply: draft.closingReply,
             manualOptimizedReply: finalReply,
             salesNote: text(formData, "salesNote"),
-            forbiddenNotes: parseMarketClawTextArray(draft.riskWarnings).join("\n"),
+            forbiddenNotes,
+            replyRiskLevel: normalizedPolicy.replyRiskLevel,
+            sendMode: normalizedPolicy.sendMode,
+            riskReason: normalizedPolicy.riskReason,
+            requiresReview: normalizedPolicy.requiresReview,
+            internalOnlyNote: normalizedPolicy.internalOnlyNote,
             reviewStatus: MarketClawTrainingReviewStatus.PENDING_REVIEW,
             submittedForReviewAt: new Date()
           }
@@ -2752,7 +3272,12 @@ export async function submitMarketClawReplyDraftForReview(tenantSlug: string, le
       trainingCaseId: trainingCase.id,
       submittedForReviewAt: new Date(),
       selectedReplyType,
-      finalReply
+      finalReply,
+      replyRiskLevel: normalizedPolicy.replyRiskLevel,
+      sendMode: normalizedPolicy.sendMode,
+      riskReason: normalizedPolicy.riskReason,
+      requiresReview: normalizedPolicy.requiresReview,
+      internalOnlyNote: normalizedPolicy.internalOnlyNote
     }
   });
 
@@ -2769,9 +3294,48 @@ export async function submitMarketClawReplyDraftForReview(tenantSlug: string, le
       departmentName: trainingCase.departmentName,
       trainingScope: trainingCase.trainingScope,
       reviewStatus: trainingCase.reviewStatus,
-      createdById: user.id
+      createdById: user.id,
+      replyRiskLevel: trainingCase.replyRiskLevel,
+      sendMode: trainingCase.sendMode,
+      riskReason: trainingCase.riskReason
     }
   });
+  if (trainingCase.replyRiskLevel === MarketClawReplyRiskLevel.HIGH) {
+    await safeWriteAuditLog({
+      tenantId: tenant.id,
+      userId: user.id,
+      action: "market_claw_high_risk_reply_submitted",
+      entityType: "MarketClawReplyDraft",
+      entityId: draft.id,
+      metadata: {
+        leadId: lead.id,
+        replyDraftId: draft.id,
+        trainingCaseId: trainingCase.id,
+        replyRiskLevel: trainingCase.replyRiskLevel,
+        sendMode: trainingCase.sendMode,
+        riskReason: trainingCase.riskReason,
+        updatedById: user.id
+      }
+    });
+  }
+  if (trainingCase.replyRiskLevel === MarketClawReplyRiskLevel.BLOCKED) {
+    await safeWriteAuditLog({
+      tenantId: tenant.id,
+      userId: user.id,
+      action: "market_claw_blocked_reply_detected",
+      entityType: "MarketClawReplyDraft",
+      entityId: draft.id,
+      metadata: {
+        leadId: lead.id,
+        replyDraftId: draft.id,
+        trainingCaseId: trainingCase.id,
+        replyRiskLevel: trainingCase.replyRiskLevel,
+        sendMode: trainingCase.sendMode,
+        riskReason: trainingCase.riskReason,
+        updatedById: user.id
+      }
+    });
+  }
 
   revalidatePath(`/app/${tenantSlug}/leads/${leadId}`);
   revalidatePath(`/app/${tenantSlug}/market-claw/training`);
@@ -2844,6 +3408,7 @@ export async function saveMarketClawReplyDraftAsFollowUp(tenantSlug: string, lea
   const salesEditedReply = text(formData, "salesEditedReply");
   const finalReply = pickMarketClawReplyText(draft, selectedReplyType, salesEditedReply);
   if (!finalReply) return;
+  if (draft.replyRiskLevel === MarketClawReplyRiskLevel.BLOCKED) return;
 
   const suggestedTask = parseMarketClawSuggestedTask(draft.suggestedTask);
   const followUp = await prisma.followUp.create({
@@ -2915,6 +3480,7 @@ export async function markMarketClawReplyCopied(tenantSlug: string, leadId: stri
     where: { id: draftId, tenantId: tenant.id, leadId: lead.id }
   });
   if (!draft) return;
+  if (draft.replyRiskLevel === MarketClawReplyRiskLevel.BLOCKED) return;
 
   const selectedReplyType = text(formData, "selectedReplyType") ?? "SHORT";
   const finalReply = pickMarketClawReplyText(draft, selectedReplyType, text(formData, "salesEditedReply"));

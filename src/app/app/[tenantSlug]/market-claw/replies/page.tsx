@@ -7,7 +7,14 @@
  *   第二部分：回复记录页面
  */
 import { canAccessMarketClawReplies, requireTenantAccess } from "@/lib/auth";
-import { marketClawReplySourceScopeOptions } from "@/lib/market-claw";
+import {
+  marketClawReplyRiskLevelLabels,
+  marketClawReplyRiskLevelOptions,
+  marketClawReplySourceScopeOptions,
+  marketClawSendModeLabels,
+  marketClawSendModeOptions,
+  parseMarketClawTextArray
+} from "@/lib/market-claw";
 import { prisma } from "@/lib/prisma";
 import { PageShell } from "@/components/Shell";
 import { Card, Input, SectionTabs, Select } from "@/components/Ui";
@@ -50,6 +57,8 @@ export default async function MarketClawRepliesPage({
   const sourceScope = typeof searchParams?.sourceScope === "string" ? searchParams.sourceScope : "";
   const submitted = typeof searchParams?.submitted === "string" ? searchParams.submitted : "";
   const adopted = typeof searchParams?.adopted === "string" ? searchParams.adopted : "";
+  const replyRiskLevel = typeof searchParams?.replyRiskLevel === "string" ? searchParams.replyRiskLevel : "";
+  const sendMode = typeof searchParams?.sendMode === "string" ? searchParams.sendMode : "";
 
   const [users, businessLines, drafts] = await Promise.all([
     prisma.user.findMany({
@@ -68,6 +77,8 @@ export default async function MarketClawRepliesPage({
         ...(businessLineId ? { businessLineId } : {}),
         ...(departmentName ? { departmentName: { contains: departmentName } } : {}),
         ...(sourceScope ? { sourceScope: sourceScope as never } : {}),
+        ...(replyRiskLevel ? { replyRiskLevel: replyRiskLevel as never } : {}),
+        ...(sendMode ? { sendMode: sendMode as never } : {}),
         ...(useStatus ? { useStatus: useStatus as never } : {}),
         ...(feedbackStatus ? { feedbackStatus: feedbackStatus as never } : {}),
         ...(submitted === "yes" ? { submittedForReviewAt: { not: null } } : {}),
@@ -137,6 +148,8 @@ export default async function MarketClawRepliesPage({
             options={[{ value: "", label: "全部来源" }, ...marketClawReplySourceScopeOptions]}
             defaultValue={sourceScope}
           />
+          <Select label="风险等级" name="replyRiskLevel" options={[{ value: "", label: "全部风险等级" }, ...marketClawReplyRiskLevelOptions]} defaultValue={replyRiskLevel} />
+          <Select label="使用模式" name="sendMode" options={[{ value: "", label: "全部使用模式" }, ...marketClawSendModeOptions]} defaultValue={sendMode} />
           {user.role !== "SALES" ? (
             <Select
               label="销售人员"
@@ -189,12 +202,16 @@ export default async function MarketClawRepliesPage({
                 <Info label="业务线" value={draft.businessLine?.name ?? "未指定"} />
                 <Info label="部门" value={draft.departmentName ?? "未指定"} />
                 <Info label="回复来源" value={marketClawReplySourceScopeOptions.find((item) => item.value === draft.sourceScope)?.label ?? draft.sourceScope} />
+                <Info label="生成时风险等级" value={marketClawReplyRiskLevelLabels[draft.replyRiskLevel]} />
+                <Info label="生成时使用模式" value={marketClawSendModeLabels[draft.sendMode]} />
                 <Info label="选用回复类型" value={draft.selectedReplyType ?? "未选择"} />
                 <Info label="是否复制" value={draft.useStatus === "COPIED" ? "是" : "否"} />
                 <Info label="是否保存为跟进" value={draft.useStatus === "SAVED_AS_FOLLOWUP" ? "是" : "否"} />
                 <Info label="是否标记好用" value={draft.feedbackStatus === "USEFUL" ? "是" : "否"} />
                 <Info label="是否有销售修改版本" value={draft.finalReply ? "是" : "否"} />
                 <Info label="是否提交审核" value={draft.submittedForReviewAt ? "是" : "否"} />
+                <Info label="是否来自个人话术" value={parseMarketClawTextArray(draft.usedPersonalKnowledgeIds).length ? "是" : "否"} />
+                <Info label="是否命中高风险知识" value={parseMarketClawTextArray(draft.highRiskKnowledgeIds).length ? "是" : "否"} />
                 <Info
                   label="是否被采纳"
                   value={draft.trainingCase && ["TEAM_APPROVED", "ENTERPRISE_APPROVED"].includes(draft.trainingCase.reviewStatus) ? "是" : "否"}
@@ -204,6 +221,11 @@ export default async function MarketClawRepliesPage({
               <div className="mt-4 rounded-md bg-slate-50 p-3 text-sm text-slate-700">
                 <p className="font-medium text-slate-900">客户问题</p>
                 <p className="mt-1">{draft.customerQuestion}</p>
+              </div>
+              <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                <p className="font-medium text-amber-900">回复风险复盘</p>
+                <p className="mt-1">风险原因：{draft.riskReason ?? "-"}</p>
+                <p className="mt-1">内部建议：{draft.internalOnlyNote ?? "-"}</p>
               </div>
               {draft.trainingCase ? (
                 <div className="mt-3 rounded-md border border-slate-200 p-3 text-sm text-slate-700">

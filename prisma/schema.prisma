@@ -285,6 +285,20 @@ enum MarketClawKnowledgeReviewStatus {
   ARCHIVED
 }
 
+enum MarketClawReplyRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  BLOCKED
+}
+
+enum MarketClawSendMode {
+  AUTO_ALLOWED
+  SALES_CONFIRM_REQUIRED
+  RISK_CONFIRM_REQUIRED
+  INTERNAL_ADVICE_ONLY
+}
+
 enum MarketClawTrainingRating {
   GOOD
   NEEDS_EDIT
@@ -785,6 +799,11 @@ model MarketClawKnowledgeItem {
   recommendedMaterialIds  Json?
   forbiddenPhrases        Json?
   riskNotes               String?
+  replyRiskLevel          MarketClawReplyRiskLevel      @default(MEDIUM)
+  sendMode                MarketClawSendMode            @default(SALES_CONFIRM_REQUIRED)
+  riskReason              String?
+  requiresReview          Boolean                       @default(false)
+  internalOnlyNote        String?
   sortOrder               Int                      @default(100)
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
@@ -821,6 +840,11 @@ model MarketClawTrainingCase {
   generatedClosingReply String?
   manualOptimizedReply  String?
   salesNote             String?
+  replyRiskLevel        MarketClawReplyRiskLevel      @default(MEDIUM)
+  sendMode              MarketClawSendMode            @default(SALES_CONFIRM_REQUIRED)
+  riskReason            String?
+  requiresReview        Boolean                       @default(false)
+  internalOnlyNote      String?
   rating                MarketClawTrainingRating    @default(UNRATED)
   reviewStatus          MarketClawTrainingReviewStatus @default(DRAFT)
   submittedForReviewAt  DateTime?
@@ -864,6 +888,13 @@ model MarketClawReplyDraft {
   professionalReply  String?
   closingReply       String?
   riskWarnings       Json?
+  replyRiskLevel     MarketClawReplyRiskLevel      @default(MEDIUM)
+  sendMode           MarketClawSendMode            @default(SALES_CONFIRM_REQUIRED)
+  riskReason         String?
+  requiresReview     Boolean                       @default(false)
+  internalOnlyNote   String?
+  highRiskKnowledgeIds Json?
+  internalAdviceKnowledgeIds Json?
   suggestedTags      Json?
   suggestedMaterials Json?
   suggestedTask      Json?
@@ -954,6 +985,11 @@ model MarketClawKnowledgeCandidate {
   suggestedKeywords          Json?
   suggestedForbiddenPhrases  Json?
   suggestedRiskNotes         String?
+  suggestedReplyRiskLevel    MarketClawReplyRiskLevel      @default(MEDIUM)
+  suggestedSendMode          MarketClawSendMode            @default(SALES_CONFIRM_REQUIRED)
+  suggestedRiskReason        String?
+  requiresReview             Boolean                       @default(false)
+  internalOnlyNote           String?
   suggestedReplyShort        String?
   suggestedReplyProfessional String?
   suggestedReplyClosing      String?
