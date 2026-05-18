@@ -47,6 +47,8 @@ import {
   TenantStatus,
   UserRole,
   WeComConfigStatus,
+  WecomNotificationEventType,
+  WecomNotificationStatus,
   type Prisma
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
@@ -104,6 +106,7 @@ import {
   splitKnowledgeIdsByScope
 } from "@/lib/market-claw";
 import { prisma } from "@/lib/prisma";
+import { createWecomInternalNotification } from "@/lib/wecom";
 import { parseSourceAttributionFromFormData, upsertLeadSourceAttribution } from "@/lib/source-attribution";
 import {
   detectQuestionType,
@@ -3873,32 +3876,179 @@ export async function updateBusinessLineStatus(tenantSlug: string, businessLineI
 }
 
 export async function upsertWeComConfig(tenantSlug: string, formData: FormData) {
-  const { tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN"]);
+  const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN"]);
+  const existingConfig = await prisma.weComConfig.findUnique({ where: { tenantId: tenant.id } });
+  const secretInput = text(formData, "secretEncrypted");
+  const tokenInput = text(formData, "token");
+  const encodingAESKeyInput = text(formData, "encodingAESKey");
+  const clearSensitiveConfig = checkbox(formData, "clearSensitiveConfig");
+  const status = enumValue(WeComConfigStatus, text(formData, "status"), WeComConfigStatus.draft);
 
-  await prisma.weComConfig.upsert({
+  const config = await prisma.weComConfig.upsert({
     where: { tenantId: tenant.id },
     update: {
       corpId: text(formData, "corpId"),
       agentId: text(formData, "agentId"),
-      secretEncrypted: text(formData, "secretEncrypted"),
-      token: text(formData, "token"),
-      encodingAESKey: text(formData, "encodingAESKey"),
+      secretEncrypted: clearSensitiveConfig ? null : secretInput ?? existingConfig?.secretEncrypted,
+      token: clearSensitiveConfig ? null : tokenInput ?? existingConfig?.token,
+      encodingAESKey: clearSensitiveConfig ? null : encodingAESKeyInput ?? existingConfig?.encodingAESKey,
       callbackUrl: text(formData, "callbackUrl"),
-      status: enumValue(WeComConfigStatus, text(formData, "status"), WeComConfigStatus.draft)
+      status
     },
     create: {
       tenantId: tenant.id,
       corpId: text(formData, "corpId"),
       agentId: text(formData, "agentId"),
-      secretEncrypted: text(formData, "secretEncrypted"),
-      token: text(formData, "token"),
-      encodingAESKey: text(formData, "encodingAESKey"),
+      secretEncrypted: secretInput,
+      token: tokenInput,
+      encodingAESKey: encodingAESKeyInput,
       callbackUrl: text(formData, "callbackUrl"),
-      status: enumValue(WeComConfigStatus, text(formData, "status"), WeComConfigStatus.draft)
+      status
+    }
+  });
+
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: existingConfig ? "wecom_config_updated" : "wecom_config_created",
+    entityType: "WeComConfig",
+    entityId: config.id,
+    metadata: {
+      tenantId: tenant.id,
+      status: config.status,
+      hasCorpId: Boolean(config.corpId),
+      hasAgentId: Boolean(config.agentId),
+      hasSecret: Boolean(config.secretEncrypted)
     }
   });
 
   revalidatePath(`/app/${tenantSlug}/wecom`);
+  revalidatePath(`/app/${tenantSlug}/audit-logs`);
+}
+
+export async function upsertUserWecomBinding(tenantSlug: string, userId: string, formData: FormData) {
+  const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN"]);
+  const targetUser = await prisma.user.findFirst({
+    where: { id: userId, tenantId: tenant.id }
+  });
+  if (!targetUser) return;
+
+  const existingBinding = await prisma.userWecomBinding.findUnique({ where: { userId: targetUser.id } });
+  const binding = await prisma.userWecomBinding.upsert({
+    where: { userId: targetUser.id },
+    update: {
+      tenantId: tenant.id,
+      wecomUserId: text(formData, "wecomUserId"),
+      displayName: text(formData, "displayName"),
+      enabled: checkbox(formData, "enabled")
+    },
+    create: {
+      tenantId: tenant.id,
+      userId: targetUser.id,
+      wecomUserId: text(formData, "wecomUserId"),
+      displayName: text(formData, "displayName"),
+      enabled: checkbox(formData, "enabled")
+    }
+  });
+
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: existingBinding ? "wecom_user_binding_updated" : "wecom_user_binding_created",
+    entityType: "UserWecomBinding",
+    entityId: binding.id,
+    metadata: {
+      tenantId: tenant.id,
+      userId: targetUser.id,
+      status: binding.enabled ? "enabled" : "disabled",
+      hasWecomUserId: Boolean(binding.wecomUserId)
+    }
+  });
+
+  revalidatePath(`/app/${tenantSlug}/wecom`);
+  revalidatePath(`/app/${tenantSlug}/audit-logs`);
+}
+
+export async function sendWecomTestNotification(tenantSlug: string, formData: FormData) {
+  const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN"]);
+  const recipientUserId = text(formData, "recipientUserId") ?? user.id;
+  const log = await createWecomInternalNotification({
+    tenantId: tenant.id,
+    actorUserId: user.id,
+    recipientUserId,
+    eventType: WecomNotificationEventType.TEST_MESSAGE,
+    title: "企业微信内部测试提醒",
+    content: "这是一条内部工作提醒测试。当前版本只提醒企业内部人员回到系统处理，不处理客户侧沟通内容。"
+  });
+
+  await prisma.weComConfig.updateMany({
+    where: { tenantId: tenant.id },
+    data: {
+      lastTestAt: new Date(),
+      lastTestStatus: log.status,
+      lastTestMessage: log.errorMessage ?? "测试提醒已记录。"
+    }
+  });
+
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "wecom_config_tested",
+    entityType: "WeComConfig",
+    entityId: tenant.id,
+    metadata: {
+      tenantId: tenant.id,
+      userId: recipientUserId,
+      eventType: WecomNotificationEventType.TEST_MESSAGE,
+      status: log.status
+    }
+  });
+
+  revalidatePath(`/app/${tenantSlug}/wecom`);
+  revalidatePath(`/app/${tenantSlug}/audit-logs`);
+}
+
+export async function triggerWecomInternalNotification(tenantSlug: string, formData: FormData) {
+  const { user, tenant } = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR", "SALES"]);
+  const eventType = enumValue(
+    WecomNotificationEventType,
+    text(formData, "eventType"),
+    WecomNotificationEventType.SYSTEM_NOTICE
+  );
+  const recipientUserId = text(formData, "recipientUserId");
+  const relatedLeadId = text(formData, "relatedLeadId");
+  const relatedTaskId = text(formData, "relatedTaskId");
+  const relatedTrainingCaseId = text(formData, "relatedTrainingCaseId");
+  const relatedCandidateId = text(formData, "relatedCandidateId");
+  const relatedReplyDraftId = text(formData, "relatedReplyDraftId");
+
+  if (user.role === "SALES" && recipientUserId && recipientUserId !== user.id) {
+    redirect("/forbidden");
+  }
+
+  const title = text(formData, "title") ?? "内部工作提醒";
+  const content =
+    text(formData, "content") ??
+    "请回到系统处理该事项。当前提醒仅用于企业内部协作，不会自动触达客户。";
+
+  await createWecomInternalNotification({
+    tenantId: tenant.id,
+    actorUserId: user.id,
+    recipientUserId: recipientUserId ?? user.id,
+    eventType,
+    title,
+    content,
+    relatedLeadId,
+    relatedTaskId,
+    relatedTrainingCaseId,
+    relatedCandidateId,
+    relatedReplyDraftId
+  });
+
+  if (relatedLeadId) revalidatePath(`/app/${tenantSlug}/leads/${relatedLeadId}`);
+  if (relatedTaskId) revalidatePath(`/app/${tenantSlug}/todos`);
+  revalidatePath(`/app/${tenantSlug}/wecom`);
+  revalidatePath(`/app/${tenantSlug}/audit-logs`);
 }
 
 export async function upsertCommunicationComplianceConfig(

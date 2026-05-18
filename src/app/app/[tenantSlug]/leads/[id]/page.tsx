@@ -13,7 +13,7 @@ import { LeadReplyAssistant } from "@/components/LeadReplyAssistant";
 import { MarketClawAssistant } from "@/components/MarketClawAssistant";
 import { PageShell } from "@/components/Shell";
 import { Callout, Card, Input, Select, SubmitButton, Textarea } from "@/components/Ui";
-import { addFollowUp, assignLeadOwner, createManualTask } from "@/lib/actions";
+import { addFollowUp, assignLeadOwner, createManualTask, triggerWecomInternalNotification } from "@/lib/actions";
 import { requireLeadAccess } from "@/lib/auth";
 import { readCnasExtraData } from "@/lib/cnas";
 import {
@@ -125,6 +125,7 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
   const followAction = addFollowUp.bind(null, tenant.slug, lead.id);
   const assignAction = assignLeadOwner.bind(null, tenant.slug, lead.id);
   const manualTaskAction = createManualTask.bind(null, tenant.slug, lead.id);
+  const notifyAction = triggerWecomInternalNotification.bind(null, tenant.slug);
   const canAssign = user.role === "TENANT_ADMIN" || user.role === "OPERATOR";
 
   const ownerOptions = [{ value: "", label: "未分配" }, ...owners.map((owner) => ({ value: owner.id, label: `${owner.name}（${owner.role}）` }))];
@@ -348,6 +349,21 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
                 <p className="text-slate-500">暂无匹配资料。</p>
               )}
             </div>
+          </Card>
+
+          <Card>
+            <h2 className="mb-4 text-base font-semibold">内部工作提醒</h2>
+            <p className="mb-4 text-sm leading-6 text-slate-600">
+              仅用于提醒内部人员回到系统处理客户跟进，不会自动联系客户，也不会替销售做回复决定。
+            </p>
+            <form action={notifyAction} className="space-y-3">
+              <input name="eventType" type="hidden" value="NEW_LEAD" />
+              <input name="recipientUserId" type="hidden" value={lead.ownerId ?? user.id} />
+              <input name="relatedLeadId" type="hidden" value={lead.id} />
+              <input name="title" type="hidden" value={`客户跟进提醒：${lead.name}`} />
+              <input name="content" type="hidden" value="请回到系统查看客户详情、跟进任务和 Market Claw 风险边界提示后再处理。" />
+              <SubmitButton>发送客户跟进提醒</SubmitButton>
+            </form>
           </Card>
 
           <Card>

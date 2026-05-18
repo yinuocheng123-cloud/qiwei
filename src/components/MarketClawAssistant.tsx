@@ -16,7 +16,8 @@ import {
   markMarketClawReplyCopied,
   saveMarketClawReplyDraftAsFollowUp,
   saveMarketClawReplyDraftAsPersonalKnowledge,
-  submitMarketClawReplyDraftForReview
+  submitMarketClawReplyDraftForReview,
+  triggerWecomInternalNotification
 } from "@/lib/actions";
 import { MarketClawCopyButton } from "@/components/MarketClawCopyButton";
 import { Card, Input, Select, SubmitButton, Textarea } from "@/components/Ui";
@@ -37,6 +38,8 @@ type ExistingTagRecord = Pick<LeadTag, "id" | "tagName" | "tagGroup">;
 type DraftRecord = Pick<
   MarketClawReplyDraft,
   | "id"
+  | "leadId"
+  | "createdById"
   | "customerQuestion"
   | "shortReply"
   | "professionalReply"
@@ -109,6 +112,7 @@ export function MarketClawAssistant({
   const confirmTagsAction = confirmMarketClawDraftTags.bind(null, tenantSlug, leadId);
   const createTaskAction = createMarketClawTask.bind(null, tenantSlug, leadId);
   const feedbackAction = createMarketClawFeedback.bind(null, tenantSlug, leadId);
+  const notifyAction = triggerWecomInternalNotification.bind(null, tenantSlug);
 
   return (
     <Card>
@@ -154,6 +158,7 @@ export function MarketClawAssistant({
               feedbackAction={feedbackAction}
               knowledgeItems={knowledgeItems}
               materials={materials}
+              notifyAction={notifyAction}
               saveAction={saveAction}
               savePersonalAction={savePersonalAction}
               submitTrainingAction={submitTrainingAction}
@@ -181,6 +186,7 @@ function MarketClawDraftCard({
   confirmTagsAction,
   createTaskAction,
   feedbackAction
+  , notifyAction
 }: {
   draft: DraftRecord;
   materials: MaterialRecord[];
@@ -193,6 +199,7 @@ function MarketClawDraftCard({
   confirmTagsAction: (formData: FormData) => Promise<void>;
   createTaskAction: (formData: FormData) => Promise<void>;
   feedbackAction: (formData: FormData) => Promise<void>;
+  notifyAction: (formData: FormData) => Promise<void>;
 }) {
   const matchedKnowledgeTitles = parseMarketClawTextArray(draft.matchedKnowledgeIds)
     .map((id) => knowledgeItems.find((item) => item.id === id)?.title)
@@ -383,6 +390,17 @@ function MarketClawDraftCard({
           <form action={createTaskAction}>
             <input name="draftId" type="hidden" value={draft.id} />
             <SubmitButton>{isBlocked || isHighRisk ? "创建负责人任务" : "创建下一步任务"}</SubmitButton>
+          </form>
+        ) : null}
+        {isHighRisk ? (
+          <form action={notifyAction}>
+            <input name="eventType" type="hidden" value="HIGH_RISK_REPLY" />
+            <input name="recipientUserId" type="hidden" value={draft.createdById} />
+            <input name="relatedLeadId" type="hidden" value={draft.leadId} />
+            <input name="relatedReplyDraftId" type="hidden" value={draft.id} />
+            <input name="title" type="hidden" value="风险边界确认提醒" />
+            <input name="content" type="hidden" value="Market Claw 生成了高风险回复，请回到系统查看边界提醒并确认条件后再使用。" />
+            <SubmitButton>发送风险边界确认提醒</SubmitButton>
           </form>
         ) : null}
       </div>

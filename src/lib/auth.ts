@@ -191,7 +191,15 @@ export function canAccessTenantAuditLogs(role: UserRole) {
 }
 
 export function canAccessTenantWeCom(role: UserRole) {
+  return role === "TENANT_ADMIN" || role === "OPERATOR" || role === "SALES";
+}
+
+export function canManageTenantWeCom(role: UserRole) {
   return role === "TENANT_ADMIN";
+}
+
+export function canViewTenantWeComLogs(role: UserRole) {
+  return role === "TENANT_ADMIN" || role === "OPERATOR";
 }
 
 export function canExportTenantLeads(role: UserRole) {

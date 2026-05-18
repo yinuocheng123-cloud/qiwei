@@ -9,7 +9,7 @@
  */
 import Link from "next/link";
 import { FollowTaskPriority, FollowTaskStatus, FollowTaskType, type Prisma } from "@prisma/client";
-import { cancelTask, completeTask, delayTask } from "@/lib/actions";
+import { cancelTask, completeTask, delayTask, triggerWecomInternalNotification } from "@/lib/actions";
 import { canViewAllTenantLeads, requireTenantAccess } from "@/lib/auth";
 import { todoWhere } from "@/lib/dashboard";
 import { customerTypeOptions, formatDate, intentionOptions, labelOf, stageOptions, taskPriorityOptions, taskStatusOptions, taskTypeOptions } from "@/lib/options";
@@ -79,6 +79,7 @@ export default async function TodosPage({
   const ownerId = canViewAll ? undefined : user.id;
   const taskRules = taskWhere(tenant.id, ownerId);
   const leadRules = todoWhere(tenant.id, ownerId);
+  const notifyAction = triggerWecomInternalNotification.bind(null, tenant.slug);
 
   const statusFilter = filterValue(FollowTaskStatus, searchParams?.status);
   const typeFilter = filterValue(FollowTaskType, searchParams?.type);
@@ -247,12 +248,12 @@ export default async function TodosPage({
       </details>
 
       <div className="mt-6 grid gap-5 xl:grid-cols-2">
-        {hasFilters ? <TaskSection tenantSlug={tenant.slug} sectionId="filtered-tasks" title="筛选结果" tasks={filteredTasks} /> : null}
-        <TaskSection tenantSlug={tenant.slug} sectionId="today-tasks" title="今日待办" tasks={todayTasks} />
-        <TaskSection tenantSlug={tenant.slug} sectionId="overdue-tasks" title="逾期任务" tasks={overdueTasks} urgent />
-        <TaskSection tenantSlug={tenant.slug} sectionId="high-priority-tasks" title="高优先级任务" tasks={highPriorityTasks} />
-        <TaskSection tenantSlug={tenant.slug} sectionId="week-tasks" title="本周待跟进" tasks={weekTasks} />
-        <TaskSection tenantSlug={tenant.slug} sectionId="done-tasks" title="已完成" tasks={doneTasks} readOnly />
+        {hasFilters ? <TaskSection notifyAction={notifyAction} tenantSlug={tenant.slug} sectionId="filtered-tasks" title="筛选结果" tasks={filteredTasks} /> : null}
+        <TaskSection notifyAction={notifyAction} tenantSlug={tenant.slug} sectionId="today-tasks" title="今日待办" tasks={todayTasks} />
+        <TaskSection notifyAction={notifyAction} tenantSlug={tenant.slug} sectionId="overdue-tasks" title="逾期任务" tasks={overdueTasks} urgent />
+        <TaskSection notifyAction={notifyAction} tenantSlug={tenant.slug} sectionId="high-priority-tasks" title="高优先级任务" tasks={highPriorityTasks} />
+        <TaskSection notifyAction={notifyAction} tenantSlug={tenant.slug} sectionId="week-tasks" title="本周待跟进" tasks={weekTasks} />
+        <TaskSection notifyAction={notifyAction} tenantSlug={tenant.slug} sectionId="done-tasks" title="已完成" tasks={doneTasks} readOnly />
         <LeadSection tenantSlug={tenant.slug} title="高意向客户" leads={highIntentLeads} />
         <LeadSection tenantSlug={tenant.slug} title="报价客户" leads={quotedLeads} />
         <LeadSection tenantSlug={tenant.slug} title="待激活客户" leads={reactivateLeads} />
@@ -267,7 +268,8 @@ function TaskSection({
   title,
   tasks,
   urgent = false,
-  readOnly = false
+  readOnly = false,
+  notifyAction
 }: {
   tenantSlug: string;
   sectionId: string;
@@ -275,6 +277,7 @@ function TaskSection({
   tasks: TaskItem[];
   urgent?: boolean;
   readOnly?: boolean;
+  notifyAction: (formData: FormData) => Promise<void>;
 }) {
   return (
     <section id={sectionId}>
@@ -312,6 +315,17 @@ function TaskSection({
                       <form action={cancelTask.bind(null, tenantSlug, task.id)}>
                         <button className="rounded-md border border-red-200 px-3 py-1 text-xs text-red-700">取消</button>
                       </form>
+                      {task.ownerId ? (
+                        <form action={notifyAction}>
+                          <input name="eventType" type="hidden" value="OVERDUE_TASK" />
+                          <input name="recipientUserId" type="hidden" value={task.ownerId} />
+                          <input name="relatedTaskId" type="hidden" value={task.id} />
+                          {task.leadId ? <input name="relatedLeadId" type="hidden" value={task.leadId} /> : null}
+                          <input name="title" type="hidden" value={`任务提醒：${task.title}`} />
+                          <input name="content" type="hidden" value="请回到系统处理该跟进任务。该提醒仅用于企业内部协作，不会自动联系客户。" />
+                          <button className="rounded-md border border-amber-200 px-3 py-1 text-xs text-amber-700">发送内部提醒</button>
+                        </form>
+                      ) : null}
                     </>
                   ) : null}
                 </div>

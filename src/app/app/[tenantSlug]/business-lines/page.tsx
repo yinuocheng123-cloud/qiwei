@@ -180,7 +180,7 @@ export default async function BusinessLinesPage({ params }: { params: { tenantSl
           { key: "materials", label: "资料包", href: `/app/${tenant.slug}/materials` },
           { key: "strategies", label: "策略库", href: `/app/${tenant.slug}/strategies` },
           { key: "tasks", label: "任务模板", href: `/app/${tenant.slug}/task-templates` },
-          ...(user.role === "TENANT_ADMIN" ? [{ key: "wecom", label: "企微配置", href: `/app/${tenant.slug}/wecom` }] : []),
+          ...(user.role === "TENANT_ADMIN" ? [{ key: "wecom", label: "企业微信提醒配置", href: `/app/${tenant.slug}/wecom` }] : []),
           ...(canEdit ? [{ key: "compliance", label: "合规配置", href: `/app/${tenant.slug}/communication-compliance` }] : [])
         ]}
         className="mt-4"
@@ -220,8 +220,8 @@ export default async function BusinessLinesPage({ params }: { params: { tenantSl
           />
           {user.role === "TENANT_ADMIN" ? (
             <ConfigEntryCard
-              title="企微配置"
-              description="保留高权限配置入口，不让普通角色直接接触敏感密钥和回调配置。"
+              title="企业微信提醒配置"
+              description="配置内部工作提醒、成员 ID 绑定和通知日志；当前不处理客户侧沟通内容，也不做自动对外动作。"
               href={`/app/${tenant.slug}/wecom`}
             />
           ) : null}

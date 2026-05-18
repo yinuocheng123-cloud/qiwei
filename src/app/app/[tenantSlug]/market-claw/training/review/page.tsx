@@ -7,7 +7,7 @@
  *   第二部分：训练审核页面
  *   第三部分：辅助展示组件
  */
-import { reviewMarketClawTrainingCase, saveMarketClawTrainingAsKnowledge } from "@/lib/actions";
+import { reviewMarketClawTrainingCase, saveMarketClawTrainingAsKnowledge, triggerWecomInternalNotification } from "@/lib/actions";
 import { canReviewMarketClawTraining, requireTenantAccess } from "@/lib/auth";
 import {
   marketClawKnowledgeScopeOptions,
@@ -50,6 +50,7 @@ export default async function MarketClawTrainingReviewPage({
     orderBy: [{ submittedForReviewAt: "desc" }, { updatedAt: "desc" }],
     take: 30
   });
+  const notifyAction = triggerWecomInternalNotification.bind(null, tenant.slug);
 
   return (
     <PageShell
@@ -133,6 +134,15 @@ export default async function MarketClawTrainingReviewPage({
                 <Info label="是否建议负责人介入" value={item.replyRiskLevel === "BLOCKED" ? "是" : item.requiresReview ? "必要时介入" : "否"} />
                 <Info label="风险原因" value={item.riskReason ?? "-"} />
               </div>
+
+              <form action={notifyAction} className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-4">
+                <input name="eventType" type="hidden" value="TRAINING_REVIEW_PENDING" />
+                <input name="recipientUserId" type="hidden" value={item.createdById} />
+                <input name="relatedTrainingCaseId" type="hidden" value={item.id} />
+                <input name="title" type="hidden" value="训练待审核提醒" />
+                <input name="content" type="hidden" value="销售提交了 Market Claw 训练样本，请回到系统审核风险等级、使用模式和边界提醒。" />
+                <SubmitButton>发送训练待审核提醒</SubmitButton>
+              </form>
 
               <div className="mt-4 grid gap-4 xl:grid-cols-3">
                 <form

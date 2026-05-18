@@ -141,6 +141,23 @@ enum WeComConfigStatus {
   disabled
 }
 
+enum WecomNotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum WecomNotificationEventType {
+  TEST_MESSAGE
+  NEW_LEAD
+  OVERDUE_TASK
+  TRAINING_REVIEW_PENDING
+  KNOWLEDGE_CANDIDATE_REVIEW_PENDING
+  HIGH_RISK_REPLY
+  SYSTEM_NOTICE
+}
+
 enum FollowTaskType {
   FIRST_FOLLOW
   SEND_MATERIAL
@@ -396,6 +413,8 @@ model Tenant {
   materials   Material[]
   intakeForms IntakeForm[]
   weComConfig WeComConfig?
+  userWecomBindings UserWecomBinding[]
+  wecomNotificationLogs WecomNotificationLog[]
   auditLogs   AuditLog[]
   followTasks FollowTask[]
   taskTemplates TaskTemplate[]
@@ -444,6 +463,8 @@ model User {
   marketClawReplyFeedbacks              MarketClawReplyFeedback[]
   createdMarketClawIngestionBatches     MarketClawIngestionBatch[]       @relation("MarketClawIngestionBatchCreator")
   createdMarketClawKnowledgeCandidates  MarketClawKnowledgeCandidate[]   @relation("MarketClawKnowledgeCandidateCreator")
+  wecomBinding                           UserWecomBinding?
+  wecomNotificationLogs                  WecomNotificationLog[]
 
   @@index([tenantId, role])
 }
@@ -705,8 +726,53 @@ model WeComConfig {
   encodingAESKey  String?
   callbackUrl     String?
   status          WeComConfigStatus @default(draft)
+  lastTestAt      DateTime?
+  lastTestStatus  WecomNotificationStatus?
+  lastTestMessage String?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
+}
+
+model UserWecomBinding {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wecomUserId String?
+  displayName String?
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId, enabled])
+  @@index([tenantId, wecomUserId])
+}
+
+model WecomNotificationLog {
+  id                    String                       @id @default(cuid())
+  tenantId              String
+  tenant                Tenant                       @relation(fields: [tenantId], references: [id])
+  eventType             WecomNotificationEventType
+  recipientUserId       String?
+  recipientUser         User?                        @relation(fields: [recipientUserId], references: [id])
+  recipientWecomUserId  String?
+  title                 String
+  content               String
+  status                WecomNotificationStatus      @default(PENDING)
+  errorMessage          String?
+  relatedLeadId         String?
+  relatedTaskId         String?
+  relatedTrainingCaseId String?
+  relatedCandidateId    String?
+  relatedReplyDraftId   String?
+  createdAt             DateTime                     @default(now())
+  sentAt                DateTime?
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, eventType, createdAt])
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, recipientUserId, createdAt])
 }
 
 model CommunicationComplianceConfig {

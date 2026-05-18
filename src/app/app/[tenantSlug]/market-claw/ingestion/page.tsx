@@ -11,7 +11,8 @@ import {
   adoptMarketClawKnowledgeCandidate,
   createMarketClawIngestionBatch,
   mergeMarketClawKnowledgeCandidate,
-  rejectMarketClawKnowledgeCandidate
+  rejectMarketClawKnowledgeCandidate,
+  triggerWecomInternalNotification
 } from "@/lib/actions";
 import { canAccessMarketClawIngestion, requireTenantAccess } from "@/lib/auth";
 import {
@@ -247,6 +248,7 @@ export default async function MarketClawIngestionPage({
   ]);
 
   const createAction = createMarketClawIngestionBatch.bind(null, tenant.slug);
+  const notifyAction = triggerWecomInternalNotification.bind(null, tenant.slug);
   const knowledgeItemMap = new Map(knowledgeItems.map((item) => [item.id, item]));
   const knowledgeOptions = knowledgeItems.map((item) => ({
     value: item.id,
@@ -449,6 +451,15 @@ export default async function MarketClawIngestionPage({
                     value={`${marketClawReplyRiskLevelLabels[candidate.suggestedReplyRiskLevel]} / ${marketClawSendModeLabels[candidate.suggestedSendMode]}`}
                   />
                 </div>
+
+                <form action={notifyAction} className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-4">
+                  <input name="eventType" type="hidden" value="KNOWLEDGE_CANDIDATE_REVIEW_PENDING" />
+                  <input name="recipientUserId" type="hidden" value={candidate.createdById} />
+                  <input name="relatedCandidateId" type="hidden" value={candidate.id} />
+                  <input name="title" type="hidden" value="候选知识待审核提醒" />
+                  <input name="content" type="hidden" value="资料投喂产生了候选知识，请回到系统审核是否采纳、合并或驳回。" />
+                  <SubmitButton>发送候选知识待审核提醒</SubmitButton>
+                </form>
 
                 <div className="mt-4 grid gap-4 lg:grid-cols-3">
                   <CandidatePanel title="简短微信版" value={candidate.suggestedReplyShort} rows={5} />
