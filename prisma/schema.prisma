@@ -160,6 +160,7 @@ enum WecomNotificationEventType {
 
 enum AiProvider {
   DEEPSEEK
+  DOUBAO
   OPENAI_COMPATIBLE
   MOCK
 }

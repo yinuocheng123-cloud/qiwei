@@ -10,7 +10,14 @@
 import { AiProvider, type AiCallStatus } from "@prisma/client";
 import { clearAiProviderConfig, testTenantAiProviderConfig, upsertAiProviderConfig } from "@/lib/actions";
 import { canManageTenantAiSettings, canTestTenantAiSettings, requireTenantAccess } from "@/lib/auth";
-import { aiCallPurposeLabels, aiCallStatusLabels, aiProviderLabels, maskApiKey } from "@/lib/ai-provider";
+import {
+  aiCallPurposeLabels,
+  aiCallStatusLabels,
+  aiProviderLabels,
+  getDefaultAiBaseUrl,
+  getDefaultAiModel,
+  maskApiKey
+} from "@/lib/ai-provider";
 import { prisma } from "@/lib/prisma";
 import { PageShell } from "@/components/Shell";
 import { Callout, Card, Input, Select, SubmitButton } from "@/components/Ui";
@@ -62,6 +69,9 @@ export default async function AiSettingsPage({ params }: { params: { tenantSlug:
   const saveAction = upsertAiProviderConfig.bind(null, tenant.slug);
   const testAction = testTenantAiProviderConfig.bind(null, tenant.slug);
   const clearAction = clearAiProviderConfig.bind(null, tenant.slug);
+  const activeProvider = config?.provider ?? AiProvider.DEEPSEEK;
+  const defaultBaseUrl = getDefaultAiBaseUrl(activeProvider);
+  const defaultModel = getDefaultAiModel(activeProvider);
 
   return (
     <PageShell
@@ -100,6 +110,11 @@ export default async function AiSettingsPage({ params }: { params: { tenantSlug:
             <p className="mt-2 text-sm leading-6 text-slate-600">
               DeepSeek API 使用 OpenAI-compatible Chat Completions 格式。模型名称不写死，请按后台配置和官方文档维护。页面不会回显完整 API Key，留空表示保留当前密钥。
             </p>
+            <div className="mt-3 rounded-lg border border-sky-100 bg-sky-50 p-3 text-sm leading-6 text-sky-900">
+              <p>豆包 / 火山方舟按 OpenAI-compatible Chat Completions 接入，默认 Base URL 可使用 https://ark.cn-beijing.volces.com/api/v3。</p>
+              <p>当前 Provider 的默认参考值：{defaultBaseUrl} / {defaultModel}。</p>
+              <p>模型 ID 和 API Key 以火山方舟控制台实际开通结果为准；系统只保存配置并复用统一调用服务，不新增自动对外动作。</p>
+            </div>
             <form action={saveAction} className="mt-4 space-y-4">
               <Select
                 label="Provider"
@@ -108,6 +123,7 @@ export default async function AiSettingsPage({ params }: { params: { tenantSlug:
                 disabled={!canManage}
                 options={[
                   { value: AiProvider.DEEPSEEK, label: "DEEPSEEK" },
+                  { value: AiProvider.DOUBAO, label: "DOUBAO / 豆包火山方舟" },
                   { value: AiProvider.OPENAI_COMPATIBLE, label: "OPENAI_COMPATIBLE" },
                   { value: AiProvider.MOCK, label: "MOCK" }
                 ]}

@@ -15,6 +15,7 @@ import { prisma } from "@/lib/prisma";
 
 export const aiProviderLabels: Record<AiProvider, string> = {
   DEEPSEEK: "DeepSeek",
+  DOUBAO: "豆包 / 火山方舟",
   OPENAI_COMPATIBLE: "OpenAI-compatible",
   MOCK: "Mock 测试通道"
 };
@@ -40,8 +41,28 @@ export function maskApiKey(value?: string | null) {
   return `${value.slice(0, 4)}***${value.slice(-4)}`;
 }
 
+export function getDefaultAiBaseUrl(provider: AiProvider) {
+  if (provider === AiProvider.DOUBAO) {
+    return "https://ark.cn-beijing.volces.com/api/v3";
+  }
+  return "https://api.deepseek.com";
+}
+
+export function getDefaultAiModel(provider: AiProvider) {
+  if (provider === AiProvider.DOUBAO) {
+    return "doubao-seed-1-6";
+  }
+  if (provider === AiProvider.MOCK) {
+    return "mock-model";
+  }
+  if (provider === AiProvider.OPENAI_COMPATIBLE) {
+    return "chat-completions-model";
+  }
+  return "deepseek-chat";
+}
+
 export function normalizeAiBaseUrl(value?: string | null) {
-  const fallback = "https://api.deepseek.com";
+  const fallback = getDefaultAiBaseUrl(AiProvider.DEEPSEEK);
   const next = value?.trim() || fallback;
   return next.endsWith("/") ? next.slice(0, -1) : next;
 }
@@ -146,7 +167,7 @@ type CompletionInput = {
 async function safeCallChatCompletions(input: CompletionInput): Promise<AiCompletionResult> {
   const config = await getTenantAiProviderConfig(input.tenantId);
   const provider = config?.provider ?? AiProvider.DEEPSEEK;
-  const model = config?.model ?? "deepseek-chat";
+  const model = config?.model ?? getDefaultAiModel(provider);
   const promptHash = hashText(`${input.systemPrompt ?? ""}\n${input.prompt}`);
   const startedAt = Date.now();
 

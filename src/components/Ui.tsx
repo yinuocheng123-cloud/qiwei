@@ -116,7 +116,7 @@ export function Input({
       <input
         className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-600"
         name={name}
-        type={type}
+        type={name === "apiKeyEncrypted" ? "password" : type}
         defaultValue={defaultValue}
         required={required}
         disabled={disabled}

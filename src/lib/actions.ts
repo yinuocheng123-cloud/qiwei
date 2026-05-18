@@ -69,7 +69,7 @@ import {
   requirePlatformAdmin,
   requireTenantAccess
 } from "@/lib/auth";
-import { testAiProviderConnection } from "@/lib/ai-provider";
+import { getDefaultAiBaseUrl, getDefaultAiModel, testAiProviderConnection } from "@/lib/ai-provider";
 import { buildBusinessLineSlug, parseBusinessLineRecommendedTagText } from "@/lib/business-lines";
 import {
   CNAS_BUSINESS_LINE_NAME,
@@ -4065,8 +4065,8 @@ export async function upsertAiProviderConfig(tenantSlug: string, formData: FormD
   const apiKeyInput = text(formData, "apiKeyEncrypted");
   const clearApiKey = checkbox(formData, "clearApiKey");
   const provider = enumValue(AiProvider, text(formData, "provider"), AiProvider.DEEPSEEK);
-  const baseUrl = text(formData, "baseUrl") ?? (provider === AiProvider.DEEPSEEK ? "https://api.deepseek.com" : "https://api.deepseek.com");
-  const model = text(formData, "model") ?? existingConfig?.model ?? "deepseek-chat";
+  const baseUrl = text(formData, "baseUrl") ?? existingConfig?.baseUrl ?? getDefaultAiBaseUrl(provider);
+  const model = text(formData, "model") ?? existingConfig?.model ?? getDefaultAiModel(provider);
   const temperature = Math.max(0, Math.min(2, parseNumber(text(formData, "temperature"), existingConfig?.temperature ?? 0.2)));
   const maxTokens = Math.max(64, Math.min(8192, Math.round(parseNumber(text(formData, "maxTokens"), existingConfig?.maxTokens ?? 512))));
   const enabled = checkbox(formData, "enabled");

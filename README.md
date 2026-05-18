@@ -1560,3 +1560,39 @@ AI 输出在本系统中只作为建议：候选知识仍需人工审核，客�
 本轮正式记录：
 
 - `custom/notes/v2.1.5-ai-provider-deepseek-config.md`
+
+## V2.1.6 AI Provider 扩展支持豆包
+
+V2.1.6 在 V2.1.5 的 AI Provider 配置框架上新增 `DOUBAO` Provider，用于承接豆包 / 火山方舟的 OpenAI-compatible Chat Completions 接入方式。
+
+本轮只做 Provider 增量支持，不把 AI 接入 Market Claw 主链路，不自动写入知识库，不自动回复客户，也不做企业微信 API 真实发送。
+
+配置入口仍然是：
+
+- `/app/[tenantSlug]/ai-settings`
+
+豆包 / 火山方舟参考配置：
+
+- Provider：`DOUBAO`
+- Base URL：`https://ark.cn-beijing.volces.com/api/v3`
+- Chat Completions 路径由服务层统一拼接为 `/chat/completions`
+- Model：以火山方舟控制台实际开通的模型 ID 为准，页面和服务层只提供默认参考值
+- API Key：使用火山方舟控制台密钥，页面不回显完整密钥
+
+服务层继续复用 `src/lib/ai-provider.ts` 的统一调用能力：
+
+- `getChatCompletionsUrl`
+- `testAiProviderConnection`
+- `callAiTextCompletion`
+- `callAiJsonCompletion`
+- `recordAiCallLog`
+
+V2.1.6 继续保持 V2.1.5 的安全边界：AI 输出只是建议；未配置、未启用、缺少 API Key 或请求失败时，会记录 `SKIPPED` 或 `FAILED`，系统继续使用规则版能力。
+
+专项验证文件：
+
+- `tests/v216-ai-provider-doubao-support-e2e.spec.ts`
+
+本轮正式记录：
+
+- `custom/notes/v2.1.6-ai-provider-doubao-support.md`
