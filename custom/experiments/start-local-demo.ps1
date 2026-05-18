@@ -193,7 +193,8 @@ function Start-PostgresIfNeeded {
       "端口 $Port 已被其他进程占用。",
       "进程 ID：$($portOwner.ProcessId)",
       "进程名：$($portOwner.ProcessName)",
-      "可执行文件：$($portOwner.ExecutablePath)"
+      "可执行文件：$($portOwner.ExecutablePath)",
+      "请先停止占用端口的进程，或改用其它端口后重试。"
     ) -join [Environment]::NewLine
 
     Fail $details
@@ -256,6 +257,9 @@ if (-not (Test-Path -LiteralPath (Join-Path $ProjectRoot "package.json"))) {
 }
 
 Set-Location -LiteralPath $ProjectRoot
+Write-Info "当前项目路径：$ProjectRoot"
+Write-Info "演示数据库端口：$Port"
+Write-Info "本地 PostgreSQL 数据目录：$DataDir"
 
 Write-Step "检查 PostgreSQL 可执行文件"
 
@@ -315,6 +319,12 @@ Write-Host "platform-boss@zhengmu.local / 123456" -ForegroundColor Green
 Write-Host "platform-operator@zhengmu.local / 123456" -ForegroundColor Green
 Write-Host "platform-sales@zhengmu.local / 123456" -ForegroundColor Green
 Write-Host "当前脚本不依赖 Docker，会继续以前台方式启动 Next.js dev server。" -ForegroundColor Green
+Write-Host "常见失败排查：" -ForegroundColor Yellow
+Write-Host "1. 如果端口 $Port 不可用，请先释放占用进程。" -ForegroundColor Yellow
+Write-Host "2. 如果 seed 失败，请优先查看当前控制台输出。" -ForegroundColor Yellow
+Write-Host "3. 如果 PostgreSQL 启动失败，可查看：" -ForegroundColor Yellow
+Write-Host "   $PostgresStdoutLog" -ForegroundColor Yellow
+Write-Host "   $PostgresStderrLog" -ForegroundColor Yellow
 
 Write-Step "启动 Next.js dev server"
 & npm.cmd run dev

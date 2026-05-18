@@ -1333,3 +1333,85 @@ V2.0.6 解决了“企业资料怎么先变成候选知识”的问题，但候�
 - 跟进任务
 
 这意味着不同企业可以复用同一套初始化结构，而不是被迫套进某个行业样板。
+
+## V2.1 稳定测试环境与演示交付包
+
+### 为什么这一轮不继续加业务功能
+
+到 V2.0.9 为止，系统的业务主链路已经具备内部试用条件。V2.1 的重点不再是扩功能，而是把当前版本整理成：
+
+- 可稳定启动
+- 可人工演示
+- 可内部试用
+- 可熟客共创试点
+
+所以这一轮优先补的是演示环境、交付文档、试点清单、验收表和常见问题说明，而不是继续扩业务模块。
+
+### 当前本轮交付物位置
+
+V2.1 的交付材料集中放在：
+
+- `custom/docs/local-demo-runbook.md`
+- `custom/docs/demo-script-role-paths.md`
+- `custom/docs/demo-script-market-claw.md`
+- `custom/docs/customer-pilot-onboarding-checklist.md`
+- `custom/docs/knowledge-materials-preparation-checklist.md`
+- `custom/docs/manual-acceptance-checklist.md`
+- `custom/docs/troubleshooting.md`
+
+本轮正式记录：
+
+- `custom/notes/v2.1-demo-environment-delivery-package.md`
+
+### 如何本地启动演示
+
+推荐直接执行：
+
+```powershell
+D:
+cd D:\ceshi\qiwei
+powershell.exe -ExecutionPolicy Bypass -File custom\experiments\start-local-demo.ps1
+```
+
+脚本会自动检查项目目录、本地 PostgreSQL、数据目录、数据库端口，并依次执行：
+
+1. `npm.cmd run prisma:generate`
+2. `npx.cmd prisma migrate deploy`
+3. `npm.cmd run prisma:seed`
+4. `npm.cmd run dev`
+
+### 演示账号与推荐路径
+
+推荐演示账号：
+
+- 企业管理员：`platform-boss@zhengmu.local / 123456`
+- 运营角色：`platform-operator@zhengmu.local / 123456`
+- 销售角色：`platform-sales@zhengmu.local / 123456`
+
+推荐演示顺序：
+
+1. 企业管理员先看首页与初始化向导
+2. 再看业务配置与 Market Claw 总览
+3. 进入资料投喂、训练审核、训练复盘
+4. 再切到运营角色看导入、投喂、知识整理
+5. 最后切到销售角色看客户详情页 Market Claw、我的训练和跟进工作台
+
+详细脚本见：
+
+- `custom/docs/demo-script-role-paths.md`
+- `custom/docs/demo-script-market-claw.md`
+
+### 当前适合进入什么阶段
+
+本轮目标不是正式生产部署，也不是正式 SaaS 商业交付，而是：
+
+1. 内部真实自用
+2. 熟客共创试点
+3. 小范围人工演示
+4. 角色体验验收
+
+如果要进入下一阶段，建议先完成：
+
+- 一轮人工验收
+- 一轮熟客试点
+- 一轮文档与演示口径收敛
