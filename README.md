@@ -1415,3 +1415,58 @@ powershell.exe -ExecutionPolicy Bypass -File custom\experiments\start-local-demo
 - 一轮人工验收
 - 一轮熟客试点
 - 一轮文档与演示口径收敛
+
+## V2.1.1 售前演示话术与熟客共创试点包
+
+### 本轮不是什么
+
+本轮不是系统功能开发，也不是继续扩外部接入能力，而是在 V2.1 演示交付包基础上，继续补齐售前、演示、试点和交付边界文档。
+
+### 本轮补充了什么
+
+V2.1.1 重点新增以下材料：
+
+- `custom/docs/sales-one-page-product-brief.md`
+- `custom/docs/boss-demo-talk-track.md`
+- `custom/docs/sales-user-quick-guide.md`
+- `custom/docs/customer-pilot-proposal.md`
+- `custom/docs/customer-pilot-weekly-report-template.md`
+- `custom/docs/pricing-and-delivery-boundary.md`
+- `custom/docs/demo-to-pilot-conversion-script.md`
+
+本轮正式记录：
+
+- `custom/notes/v2.1.1-sales-demo-pilot-package.md`
+
+### 适合什么场景使用
+
+这批文档适合以下场景：
+
+1. 给老板看一页纸产品说明
+2. 售前或负责人做人工演示
+3. 内部销售培训和角色彩排
+4. 熟客共创试点沟通
+5. 试点周报、交付边界和转正式合作前的收口说明
+
+### 和 V2.1 演示交付包的关系
+
+V2.1 解决的是“系统怎么稳定启动、怎么做演示、怎么做试点准备”。
+
+V2.1.1 继续解决的是：
+
+- 这套系统怎么讲得更清楚
+- 老板怎么更快听懂
+- 销售怎么照着演示
+- 熟客怎么从演示进入 30 天试点
+
+也就是说，V2.1 是演示交付底座，V2.1.1 是售前讲法、试点节奏和商务边界补充包。
+
+### 下一步建议
+
+当前更适合进入：
+
+1. 一轮内部人工彩排
+2. 一轮老板视角演示收口
+3. 一轮熟客共创试点准备
+
+如果这些动作顺利，再继续收集真实反馈，决定是否补更细的行业版话术或项目化试点模板。
