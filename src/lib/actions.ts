@@ -11,6 +11,8 @@
  *   第四部分：策略、资料和企业微信动作
  */
 import {
+  AiCallPurpose,
+  AiCallStatus,
   AiProvider,
   BusinessLineCategory,
   BusinessLineStatus,
@@ -59,6 +61,7 @@ import {
   canAccessMarketClawIngestion,
   canAccessMarketClawKnowledge,
   canAccessMarketClawReplies,
+  canAccessMarketClawSandbox,
   canAccessMarketClawTraining,
   canManageTenantAiSettings,
   canTestTenantAiSettings,
@@ -69,7 +72,14 @@ import {
   requirePlatformAdmin,
   requireTenantAccess
 } from "@/lib/auth";
-import { getDefaultAiBaseUrl, getDefaultAiModel, testAiProviderConnection } from "@/lib/ai-provider";
+import {
+  callAiJsonCompletion,
+  getDefaultAiBaseUrl,
+  getDefaultAiModel,
+  getTenantAiProviderConfig,
+  recordAiCallLog,
+  testAiProviderConnection
+} from "@/lib/ai-provider";
 import { buildBusinessLineSlug, parseBusinessLineRecommendedTagText } from "@/lib/business-lines";
 import {
   CNAS_BUSINESS_LINE_NAME,
@@ -97,10 +107,12 @@ import {
 } from "@/lib/imports";
 import {
   buildMarketClawMergedKnowledgeContent,
+  detectRiskFromQuestion,
   findSimilarKnowledgeItems,
   generateMarketClawKnowledgeCandidates,
   generateMarketClawReply,
   inferMarketClawPolicy,
+  mergeAiRiskWithRuleRisk,
   materialTitlesFromIds,
   resolveMarketClawKnowledgePolicy,
   type MarketClawKnowledgeCandidateMergeAction,
@@ -109,6 +121,18 @@ import {
   parseMarketClawTextArray,
   splitKnowledgeIdsByScope
 } from "@/lib/market-claw";
+import {
+  getSandboxStageLabel,
+  getMarketClawSandboxAgentProfile,
+  mapSandboxStageToLeadStage,
+  parseSandboxAgentId,
+  parseSandboxStage,
+  type MarketClawSandboxActionState,
+  type MarketClawSandboxAdvice,
+  type MarketClawSandboxAgentId,
+  type MarketClawSandboxKnowledgeSuggestion,
+  type MarketClawSandboxStage
+} from "@/lib/market-claw-agents";
 import { prisma } from "@/lib/prisma";
 import { createWecomInternalNotification } from "@/lib/wecom";
 import { parseSourceAttributionFromFormData, upsertLeadSourceAttribution } from "@/lib/source-attribution";
@@ -1734,6 +1758,223 @@ async function requireMarketClawIngestionAccess(tenantSlug: string) {
   return access;
 }
 
+async function requireMarketClawSandboxAccess(tenantSlug: string) {
+  const access = await requireTenantAccess(tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
+  if (!canAccessMarketClawSandbox(access.user.role)) {
+    redirect("/forbidden");
+  }
+  return access;
+}
+
+function sandboxKnowledgeTypeForQuestion(question: string): MarketClawSandboxKnowledgeSuggestion["type"] {
+  const normalized = question.toLowerCase();
+  if (["报价", "价格", "费用", "多少钱"].some((keyword) => normalized.includes(keyword))) {
+    return "PRICE_BOUNDARY";
+  }
+  if (["保证", "一定", "效果", "承诺", "周期"].some((keyword) => normalized.includes(keyword))) {
+    return "RISK_REMINDER";
+  }
+  if (["流程", "步骤", "怎么做", "多久", "交付"].some((keyword) => normalized.includes(keyword))) {
+    return "PROCESS";
+  }
+  if (["案例", "能不能", "凭什么", "为什么选你们"].some((keyword) => normalized.includes(keyword))) {
+    return "OBJECTION_HANDLING";
+  }
+  return "FAQ";
+}
+
+function parseSandboxStringArray(value: unknown) {
+  return Array.isArray(value)
+    ? value
+        .map((item) => (typeof item === "string" ? item.trim() : ""))
+        .filter(Boolean)
+    : [];
+}
+
+function buildSandboxPrompt(input: {
+  question: string;
+  businessLineName: string;
+  customerStageLabel: string;
+  agentName: string;
+  agentDescription: string;
+  agentFocus: string[];
+  outputSections: string[];
+}) {
+  return [
+    `客户问题：${input.question}`,
+    `业务线：${input.businessLineName}`,
+    `客户阶段：${input.customerStageLabel}`,
+    `专家视角：${input.agentName}`,
+    `专家说明：${input.agentDescription}`,
+    `重点关注：${input.agentFocus.join("、")}`,
+    `输出段落：${input.outputSections.join("、")}`,
+    "风险分级原则：普通业务问题默认 MEDIUM；价格、效果、周期、责任、特殊政策相关问题默认 HIGH；保证效果、保证成交、一定有效等绝对化表达建议 BLOCKED；AI 不能降低系统规则识别出的风险等级。",
+    "使用模式原则：LOW 对应 AUTO_ALLOWED；MEDIUM 对应 SALES_CONFIRM_REQUIRED；HIGH 对应 RISK_CONFIRM_REQUIRED；BLOCKED 对应 INTERNAL_ADVICE_ONLY。",
+    "请只输出合法 JSON，不要输出 Markdown，不要解释过程。JSON 结构必须包含：agentId、agentName、summary、suggestedReply、wechatShortReply、followUpQuestions、riskLevel、sendMode、riskReasons、nextActions、knowledgeSuggestion、internalNotes。knowledgeSuggestion 内必须包含 shouldSave、type、title、reason。",
+    "客户回复仍需销售确认。不能做绝对承诺。涉及价格、效果、周期、责任、服务边界时，必须提醒确认条件。如果内容不适合直接给客户，请标记为仅内部建议。"
+  ].join("\n");
+}
+
+function buildMockSandboxAdvice(input: {
+  agentId: MarketClawSandboxAgentId;
+  question: string;
+  businessLineId: string | null;
+  businessLineName: string;
+  customerStage: MarketClawSandboxStage;
+  provider: AiProvider;
+  model: string;
+}) {
+  const agent = getMarketClawSandboxAgentProfile(input.agentId);
+  const mergedRisk = mergeAiRiskWithRuleRisk({
+    question: input.question,
+    aiRiskLevel: detectRiskFromQuestion(input.question).riskLevel,
+    aiSendMode: detectRiskFromQuestion(input.question).sendMode,
+    aiRiskReasons: detectRiskFromQuestion(input.question).riskReasons
+  });
+  const knowledgeType = sandboxKnowledgeTypeForQuestion(input.question);
+  const summary =
+    mergedRisk.riskLevel === MarketClawReplyRiskLevel.BLOCKED
+      ? "这类问题涉及明显承诺或高风险边界，更适合作为内部判断和重写参考。"
+      : `${agent.name}建议先回应客户关心点，再推进下一步确认动作。`;
+
+  return {
+    agentId: agent.id,
+    agentName: agent.name,
+    customerQuestion: input.question,
+    businessLineId: input.businessLineId,
+    summary,
+    suggestedReply:
+      mergedRisk.riskLevel === MarketClawReplyRiskLevel.BLOCKED
+        ? "这类问题先不要直接答应客户，建议先收紧边界，再用更保守的表达确认客户具体场景。"
+        : `可以先回应客户当前最关心的点，再补一句“为了给你更准确的建议，我想先确认一下你的具体情况”，避免一上来就承诺结果。`,
+    wechatShortReply:
+      mergedRisk.riskLevel === MarketClawReplyRiskLevel.BLOCKED
+        ? "这类问题先别急着正面承诺，建议先确认场景和边界。"
+        : "我先把关键点跟你说清楚，再根据你的具体情况给你更准确的建议。",
+    followUpQuestions: [
+      "你现在最想先解决的是效果、周期、价格，还是落地执行问题？",
+      "这件事你更希望先了解方案，还是先判断是否适合现在启动？"
+    ],
+    riskLevel: mergedRisk.riskLevel,
+    sendMode: mergedRisk.sendMode,
+    riskReasons: mergedRisk.riskReasons,
+    nextActions:
+      mergedRisk.riskLevel === MarketClawReplyRiskLevel.BLOCKED
+        ? ["先内部改写回复口径", "确认是否涉及价格/效果/责任承诺", "必要时由负责人介入"]
+        : ["先确认客户真实需求", "根据阶段决定是否发资料", "安排下一步沟通或诊断"],
+    knowledgeSuggestion: {
+      shouldSave: mergedRisk.riskLevel !== MarketClawReplyRiskLevel.LOW,
+      type: knowledgeType,
+      title: `${input.businessLineName}｜${input.question.slice(0, 24)}`,
+      reason:
+        mergedRisk.riskLevel === MarketClawReplyRiskLevel.BLOCKED
+          ? "这类问题带有明显风险边界，适合进入训练或知识治理流程，而不是直接复用。"
+          : "这类客户问题具有复用价值，适合沉淀成训练样本草稿，再进入审核流程。"
+    },
+    internalNotes: [
+      `${agent.name}重点：${agent.focus.join("、")}`,
+      mergedRisk.internalOnlyNote ?? "输出仅供内部参考，客户回复仍需销售确认。"
+    ],
+    status: AiCallStatus.SUCCESS,
+    latencyMs: 0,
+    provider: input.provider,
+    model: input.model,
+    businessLineName: input.businessLineName,
+    customerStage: input.customerStage,
+    callStatusText: "MOCK 结构化建议已生成",
+    rawSummary: "MOCK Provider 仅用于内部测试，不代表真实大模型输出。"
+  } satisfies MarketClawSandboxAdvice;
+}
+
+function normalizeSandboxAdvice(input: {
+  agentId: MarketClawSandboxAgentId;
+  question: string;
+  businessLineId: string | null;
+  businessLineName: string;
+  customerStage: MarketClawSandboxStage;
+  provider: AiProvider;
+  model: string;
+  raw: unknown;
+  status: AiCallStatus;
+  latencyMs: number | null;
+  fallbackText?: string | null;
+}) {
+  const agent = getMarketClawSandboxAgentProfile(input.agentId);
+  const payload = input.raw && typeof input.raw === "object" && !Array.isArray(input.raw) ? (input.raw as Record<string, unknown>) : {};
+  const mergedRisk = mergeAiRiskWithRuleRisk({
+    question: input.question,
+    aiRiskLevel: typeof payload.riskLevel === "string" ? payload.riskLevel : null,
+    aiSendMode: typeof payload.sendMode === "string" ? payload.sendMode : null,
+    aiRiskReasons: payload.riskReasons,
+    aiInternalOnlyNote:
+      typeof payload.internalNotes === "string"
+        ? payload.internalNotes
+        : parseSandboxStringArray(payload.internalNotes).join("；")
+  });
+  const knowledgeSuggestionPayload =
+    payload.knowledgeSuggestion && typeof payload.knowledgeSuggestion === "object" && !Array.isArray(payload.knowledgeSuggestion)
+      ? (payload.knowledgeSuggestion as Record<string, unknown>)
+      : {};
+  const summary =
+    typeof payload.summary === "string" && payload.summary.trim()
+      ? payload.summary.trim()
+      : input.fallbackText?.trim() || "AI 已返回建议，但未成功产出完整结构化摘要，已按安全默认值降级。";
+  const suggestedReply =
+    typeof payload.suggestedReply === "string" && payload.suggestedReply.trim()
+      ? payload.suggestedReply.trim()
+      : input.fallbackText?.trim() || "建议先确认客户具体情况，再给出更准确的回复。";
+  const wechatShortReply =
+    typeof payload.wechatShortReply === "string" && payload.wechatShortReply.trim()
+      ? payload.wechatShortReply.trim()
+      : "我先确认一下你的具体情况，再给你更准确的建议。";
+  const knowledgeType =
+    typeof knowledgeSuggestionPayload.type === "string" && knowledgeSuggestionPayload.type.trim()
+      ? (knowledgeSuggestionPayload.type.trim() as MarketClawSandboxKnowledgeSuggestion["type"])
+      : sandboxKnowledgeTypeForQuestion(input.question);
+
+  return {
+    agentId: agent.id,
+    agentName:
+      typeof payload.agentName === "string" && payload.agentName.trim() ? payload.agentName.trim() : agent.name,
+    customerQuestion: input.question,
+    businessLineId: input.businessLineId,
+    summary,
+    suggestedReply,
+    wechatShortReply,
+    followUpQuestions: parseSandboxStringArray(payload.followUpQuestions),
+    riskLevel: mergedRisk.riskLevel,
+    sendMode: mergedRisk.sendMode,
+    riskReasons: mergedRisk.riskReasons,
+    nextActions: parseSandboxStringArray(payload.nextActions),
+    knowledgeSuggestion: {
+      shouldSave: Boolean(knowledgeSuggestionPayload.shouldSave),
+      type: knowledgeType,
+      title:
+        typeof knowledgeSuggestionPayload.title === "string" && knowledgeSuggestionPayload.title.trim()
+          ? knowledgeSuggestionPayload.title.trim()
+          : `${input.businessLineName}｜${input.question.slice(0, 24)}`,
+      reason:
+        typeof knowledgeSuggestionPayload.reason === "string" && knowledgeSuggestionPayload.reason.trim()
+          ? knowledgeSuggestionPayload.reason.trim()
+          : "建议先保存为训练样本草稿，再进入审核或知识治理流程。"
+    },
+    internalNotes: parseSandboxStringArray(payload.internalNotes),
+    status: input.status,
+    latencyMs: input.latencyMs,
+    provider: input.provider,
+    model: input.model,
+    businessLineName: input.businessLineName,
+    customerStage: input.customerStage,
+    callStatusText:
+      input.status === AiCallStatus.SUCCESS
+        ? "结构化建议生成完成"
+        : input.status === AiCallStatus.SKIPPED
+          ? "当前调用已跳过"
+          : "当前调用已安全降级",
+    rawSummary: input.fallbackText?.trim() || null
+  } satisfies MarketClawSandboxAdvice;
+}
+
 function pickMarketClawReplyText(
   draft: {
     shortReply: string | null;
@@ -2517,6 +2758,331 @@ export async function generateMarketClawTrainingCase(tenantSlug: string, formDat
   revalidatePath(`/app/${tenantSlug}/market-claw/training/review`);
   revalidatePath(`/app/${tenantSlug}/market-claw`);
   revalidatePath(`/app/${tenantSlug}/audit-logs`);
+}
+
+export async function generateMarketClawSandboxAdvice(
+  tenantSlug: string,
+  _previousState: MarketClawSandboxActionState,
+  formData: FormData
+): Promise<MarketClawSandboxActionState> {
+  const { user, tenant } = await requireMarketClawSandboxAccess(tenantSlug);
+  const question = text(formData, "customerQuestion");
+  const businessLineId = text(formData, "businessLineId");
+  const selectedProvider = enumValue(AiProvider, text(formData, "provider"), AiProvider.MOCK);
+  const requestedStage = parseSandboxStage(text(formData, "customerStage"));
+  const agentId = parseSandboxAgentId(text(formData, "agentId"));
+  const runMode = text(formData, "runMode");
+  if (!question) {
+    return {
+      status: "error",
+      message: "请先输入客户问题。",
+      result: null,
+      savedTrainingCaseId: null
+    };
+  }
+
+  const businessLine = businessLineId
+    ? await prisma.businessLine.findFirst({
+        where: { id: businessLineId, tenantId: tenant.id, status: "ACTIVE" }
+      })
+    : null;
+  const businessLineName = businessLine?.name ?? "未绑定业务线";
+  const agent = getMarketClawSandboxAgentProfile(agentId);
+  const customerStageLabel = getSandboxStageLabel(requestedStage);
+  const effectiveProvider = runMode === "mock" ? AiProvider.MOCK : selectedProvider;
+
+  if (effectiveProvider === AiProvider.MOCK) {
+    const result = buildMockSandboxAdvice({
+      agentId,
+      question,
+      businessLineId: businessLine?.id ?? null,
+      businessLineName,
+      customerStage: requestedStage,
+      provider: AiProvider.MOCK,
+      model: getDefaultAiModel(AiProvider.MOCK)
+    });
+    const log = await recordAiCallLog({
+      tenantId: tenant.id,
+      createdById: user.id,
+      provider: AiProvider.MOCK,
+      model: result.model,
+      purpose: AiCallPurpose.MARKET_CLAW_SANDBOX,
+      status: AiCallStatus.SUCCESS,
+      latencyMs: 0
+    });
+    await safeWriteAuditLog({
+      tenantId: tenant.id,
+      userId: user.id,
+      action: "market_claw_sandbox_generated",
+      entityType: "AiCallLog",
+      entityId: log.id,
+      metadata: {
+        provider: result.provider,
+        model: result.model,
+        agentId,
+        businessLineId: businessLine?.id ?? null,
+        customerStage: requestedStage,
+        riskLevel: result.riskLevel,
+        sendMode: result.sendMode
+      }
+    });
+    return {
+      status: "success",
+      message: "MOCK 结构化建议已生成，可继续保存为训练样本草稿。",
+      result,
+      savedTrainingCaseId: null
+    };
+  }
+
+  const config = await getTenantAiProviderConfig(tenant.id);
+  if (!config || !config.enabled) {
+    const log = await recordAiCallLog({
+      tenantId: tenant.id,
+      createdById: user.id,
+      provider: effectiveProvider,
+      model: getDefaultAiModel(effectiveProvider),
+      purpose: AiCallPurpose.MARKET_CLAW_SANDBOX,
+      status: AiCallStatus.SKIPPED,
+      errorMessage: "当前租户未启用真实 AI Provider，请先在 AI 配置页启用，或直接使用 MOCK 测试。"
+    });
+    return {
+      status: "error",
+      message: "当前租户未启用真实 AI Provider，请先在 AI 配置页启用，或直接使用 MOCK 测试。",
+      result: normalizeSandboxAdvice({
+        agentId,
+        question,
+        businessLineId: businessLine?.id ?? null,
+        businessLineName,
+        customerStage: requestedStage,
+        provider: effectiveProvider,
+        model: getDefaultAiModel(effectiveProvider),
+        raw: null,
+        status: AiCallStatus.SKIPPED,
+        latencyMs: 0,
+        fallbackText: "当前未启用真实 AI Provider，系统已按安全降级处理。"
+      }),
+      savedTrainingCaseId: null
+    };
+  }
+
+  if (config.provider !== effectiveProvider) {
+    const log = await recordAiCallLog({
+      tenantId: tenant.id,
+      createdById: user.id,
+      provider: effectiveProvider,
+      model: getDefaultAiModel(effectiveProvider),
+      purpose: AiCallPurpose.MARKET_CLAW_SANDBOX,
+      status: AiCallStatus.SKIPPED,
+      errorMessage: `当前租户启用的是 ${config.provider}，请先到 AI 配置页切换为 ${effectiveProvider}，或使用 MOCK 测试。`
+    });
+    await safeWriteAuditLog({
+      tenantId: tenant.id,
+      userId: user.id,
+      action: "market_claw_sandbox_provider_mismatch",
+      entityType: "AiCallLog",
+      entityId: log.id,
+      metadata: {
+        selectedProvider: effectiveProvider,
+        configuredProvider: config.provider
+      }
+    });
+    return {
+      status: "error",
+      message: `当前租户启用的是 ${config.provider}，请先到 AI 配置页切换为 ${effectiveProvider}，或使用 MOCK 测试。`,
+      result: normalizeSandboxAdvice({
+        agentId,
+        question,
+        businessLineId: businessLine?.id ?? null,
+        businessLineName,
+        customerStage: requestedStage,
+        provider: effectiveProvider,
+        model: getDefaultAiModel(effectiveProvider),
+        raw: null,
+        status: AiCallStatus.SKIPPED,
+        latencyMs: 0,
+        fallbackText: "当前 Provider 与租户真实配置不一致，系统已跳过真实调用。"
+      }),
+      savedTrainingCaseId: null
+    };
+  }
+
+  const aiResult = await callAiJsonCompletion({
+    tenantId: tenant.id,
+    createdById: user.id,
+    purpose: AiCallPurpose.MARKET_CLAW_SANDBOX,
+    systemPrompt: [
+      "你是 Market Claw 的内部销售辅助顾问。",
+      "你的输出只作为内部建议。",
+      "客户回复仍需销售确认。",
+      "不能做绝对化承诺。",
+      "涉及价格、效果、周期、服务、责任等边界，要提示确认条件。",
+      "如果内容不适合对客户直接表达，请标记为仅内部建议。"
+    ].join("\n"),
+    prompt: buildSandboxPrompt({
+      question,
+      businessLineName,
+      customerStageLabel,
+      agentName: agent.name,
+      agentDescription: agent.description,
+      agentFocus: agent.focus,
+      outputSections: agent.outputSections
+    })
+  });
+
+  const normalizedResult = normalizeSandboxAdvice({
+    agentId,
+    question,
+    businessLineId: businessLine?.id ?? null,
+    businessLineName,
+    customerStage: requestedStage,
+    provider: config.provider,
+    model: config.model,
+    raw: aiResult.json,
+    status: aiResult.status,
+    latencyMs: aiResult.latencyMs ?? null,
+    fallbackText: aiResult.text ?? aiResult.errorMessage ?? null
+  });
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "market_claw_sandbox_generated",
+    entityType: "AiCallLog",
+    entityId: aiResult.logId ?? tenant.id,
+    metadata: {
+      provider: normalizedResult.provider,
+      model: normalizedResult.model,
+      agentId,
+      businessLineId: businessLine?.id ?? null,
+      customerStage: requestedStage,
+      riskLevel: normalizedResult.riskLevel,
+      sendMode: normalizedResult.sendMode,
+      status: normalizedResult.status
+    }
+  });
+
+  return {
+    status: aiResult.ok ? "success" : "error",
+    message: aiResult.ok
+      ? "AI 建议已生成，可继续保存为训练样本草稿。"
+      : normalizedResult.status === AiCallStatus.SKIPPED
+        ? "当前调用已跳过，系统已用安全默认值展示建议。"
+        : "当前调用未返回完整结构化 JSON，系统已安全降级并保留建议摘要。",
+    result: normalizedResult,
+    savedTrainingCaseId: null
+  };
+}
+
+export async function saveMarketClawSandboxTrainingDraft(
+  tenantSlug: string,
+  _previousState: MarketClawSandboxActionState,
+  formData: FormData
+): Promise<MarketClawSandboxActionState> {
+  const { user, tenant } = await requireMarketClawSandboxAccess(tenantSlug);
+  const payloadText = text(formData, "resultPayload");
+  const question = text(formData, "customerQuestion");
+  const businessLineId = text(formData, "businessLineId");
+  const customerStage = parseSandboxStage(text(formData, "customerStage"));
+  const agentId = parseSandboxAgentId(text(formData, "agentId"));
+  if (!payloadText || !question) {
+    return {
+      status: "error",
+      message: "请先生成建议后再保存为训练样本草稿。",
+      result: null,
+      savedTrainingCaseId: null
+    };
+  }
+
+  let payload: MarketClawSandboxAdvice | null = null;
+  try {
+    payload = JSON.parse(payloadText) as MarketClawSandboxAdvice;
+  } catch {
+    return {
+      status: "error",
+      message: "当前建议结果无法解析，请重新生成后再保存。",
+      result: null,
+      savedTrainingCaseId: null
+    };
+  }
+
+  const mergedRisk = mergeAiRiskWithRuleRisk({
+    question,
+    aiRiskLevel: payload.riskLevel,
+    aiSendMode: payload.sendMode,
+    aiRiskReasons: payload.riskReasons,
+    aiInternalOnlyNote: payload.internalNotes.join("；")
+  });
+  const businessLine = businessLineId
+    ? await prisma.businessLine.findFirst({
+        where: { id: businessLineId, tenantId: tenant.id }
+      })
+    : null;
+  const departmentName = inferMarketClawDepartmentName(user);
+  const trainingCase = await prisma.marketClawTrainingCase.create({
+    data: {
+      tenantId: tenant.id,
+      businessLineId: businessLine?.id ?? null,
+      createdById: user.id,
+      ownerUserId: user.id,
+      departmentName,
+      trainingScope: businessLine?.id
+        ? MarketClawTrainingScope.BUSINESS_LINE_TRAINING
+        : MarketClawTrainingScope.ENTERPRISE_TRAINING,
+      customerQuestion: question,
+      customerStage: mapSandboxStageToLeadStage(customerStage),
+      replyStyle: "来源：AI 测试沙盒",
+      replyLength: payload.agentName,
+      generatedShortReply: payload.wechatShortReply,
+      generatedProfessionalReply: payload.suggestedReply,
+      generatedClosingReply: payload.nextActions[0] ?? payload.summary,
+      manualOptimizedReply: payload.suggestedReply,
+      salesNote: [
+        "来源：AI 测试沙盒",
+        `专家视角：${payload.agentName}`,
+        `业务线：${businessLine?.name ?? payload.businessLineName ?? "未绑定业务线"}`,
+        `客户阶段：${customerStage}`,
+        `知识沉淀建议：${payload.knowledgeSuggestion.shouldSave ? "建议沉淀" : "暂不建议沉淀"} / ${payload.knowledgeSuggestion.type}`,
+        payload.knowledgeSuggestion.reason ? `沉淀原因：${payload.knowledgeSuggestion.reason}` : null
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      forbiddenNotes: [...payload.riskReasons, ...payload.internalNotes].filter(Boolean).join("\n"),
+      replyRiskLevel: mergedRisk.riskLevel,
+      sendMode: mergedRisk.sendMode,
+      riskReason: mergedRisk.riskReasons.join("；") || null,
+      requiresReview: true,
+      internalOnlyNote: mergedRisk.internalOnlyNote,
+      reviewStatus: MarketClawTrainingReviewStatus.DRAFT
+    }
+  });
+
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "market_claw_sandbox_training_draft_saved",
+    entityType: "MarketClawTrainingCase",
+    entityId: trainingCase.id,
+    metadata: {
+      businessLineId: businessLine?.id ?? null,
+      customerStage,
+      agentId,
+      provider: payload.provider,
+      model: payload.model,
+      riskLevel: mergedRisk.riskLevel,
+      sendMode: mergedRisk.sendMode
+    }
+  });
+
+  revalidatePath(`/app/${tenantSlug}/market-claw/sandbox`);
+  revalidatePath(`/app/${tenantSlug}/market-claw/training`);
+  revalidatePath(`/app/${tenantSlug}/market-claw/training/review`);
+  revalidatePath(`/app/${tenantSlug}/audit-logs`);
+
+  return {
+    status: "success",
+    message: "已保存为训练样本草稿，后续仍需进入训练审核或知识治理流程。",
+    result: payload,
+    savedTrainingCaseId: trainingCase.id
+  };
 }
 
 export async function reviewMarketClawTrainingCase(tenantSlug: string, trainingCaseId: string, formData: FormData) {

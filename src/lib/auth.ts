@@ -106,8 +106,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     if (session) {
       await prisma.session.deleteMany({ where: { id: session.id } });
     }
-    cookies().delete(SESSION_COOKIE_NAME);
-    cookies().delete(AUTH_CONTEXT_COOKIE_NAME);
+    // 页面渲染阶段不能直接改写 cookie，这里只返回空用户，让后续登录或登出动作负责清理浏览器侧状态。
     return null;
   }
 
@@ -252,6 +251,10 @@ export function canAccessMarketClawIngestion(role: UserRole) {
 
 export function canAccessMarketClawInsights(role: UserRole) {
   return role === "TENANT_ADMIN" || role === "OPERATOR" || role === "SALES";
+}
+
+export function canAccessMarketClawSandbox(role: UserRole) {
+  return role === "TENANT_ADMIN" || role === "OPERATOR";
 }
 
 export function canAccessTenantOnboarding(role: UserRole) {

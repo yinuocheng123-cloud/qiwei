@@ -14,6 +14,7 @@ import {
   canAccessMarketClawIngestion,
   canAccessMarketClawKnowledge,
   canAccessMarketClawReplies,
+  canAccessMarketClawSandbox,
   canAccessMarketClawTraining,
   requireTenantAccess
 } from "@/lib/auth";
@@ -59,7 +60,8 @@ export default async function MarketClawPage({ params }: { params: { tenantSlug:
           { key: "training", label: "回复训练场", href: `/app/${tenant.slug}/market-claw/training` },
           { key: "review", label: "训练审核", href: `/app/${tenant.slug}/market-claw/training/review` },
           { key: "insights", label: "训练复盘", href: `/app/${tenant.slug}/market-claw/insights` },
-          { key: "replies", label: "回复记录", href: `/app/${tenant.slug}/market-claw/replies` }
+          { key: "replies", label: "回复记录", href: `/app/${tenant.slug}/market-claw/replies` },
+          { key: "sandbox", label: "AI 测试沙盒", href: `/app/${tenant.slug}/market-claw/sandbox` }
         ];
 
   const [knowledgeCount, ingestionBatchCount, trainingCount, pendingReviewCount, replyDraftCount, feedbackCount, recentDrafts] = await Promise.all([
@@ -168,6 +170,15 @@ export default async function MarketClawPage({ params }: { params: { tenantSlug:
             description: "回看销售实际使用情况，判断哪些回复、知识和边界仍需继续优化。",
             href: `/app/${tenant.slug}/market-claw/replies`
           },
+          ...(canAccessMarketClawSandbox(user.role)
+            ? [
+                {
+                  title: "AI 测试沙盒",
+                  description: "输入客户问题，选择业务线、Provider 和专家视角，测试 AI 生成建议、风险等级和下一步动作。仅用于内部训练和测试。",
+                  href: `/app/${tenant.slug}/market-claw/sandbox`
+                }
+              ]
+            : []),
           {
             title: "使用反馈",
             description: "结合反馈数量和最近使用记录，持续优化知识投喂与训练质量。",

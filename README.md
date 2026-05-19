@@ -1596,3 +1596,94 @@ V2.1.6 继续保持 V2.1.5 的安全边界：AI 输出只是建议；未配置�
 本轮正式记录：
 
 - `custom/notes/v2.1.6-ai-provider-doubao-support.md`
+
+## V2.1.7 Market Claw AI 测试沙盒与专家视角调用
+
+V2.1.7 把 V2.1.5 / V2.1.6 的 AI Provider 配置能力真正接到 Market Claw 的内部测试场景里，但仍然不改正式客户回复、资料投喂、训练生成和候选知识审核主链路。
+
+新增页面：
+
+- `/app/[tenantSlug]/market-claw/sandbox`
+
+页面用途：
+
+- 输入客户问题
+- 选择业务线
+- 选择 AI Provider
+- 选择专家视角
+- 选择客户阶段
+- 生成内部销售建议
+- 展示风险等级、使用模式、下一步动作和知识沉淀建议
+- 保存为训练样本草稿
+
+当前支持的专家视角：
+
+- 销售教练
+- 成交策略顾问
+- 客户发现顾问
+- 方案表达顾问
+- 风险边界顾问
+- 知识治理顾问
+- 综合建议
+
+输出重点：
+
+- 推荐回复
+- 微信简短回复
+- 建议追问
+- 风险等级
+- 使用模式
+- 风险原因
+- 下一步动作
+- 是否建议沉淀为知识
+- 内部备注
+
+风险边界继续复用 V2.1.2：
+
+- `LOW`
+- `MEDIUM`
+- `HIGH`
+- `BLOCKED`
+
+使用模式继续复用：
+
+- `AUTO_ALLOWED`
+- `SALES_CONFIRM_REQUIRED`
+- `RISK_CONFIRM_REQUIRED`
+- `INTERNAL_ADVICE_ONLY`
+
+系统规则优先于 AI 建议：
+
+- 普通业务问题默认 `MEDIUM`
+- 价格、效果、周期、责任、特殊政策相关问题默认 `HIGH`
+- 绝对化承诺建议 `BLOCKED`
+- AI 不能把系统规则识别出的 `HIGH` 或 `BLOCKED` 风险降下去
+
+训练草稿保存边界：
+
+- 沙盒结果可以保存为训练样本草稿
+- 仍进入现有训练与知识治理流程
+- 不直接写入正式知识库
+- 不自动采纳候选知识
+- 不自动替销售回复客户
+
+权限边界：
+
+- `TENANT_ADMIN`：可访问、生成建议、保存训练样本草稿
+- `OPERATOR`：可访问、生成建议、保存训练样本草稿
+- `SALES`：不显示沙盒入口，直接访问会被拒绝
+- `PLATFORM_ADMIN`：不扩大租户侧业务权限
+
+AI Provider 说明：
+
+- 继续支持 `DEEPSEEK`、`DOUBAO`、`OPENAI_COMPATIBLE`、`MOCK`
+- `MOCK` 优先用于本地测试和 E2E
+- 没有真实配置、调用失败或 JSON 不合法时，页面会安全降级，不会崩溃
+
+专项验证文件：
+
+- `tests/v217-market-claw-ai-sandbox-agent-advisors-e2e.spec.ts`
+
+本轮正式记录：
+
+- `custom/notes/v2.1.7-market-claw-ai-sandbox-agent-advisors.md`

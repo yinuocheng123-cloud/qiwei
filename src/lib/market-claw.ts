@@ -115,6 +115,15 @@ export type MarketClawReplyPolicy = {
   riskKeywordHits: string[];
 };
 
+export type MarketClawAiRiskResult = {
+  riskLevel: MarketClawReplyRiskLevel;
+  sendMode: MarketClawSendMode;
+  riskReasons: string[];
+  internalOnlyNote: string | null;
+  requiresReview: boolean;
+  riskKeywordHits: string[];
+};
+
 type MarketClawSignal = {
   price: boolean;
   effectPromise: boolean;
@@ -826,6 +835,92 @@ export function resolveMarketClawKnowledgePolicy(item: {
     riskReason: item.riskReason,
     internalOnlyNote: item.internalOnlyNote
   });
+}
+
+export function detectRiskFromQuestion(question: string): MarketClawAiRiskResult {
+  const policy = inferMarketClawPolicy({
+    knowledgeType: "OTHER",
+    content: question,
+    allowLowRisk: true
+  });
+  return {
+    riskLevel: policy.replyRiskLevel,
+    sendMode: policy.sendMode,
+    riskReasons: policy.riskReason ? policy.riskReason.split("；").filter(Boolean) : [],
+    internalOnlyNote: policy.internalOnlyNote,
+    requiresReview: policy.requiresReview,
+    riskKeywordHits: policy.riskKeywordHits
+  };
+}
+
+export function normalizeAiRiskResult(input: {
+  riskLevel?: string | null;
+  sendMode?: string | null;
+  riskReasons?: unknown;
+  internalOnlyNote?: string | null;
+}) {
+  const riskLevel = marketClawReplyRiskLevelOptions.some((item) => item.value === input.riskLevel)
+    ? (input.riskLevel as MarketClawReplyRiskLevel)
+    : "MEDIUM";
+  const sendMode = marketClawSendModeOptions.some((item) => item.value === input.sendMode)
+    ? (input.sendMode as MarketClawSendMode)
+    : "SALES_CONFIRM_REQUIRED";
+  const riskReasons = Array.isArray(input.riskReasons)
+    ? dedupeStrings(
+        input.riskReasons
+          .map((item) => (typeof item === "string" ? item.trim() : ""))
+          .filter(Boolean)
+      )
+    : [];
+
+  return {
+    riskLevel,
+    sendMode: clampSendMode(riskLevel, sendMode),
+    riskReasons,
+    internalOnlyNote: input.internalOnlyNote?.trim() || null
+  };
+}
+
+export function mergeAiRiskWithRuleRisk(input: {
+  question: string;
+  aiRiskLevel?: string | null;
+  aiSendMode?: string | null;
+  aiRiskReasons?: unknown;
+  aiInternalOnlyNote?: string | null;
+}) {
+  const ruleRisk = detectRiskFromQuestion(input.question);
+  const aiRisk = normalizeAiRiskResult({
+    riskLevel: input.aiRiskLevel,
+    sendMode: input.aiSendMode,
+    riskReasons: input.aiRiskReasons,
+    internalOnlyNote: input.aiInternalOnlyNote
+  });
+  const mergedRiskLevel = nextHigherRiskLevel(ruleRisk.riskLevel, aiRisk.riskLevel);
+  const mergedSendMode = clampSendMode(
+    mergedRiskLevel,
+    sendModeWeight(aiRisk.sendMode) >= sendModeWeight(ruleRisk.sendMode) ? aiRisk.sendMode : ruleRisk.sendMode
+  );
+  const mergedRiskReasons = dedupeStrings([
+    ...ruleRisk.riskReasons,
+    ...aiRisk.riskReasons
+  ]);
+  const internalOnlyNote =
+    mergedRiskLevel === "BLOCKED"
+      ? summarizeRiskReasons([aiRisk.internalOnlyNote, ruleRisk.internalOnlyNote]) ?? "仅内部建议，不应直接发给客户。"
+      : aiRisk.internalOnlyNote ?? ruleRisk.internalOnlyNote;
+
+  return {
+    riskLevel: mergedRiskLevel,
+    sendMode: mergedSendMode,
+    riskReasons: mergedRiskReasons,
+    internalOnlyNote,
+    requiresReview:
+      mergedRiskLevel === "HIGH" ||
+      mergedRiskLevel === "BLOCKED" ||
+      mergedSendMode === "RISK_CONFIRM_REQUIRED" ||
+      mergedSendMode === "INTERNAL_ADVICE_ONLY",
+    riskKeywordHits: dedupeStrings([...ruleRisk.riskKeywordHits])
+  } satisfies MarketClawAiRiskResult;
 }
 
 export function buildMarketClawReplyPolicy(input: { question: string; matchedKnowledge: KnowledgeLike[] }) {
