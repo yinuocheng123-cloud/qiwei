@@ -69,6 +69,36 @@ export function SectionTabs({
   );
 }
 
+export function ModuleMoreMenu({
+  label = "更多",
+  items,
+  className = ""
+}: {
+  label?: string;
+  items: { title: string; href: string; description?: string }[];
+  className?: string;
+}) {
+  if (!items.length) return null;
+
+  return (
+    <details className={`relative ${className}`}>
+      <summary className="inline-flex cursor-pointer list-none rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+        {label}
+      </summary>
+      <div className="z-20 mt-2 w-full rounded-md border border-slate-200 bg-white p-2 shadow-lg md:absolute md:left-0 md:w-72">
+        <div className="space-y-1">
+          {items.map((item) => (
+            <Link key={item.href} data-module-more-item="true" className="block rounded-md px-3 py-2 text-sm hover:bg-slate-50" href={item.href}>
+              <span className="font-medium text-slate-900">{item.title}</span>
+              {item.description ? <span className="mt-1 block text-xs leading-5 text-slate-500">{item.description}</span> : null}
+            </Link>
+          ))}
+        </div>
+      </div>
+    </details>
+  );
+}
+
 export function Callout({
   title,
   children,

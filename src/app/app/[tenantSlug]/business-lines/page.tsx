@@ -180,6 +180,7 @@ export default async function BusinessLinesPage({ params }: { params: { tenantSl
           { key: "materials", label: "资料包", href: `/app/${tenant.slug}/materials` },
           { key: "strategies", label: "策略库", href: `/app/${tenant.slug}/strategies` },
           { key: "tasks", label: "任务模板", href: `/app/${tenant.slug}/task-templates` },
+          ...(canEdit ? [{ key: "ai", label: "AI 能力配置", href: `/app/${tenant.slug}/ai-settings` }] : []),
           ...(user.role === "TENANT_ADMIN" ? [{ key: "wecom", label: "企业微信提醒配置", href: `/app/${tenant.slug}/wecom` }] : []),
           ...(canEdit ? [{ key: "compliance", label: "合规配置", href: `/app/${tenant.slug}/communication-compliance` }] : [])
         ]}
@@ -218,6 +219,13 @@ export default async function BusinessLinesPage({ params }: { params: { tenantSl
             description="维护跟进模板，保证今天该做什么、下一步做什么有一致节奏。"
             href={`/app/${tenant.slug}/task-templates`}
           />
+          {canEdit ? (
+            <ConfigEntryCard
+              title="AI 能力配置"
+              description="配置和测试租户级 AI Provider，供后续内部沙盒与业务预览安全调用。"
+              href={`/app/${tenant.slug}/ai-settings`}
+            />
+          ) : null}
           {user.role === "TENANT_ADMIN" ? (
             <ConfigEntryCard
               title="企业微信提醒配置"
