@@ -1,13 +1,10 @@
-﻿# 文件说明：该脚本用于停止本地开发服务并清理测试缓存。
-# 功能说明：停止 node / Next dev 进程，清理 .next 与 test-results，并检查 3000 端口状态。
-#
-# 结构概览：
-#   第一部分：项目根目录检查
-#   第二部分：停止本地 Node 服务
-#   第三部分：清理缓存与测试产物
-#   第四部分：检查 3000 端口状态
+# File: stop local dev services and clean test artifacts.
+# Purpose: stop node / Next dev, stop the local PostgreSQL fallback when it can be identified, clean .next and test-results, and print port status.
 
 $ErrorActionPreference = "Stop"
+
+$repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
+Set-Location $repoRoot
 
 function Write-Step {
   param([string]$Message)
@@ -16,41 +13,119 @@ function Write-Step {
   Write-Host "===== $Message ====="
 }
 
-Write-Step "检查项目根目录"
-if (-not (Test-Path "package.json")) {
-  throw "请先执行：Set-Location D:\ceshi\qiwei，然后再运行 scripts\stop-local.ps1。"
-}
-Write-Host "当前目录：$(Get-Location)"
+function Test-PortListening {
+  param([int]$Port)
 
-Write-Step "停止 node / Next dev 进程"
+  $rows = netstat -ano | findstr ":$Port"
+  if (-not $rows) {
+    return $false
+  }
+
+  return [bool]($rows | Select-String "LISTENING")
+}
+
+function Show-PortRows {
+  param([int]$Port)
+
+  $rows = netstat -ano | findstr ":$Port"
+  if ($rows) {
+    Write-Host $rows
+  } else {
+    Write-Host "No records found for port $Port."
+  }
+}
+
+function Get-ListeningPids {
+  param([int]$Port)
+
+  $rows = netstat -ano | findstr ":$Port"
+  if (-not $rows) {
+    return @()
+  }
+
+  $pids = @()
+  foreach ($row in $rows) {
+    $parts = ($row -split "\s+") | Where-Object { $_ }
+    if ($parts.Count -gt 0) {
+      $pidText = $parts[-1]
+      $pidValue = 0
+      if ([int]::TryParse($pidText, [ref]$pidValue)) {
+        $pids += $pidValue
+      }
+    }
+  }
+
+  return $pids | Sort-Object -Unique
+}
+
+function Get-ProjectPostgresProcesses {
+  $listeningPids = @(Get-ListeningPids -Port 55432)
+
+  foreach ($listenPid in $listeningPids) {
+    $process = Get-Process -Id $listenPid -ErrorAction SilentlyContinue
+    if ($process -and $process.ProcessName -like "postgres*") {
+      [pscustomobject]@{
+        Id = [int]$process.Id
+        Name = $process.ProcessName
+        CommandLine = ""
+        ExecutablePath = ""
+      }
+    }
+  }
+}
+
+Write-Step "Check project root"
+if (-not (Test-Path -LiteralPath "package.json")) {
+  throw "Run from D:\ceshi\qiwei first, then rerun scripts\stop-local.ps1."
+}
+Write-Host "Current directory: $(Get-Location)"
+
+Write-Step "Stop node / Next dev processes"
 $nodeProcesses = Get-Process node -ErrorAction SilentlyContinue
 if ($nodeProcesses) {
   $nodeProcesses | Stop-Process -Force
-  Write-Host "已停止 node 进程数量：$($nodeProcesses.Count)"
+  Write-Host "Stopped node process count: $($nodeProcesses.Count)"
 } else {
-  Write-Host "未发现 node 进程。"
+  Write-Host "No node processes found."
 }
 
-Write-Step "清理 .next"
-Remove-Item -Recurse -Force ".next" -ErrorAction SilentlyContinue
-Write-Host "已清理 .next。"
-
-Write-Step "清理 test-results"
-Remove-Item -Recurse -Force "test-results" -ErrorAction SilentlyContinue
-Write-Host "已清理 test-results。"
-
-Write-Step "检查 3000 端口"
-$portRows = netstat -ano | findstr ":3000"
-if ($portRows -and ($portRows | Select-String "LISTENING")) {
-  Write-Host "3000 端口仍有 LISTENING 占用："
-  Write-Host $portRows
-  Write-Host "如需继续清理，请根据 PID 手动确认后停止。"
-} elseif ($portRows) {
-  Write-Host "3000 端口没有 LISTENING，占用记录仅为 TIME_WAIT 等连接收尾状态："
-  Write-Host $portRows
+Write-Step "Stop local PostgreSQL fallback"
+$projectPostgresProcesses = @(Get-ProjectPostgresProcesses)
+if ($projectPostgresProcesses.Count -gt 0) {
+  $projectPostgresProcesses | Select-Object Id, Name | Format-Table -AutoSize
+  $projectPostgresProcesses | ForEach-Object {
+    Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+  }
+  Write-Host "Stopped project-related postgres process count: $($projectPostgresProcesses.Count)"
 } else {
-  Write-Host "3000 端口未发现监听。"
+  Write-Host "No project-related postgres process found."
+}
+
+Write-Step "Clean .next"
+Remove-Item -Recurse -Force ".next" -ErrorAction SilentlyContinue
+Write-Host ".next cleaned."
+
+Write-Step "Clean test-results"
+Remove-Item -Recurse -Force "test-results" -ErrorAction SilentlyContinue
+Write-Host "test-results cleaned."
+
+Write-Step "Check port 3000"
+$webListening = Test-PortListening -Port 3000
+Show-PortRows -Port 3000
+if ($webListening) {
+  Write-Host "3000: LISTENING"
+} else {
+  Write-Host "3000: NOT LISTENING"
+}
+
+Write-Step "Check port 55432"
+$dbListening = Test-PortListening -Port 55432
+Show-PortRows -Port 55432
+if ($dbListening) {
+  Write-Host "55432: LISTENING"
+} else {
+  Write-Host "55432: NOT LISTENING"
 }
 
 Write-Host ""
-Write-Host "本地开发服务停止与缓存清理完成。"
+Write-Host "Local dev stop and cache cleanup completed."

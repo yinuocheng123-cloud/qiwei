@@ -1,14 +1,11 @@
-﻿# 文件说明：该脚本用于启动本地开发环境。
-# 功能说明：清理旧 Next 进程与缓存，确认 PostgreSQL 可用，执行数据库同步、质量检查和构建，最后启动 Next dev。
-#
-# 结构概览：
-#   第一部分：通用工具函数
-#   第二部分：项目、环境变量与端口检查
-#   第三部分：本机 PostgreSQL fallback 启动
-#   第四部分：数据库与质量检查
-#   第五部分：启动 Next dev
+# File: start local dev environment in the foreground.
+# Purpose: ensure PostgreSQL fallback is ready, run db sync and quality checks, then start Next dev in the current shell.
 
 $ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
+
+$repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
+Set-Location $repoRoot
 
 function Write-Step {
   param([string]$Message)
@@ -27,18 +24,19 @@ function Run-Step {
   $global:LASTEXITCODE = 0
   & $Command
   if ($null -ne $global:LASTEXITCODE -and $global:LASTEXITCODE -ne 0) {
-    throw "$Title 失败，退出码：$global:LASTEXITCODE"
+    throw "$Title failed, exit code: $global:LASTEXITCODE"
   }
 }
 
 function Read-EnvValue {
   param([string]$Name)
 
-  if (-not (Test-Path ".env")) {
+  $envFile = Join-Path $repoRoot ".env"
+  if (-not (Test-Path -LiteralPath $envFile)) {
     return $null
   }
 
-  $line = Get-Content ".env" | Where-Object { $_ -match "^$Name=" } | Select-Object -First 1
+  $line = Get-Content -LiteralPath $envFile | Where-Object { $_ -match "^$Name=" } | Select-Object -First 1
   if (-not $line) {
     return $null
   }
@@ -56,11 +54,28 @@ function Resolve-PgTool {
 
   $fallback = "D:\tools\pgsql17\pgsql\bin\$Name.exe"
   if (Test-Path -LiteralPath $fallback) {
-    Write-Host "$Name.exe 不在 PATH 中，已回退到固定路径：$fallback"
+    Write-Host "$Name.exe is not in PATH, falling back to fixed path: $fallback"
     return $fallback
   }
 
   return $null
+}
+
+function Resolve-LocalPostgresDataDir {
+  $candidates = @(
+    (Join-Path $repoRoot ".local\postgres-data"),
+    (Join-Path $repoRoot "tmp\postgres-data"),
+    (Join-Path $repoRoot "custom\experiments\postgres-data")
+  )
+
+  foreach ($candidate in $candidates) {
+    $resolved = [System.IO.Path]::GetFullPath($candidate)
+    if (Test-Path -LiteralPath (Join-Path $resolved "PG_VERSION")) {
+      return $resolved
+    }
+  }
+
+  return [System.IO.Path]::GetFullPath((Join-Path $repoRoot ".local\postgres-data"))
 }
 
 function Test-TcpPort {
@@ -138,23 +153,6 @@ function Wait-ForPostgresReady {
   return $false
 }
 
-function Resolve-LocalPostgresDataDir {
-  $candidates = @(
-    (Join-Path $PSScriptRoot "..\.local\postgres-data"),
-    (Join-Path $PSScriptRoot "..\tmp\postgres-data"),
-    (Join-Path $PSScriptRoot "..\custom\experiments\postgres-data")
-  )
-
-  foreach ($candidate in $candidates) {
-    $resolved = [System.IO.Path]::GetFullPath($candidate)
-    if (Test-Path -LiteralPath (Join-Path $resolved "PG_VERSION")) {
-      return $resolved
-    }
-  }
-
-  return [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.local\postgres-data"))
-}
-
 function Initialize-PostgresDataDir {
   param(
     [string]$DataDir,
@@ -162,7 +160,7 @@ function Initialize-PostgresDataDir {
   )
 
   if (-not $InitDbExe) {
-    Write-Host "未找到 initdb.exe。请安装 PostgreSQL，或把 PostgreSQL bin 目录加入 PATH。"
+    Write-Host "Missing initdb.exe. Install PostgreSQL or add its bin directory to PATH."
     return $false
   }
 
@@ -174,21 +172,21 @@ function Initialize-PostgresDataDir {
   if (Test-Path -LiteralPath $DataDir) {
     $existingItems = Get-ChildItem -LiteralPath $DataDir -Force -ErrorAction SilentlyContinue
     if ($existingItems -and -not (Test-Path -LiteralPath (Join-Path $DataDir "PG_VERSION"))) {
-      throw "数据目录 $DataDir 已存在但未初始化，请清空后重试，或删除后让脚本自动 initdb。"
+      throw "Data directory $DataDir exists but is not initialized. Clear it first, or delete it and let the script run initdb."
     }
   } else {
     New-Item -ItemType Directory -Path $DataDir -Force | Out-Null
   }
 
   if (Test-Path -LiteralPath (Join-Path $DataDir "PG_VERSION")) {
-    Write-Host "已发现初始化完成的数据目录：$DataDir"
+    Write-Host "Found initialized data directory: $DataDir"
     return $true
   }
 
-  Write-Host "未发现初始化完成的数据目录，正在执行 initdb：$DataDir"
+  Write-Host "No initialized data directory found, running initdb: $DataDir"
   & $InitDbExe -D $DataDir -U postgres -A trust -E UTF8 | Out-Host
   if ($LASTEXITCODE -ne 0) {
-    throw "initdb 初始化数据目录失败：$DataDir"
+    throw "initdb failed for data directory: $DataDir"
   }
 
   return $true
@@ -203,7 +201,7 @@ function Clear-StalePostgresPid {
   $pidFile = Join-Path $DataDir "postmaster.pid"
   if ((Test-Path -LiteralPath $pidFile) -and -not (Test-PortListening -Port $Port)) {
     Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
-    Write-Host "已清理残留 postmaster.pid。"
+    Write-Host "Removed stale postmaster.pid."
   }
 }
 
@@ -214,25 +212,25 @@ function Ensure-LocalDatabase {
     [string]$PsqlExe
   )
 
-  if (-not (Test-Path $psqlExe)) {
-    Write-Host "未找到 psql.exe，跳过数据库存在性检查。"
+  if (-not $PsqlExe -or -not (Test-Path -LiteralPath $PsqlExe)) {
+    Write-Host "Missing psql.exe, skipping database existence check."
     return
   }
 
   if (-not (Wait-ForPostgresReady -Port $Port -Seconds 60)) {
-    throw "PostgreSQL 端口已打开，但还没有进入 accepting connections 状态。"
+    throw "PostgreSQL port is open, but it has not reached accepting connections yet."
   }
 
-  $exists = & $psqlExe -h 127.0.0.1 -p $Port -U postgres -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '$DatabaseName';"
+  $exists = & $PsqlExe -h 127.0.0.1 -p $Port -U postgres -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '$DatabaseName';"
   if (($exists | Out-String).Trim() -eq "1") {
-    Write-Host "数据库 $DatabaseName 已存在。"
+    Write-Host "Database already exists: $DatabaseName"
     return
   }
 
-  Write-Host "数据库 $DatabaseName 不存在，正在创建。"
-  & $psqlExe -h 127.0.0.1 -p $Port -U postgres -d postgres -c "CREATE DATABASE `"$DatabaseName`";"
+  Write-Host "Database missing, creating: $DatabaseName"
+  & $PsqlExe -h 127.0.0.1 -p $Port -U postgres -d postgres -c "CREATE DATABASE `"$DatabaseName`";"
   if ($LASTEXITCODE -ne 0) {
-    throw "创建数据库 $DatabaseName 失败。"
+    throw "Failed to create database: $DatabaseName"
   }
 }
 
@@ -240,15 +238,15 @@ function Start-PostgresFallback {
   param([int]$Port)
 
   $postgresExe = Resolve-PgTool "postgres"
-  $pgCtlExe = Resolve-PgTool "pg_ctl"
   $initDbExe = Resolve-PgTool "initdb"
-  $psqlExe = Resolve-PgTool "psql"
   $dataDir = Resolve-LocalPostgresDataDir
-  $logPath = Join-Path $dataDir "postgres-start-local.log"
+  $repoLogs = Join-Path $repoRoot ".local\logs"
+  $stdoutLogPath = Join-Path $repoLogs "postgres-start-local.stdout.log"
+  $stderrLogPath = Join-Path $repoLogs "postgres-start-local.stderr.log"
 
-  if (-not $postgresExe -or -not $pgCtlExe -or -not $initDbExe) {
-    Write-Host "未找到 PostgreSQL 工具链（pg_ctl / initdb / postgres）。"
-    Write-Host "请安装 PostgreSQL，或把 PostgreSQL bin 目录加入 PATH。"
+  if (-not $postgresExe -or -not $initDbExe) {
+    Write-Host "Missing PostgreSQL toolchain (postgres / initdb)."
+    Write-Host "Install PostgreSQL or add its bin directory to PATH."
     return $false
   }
 
@@ -258,105 +256,112 @@ function Start-PostgresFallback {
 
   Clear-StalePostgresPid -DataDir $dataDir -Port $Port
 
-  Write-Host "使用本地 PGDATA：$dataDir"
-  Write-Host "启动命令：pg_ctl -D `"$dataDir`" -o `"-p $Port`" -l `"$logPath`" start"
-  & $pgCtlExe -D $dataDir -o "-p $Port" -l $logPath start -w | Out-Host
-
-  if (-not (Wait-ForPortListening -Port $Port -Seconds 30)) {
-    Write-Host "pg_ctl 启动后 30 秒内仍未看到 55432 LISTENING。"
-    if (Test-Path -LiteralPath $logPath) {
-      Write-Host "最近日志："
-      Get-Content -LiteralPath $logPath -Tail 20 -ErrorAction SilentlyContinue | Out-Host
-    }
-    Write-Host "尝试改用 postgres.exe 直接启动作为兜底。"
-    $fallbackScript = Join-Path $PSScriptRoot "run-postgres-fallback.ps1"
-    if (-not (Test-Path -LiteralPath $fallbackScript)) {
-      Write-Host "未找到兜底脚本：$fallbackScript"
-      return $false
-    }
-
-    $fallbackArgs = @(
-      "-NoProfile",
-      "-ExecutionPolicy",
-      "Bypass",
-      "-File",
-      $fallbackScript,
-      "-DataDir",
-      $dataDir,
-      "-Port",
-      "$Port",
-      "-PostgresExe",
-      $postgresExe
-    )
-
-    $process = Start-Process -FilePath powershell.exe -ArgumentList $fallbackArgs -WorkingDirectory ([System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))) -PassThru
-    Write-Host "postgres.exe 兜底进程已启动，进程 ID：$($process.Id)"
-
-    if (-not (Wait-ForPortListening -Port $Port -Seconds 45)) {
-      Write-Host "postgres.exe 兜底启动后 45 秒内仍未看到 55432 LISTENING。"
-      return $false
-    }
-
-    if (-not (Wait-ForPostgresReady -Port $Port -Seconds 45)) {
-      Write-Host "55432 已监听，但 pg_isready 仍未返回 accepting connections。"
-      return $false
-    }
-
-    return $true
+  if (-not (Test-Path -LiteralPath $repoLogs)) {
+    New-Item -ItemType Directory -Path $repoLogs -Force | Out-Null
   }
 
+  Write-Host "Using local PGDATA: $dataDir"
+  Write-Host "stdout log: $stdoutLogPath"
+  Write-Host "stderr log: $stderrLogPath"
+  Write-Host "Launch command: Start-Process postgres.exe -ArgumentList '-D `"$dataDir`" -p $Port'"
+
+  try {
+    $job = Start-Job -ArgumentList $postgresExe, $dataDir, $Port, $stdoutLogPath, $stderrLogPath -ScriptBlock {
+      param($exe, $dataDirArg, $portArg, $stdoutArg, $stderrArg)
+      & $exe -D $dataDirArg -p $portArg 1>> $stdoutArg 2>> $stderrArg
+    }
+  } catch {
+    Write-Host "Failed to launch postgres.exe background job: $($_.Exception.Message)"
+    return $false
+  }
+
+  Write-Host "postgres.exe background job started, job id: $($job.Id)"
+
+  if (-not (Wait-ForPortListening -Port $Port -Seconds 30)) {
+    Write-Host "Port $Port was still not LISTENING after 30 seconds."
+    Write-Host "netstat output:"
+    netstat -ano | findstr ":$Port" | Out-Host
+    $jobInfo = Get-Job -Id $job.Id -ErrorAction SilentlyContinue
+    if ($jobInfo) {
+      $jobOutput = Receive-Job -Id $job.Id -Keep -ErrorAction SilentlyContinue
+      if ($jobOutput) {
+        Write-Host "Recent job output:"
+        $jobOutput | Out-Host
+      }
+      Stop-Job -Id $job.Id -ErrorAction SilentlyContinue
+      Remove-Job -Id $job.Id -Force -ErrorAction SilentlyContinue
+    }
+    if (Test-Path -LiteralPath $stderrLogPath) {
+      Write-Host "Recent error log:"
+      Get-Content -LiteralPath $stderrLogPath -Tail 30 -ErrorAction SilentlyContinue | Out-Host
+    }
+    return $false
+  }
+
+  Write-Host "$Port is LISTENING:"
+  netstat -ano | findstr ":$Port" | Out-Host
+
   if (-not (Wait-ForPostgresReady -Port $Port -Seconds 30)) {
-    Write-Host "55432 已监听，但 pg_isready 仍未返回 accepting connections。"
+    Write-Host "Port $Port is listening, but pg_isready still did not return accepting connections."
+    $jobInfo = Get-Job -Id $job.Id -ErrorAction SilentlyContinue
+    if ($jobInfo) {
+      Stop-Job -Id $job.Id -ErrorAction SilentlyContinue
+      Remove-Job -Id $job.Id -Force -ErrorAction SilentlyContinue
+    }
+    if (Test-Path -LiteralPath $stderrLogPath) {
+      Write-Host "Recent error log:"
+      Get-Content -LiteralPath $stderrLogPath -Tail 30 -ErrorAction SilentlyContinue | Out-Host
+    }
     return $false
   }
 
   return $true
 }
 
-Run-Step "检查项目根目录" {
-  if (-not (Test-Path "package.json")) {
-    throw "请先执行：Set-Location D:\ceshi\qiwei，然后再运行 scripts\start-local.ps1。"
+Run-Step "Check project root" {
+  if (-not (Test-Path -LiteralPath "package.json")) {
+    throw "Run from D:\ceshi\qiwei first, then rerun scripts\start-local.ps1."
   }
-  Get-Location
+  Write-Host "Current directory: $(Get-Location)"
 }
 
-Run-Step "停止旧 node / Next dev 进程" {
+Run-Step "Stop old node / Next dev processes" {
   $nodeProcesses = Get-Process node -ErrorAction SilentlyContinue
   if ($nodeProcesses) {
     $nodeProcesses | Stop-Process -Force
-    Write-Host "已停止 node 进程数量：$($nodeProcesses.Count)"
+    Write-Host "Stopped node process count: $($nodeProcesses.Count)"
   } else {
-    Write-Host "未发现旧 node 进程。"
+    Write-Host "No old node processes found."
   }
 }
 
-Run-Step "清理 .next" {
+Run-Step "Clean .next" {
   Remove-Item -Recurse -Force ".next" -ErrorAction SilentlyContinue
-  Write-Host "已清理 .next。"
+  Write-Host ".next cleaned."
 }
 
 $databaseUrl = Read-EnvValue "DATABASE_URL"
-Run-Step "检查 DATABASE_URL" {
+Run-Step "Check DATABASE_URL" {
   if (-not $databaseUrl) {
-    throw "未在 .env 中找到 DATABASE_URL。"
+    throw "DATABASE_URL was not found in .env."
   }
   Write-Host "DATABASE_URL=$databaseUrl"
 }
 
-Run-Step "检查 55432 数据库端口" {
+Run-Step "Check PostgreSQL port 55432" {
   if (-not (Test-PostgresReady -Port 55432)) {
-    Write-Host "127.0.0.1:55432 当前不可用，尝试启动本机 PostgreSQL fallback。"
+    Write-Host "127.0.0.1:55432 is not ready, trying to start local PostgreSQL fallback."
     $started = Start-PostgresFallback -Port 55432
     if (-not $started) {
-      Write-Host "127.0.0.1:55432 仍不可用。"
-      Write-Host "请先修复 Docker Desktop / WSL2，或手动启动本机 PostgreSQL fallback。"
-      throw "数据库不可用，停止启动流程，避免后续登录测试误报。"
+      Write-Host "127.0.0.1:55432 is still unavailable."
+      Write-Host "Fix Docker Desktop / WSL2, or start the local PostgreSQL fallback manually."
+      throw "Database unavailable, stopping startup to avoid false login failures."
     }
   }
 
   $resolvedPsql = Resolve-PgTool "psql"
   Ensure-LocalDatabase -Port 55432 -DatabaseName "wecom_growth_hub_demo" -PsqlExe $resolvedPsql
-  Write-Host "127.0.0.1:55432 已可用。"
+  Write-Host "127.0.0.1:55432 is ready."
 }
 
 Run-Step "Prisma Generate" {
@@ -383,11 +388,12 @@ Run-Step "Build" {
   npm.cmd run build
 }
 
-Run-Step "build 后再次清理 .next" {
+Run-Step "Clean .next after build" {
   Remove-Item -Recurse -Force ".next" -ErrorAction SilentlyContinue
-  Write-Host "已清理 build 产物，避免 Next dev 与生产构建缓存混用。"
+  Write-Host "Build output cleaned to avoid cache mixing with Next dev."
 }
 
-Write-Step "启动 Next dev"
-Write-Host "Next dev 将持续运行。另开一个 PowerShell 执行 scripts\test-smoke.ps1。"
+Write-Host ""
+Write-Host "This window will keep running Next dev. Do not close it. Open another PowerShell window to run scripts\check-local.ps1 or scripts\test-smoke.ps1."
+Write-Step "Start Next dev in the foreground"
 npm.cmd run dev

@@ -1876,7 +1876,11 @@ docker : The term 'docker' is not recognized
 
 ### 常用本地脚本
 
-V2.3.1 开始，本地日常启动、smoke 测试和停止清理可以直接使用三个 PowerShell 脚本，减少手动输入命令和 Next 缓存混用问题。
+V2.3.2 起，本地日常工作流固定为两窗口：
+
+1. 窗口一：`start-local.ps1`，保持打开，直到你手动结束 `Next dev`。
+2. 窗口二：`check-local.ps1` 或 `test-smoke.ps1`。
+3. 结束时：`stop-local.ps1`。
 
 启动本地开发环境：
 
@@ -1885,7 +1889,16 @@ Set-Location D:\ceshi\qiwei
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\start-local.ps1
 ```
 
-`start-local.ps1` 会停止旧 node 进程、清理 `.next`、检查 `DATABASE_URL` 和 `127.0.0.1:55432`，必要时尝试启动本机 PostgreSQL fallback，然后执行 `db:generate`、`db:push`、`db:seed`、`typecheck`、`lint`、`build`。构建后会再次清理 `.next`，最后进入 `npm.cmd run dev` 持续运行状态。
+`start-local.ps1` 会在当前 PowerShell 前台完成旧 node 清理、`.next` 清理、`DATABASE_URL` 检查、本机 PostgreSQL fallback 启动与 55432 可用性确认，然后依次执行 `db:generate`、`db:push`、`db:seed`、`typecheck`、`lint`、`build`。构建完成后，它会直接在当前窗口运行 `npm.cmd run dev`。这个窗口必须保持打开，另开窗口再跑检查或 smoke。
+
+另开一个 PowerShell 窗口检查本地环境是否可打开：
+
+```powershell
+Set-Location D:\ceshi\qiwei
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\check-local.ps1
+```
+
+`check-local.ps1` 会检查 3000、55432、node 进程、postgres 进程和 `/login` 页面，并输出 `Result: OPENABLE` 或 `Result: NOT OPENABLE`。
 
 另开一个 PowerShell 窗口执行 smoke 测试：
 
@@ -1894,7 +1907,7 @@ Set-Location D:\ceshi\qiwei
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\test-smoke.ps1
 ```
 
-`test-smoke.ps1` 会设置 `PLAYWRIGHT_SKIP_WEBSERVER=1` 和 `APP_URL=http://127.0.0.1:3000`，依次执行 V2.2、V2.2.1、V2.2.4、V2.2.7 四组 smoke 测试，最后输出 `git status`。
+`test-smoke.ps1` 只负责测试，不负责启动 dev server；它会设置 `PLAYWRIGHT_SKIP_WEBSERVER=1` 和 `APP_URL=http://127.0.0.1:3000`，依次执行 V2.2、V2.2.1、V2.2.4、V2.2.7 四组 smoke 测试，最后输出 `git status`。
 
 停止本地开发服务并清理缓存：
 
@@ -1903,17 +1916,16 @@ Set-Location D:\ceshi\qiwei
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\stop-local.ps1
 ```
 
-`stop-local.ps1` 会停止 node / Next dev 进程，清理 `.next` 和 `test-results`，并检查 3000 端口是否仍被占用。
+`stop-local.ps1` 会停止 node / Next dev 进程，按本项目 PGDATA 识别并停止本地 PostgreSQL fallback，清理 `.next` 和 `test-results`，并检查 3000 与 55432 端口状态。
 
-当前机器也支持本机 PostgreSQL fallback。若 Docker CLI 可用但 Docker Engine 报 `Docker Desktop is unable to start`，可以使用：
+当前机器也支持本机 PostgreSQL fallback。若 Docker CLI 可用但 Docker Engine 报 `Docker Desktop is unable to start`，优先使用 `scripts\start-local.ps1` 自动启动。需要手动排障时，可以使用：
 
 ```powershell
 Set-Location D:\ceshi\qiwei
-D:\tools\pgsql17\pgsql\bin\pg_ctl.exe -D D:\ceshi\qiwei\custom\experiments\postgres-data -l D:\ceshi\qiwei\custom\experiments\postgres-v222.log -o "-p 55432" start
-D:\tools\pgsql17\pgsql\bin\pg_isready.exe -h 127.0.0.1 -p 55432 -U postgres
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\run-postgres-fallback.ps1
 ```
 
-确认返回 `accepting connections` 后，再执行 `npm run db:generate`、`npm run db:push`、`npm run db:seed` 和 smoke 测试。
+这只是手动排障入口，正常日常流程仍以 `start-local.ps1` + `check-local.ps1` / `test-smoke.ps1` 为准。确认 `scripts\check-local.ps1` 显示 `55432 LISTENING` 后，再继续启动或测试。
 
 ### 一键检查脚本
 

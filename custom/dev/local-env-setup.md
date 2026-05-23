@@ -1,163 +1,106 @@
 # 本地开发环境与 E2E 测试准备
 
-## 当前机器状态
+## 当前前提
 
-本机曾出现过两类 Docker 状态：
+本仓库本地开发现在以两窗口工作流为准：
 
-```powershell
-docker --version
-docker compose version
-```
+1. 窗口一运行 `scripts/start-local.ps1`，并保持打开。
+2. 窗口二运行 `scripts/check-local.ps1` 或 `scripts/test-smoke.ps1`。
+3. 结束时运行 `scripts/stop-local.ps1`。
 
-第一类是 CLI 未识别：
-
-```text
-docker : The term 'docker' is not recognized as the name of a cmdlet
-```
-
-第二类是 CLI 可用但 Engine 启动失败：
+当前 `.env` 的数据库地址仍然指向本机 55432：
 
 ```text
-Docker Desktop is unable to start
+DATABASE_URL="postgresql://postgres@127.0.0.1:55432/wecom_growth_hub_demo?schema=public"
 ```
 
-这说明当前不能只看 Docker CLI 是否存在。要运行 Playwright E2E，最终条件是 PostgreSQL 在 `127.0.0.1:55432` 可连接。
-
-## 两种可选方案
-
-### 方案一：安装 Docker Desktop
-
-1. 安装 Docker Desktop。
-2. 启动 Docker Desktop，等待 Docker Engine ready。
-3. 重新打开 PowerShell。
-4. 执行：
-
-```powershell
-docker --version
-docker compose version
-```
-
-确认两个命令都有版本输出后，再回到项目目录。
-
-### 方案二：使用本地 PostgreSQL
-
-如果不安装 Docker，也可以手动启动本地 PostgreSQL，并确保它监听：
-
-- Host：`127.0.0.1`
-- Port：`55432`
-- User：`postgres`
-- Database：`wecom_growth_hub_demo`
-- Schema：`public`
-
-连接串以 `.env` 为准：
-
-```text
-postgresql://postgres@127.0.0.1:55432/wecom_growth_hub_demo?schema=public
-```
-
-当前机器已发现本地 PostgreSQL 17：
-
-```text
-D:\tools\pgsql17\pgsql\bin\postgres.exe
-D:\tools\pgsql17\pgsql\bin\pg_ctl.exe
-D:\tools\pgsql17\pgsql\bin\psql.exe
-```
-
-如果 Docker Desktop Engine 起不来，可以使用本机 PostgreSQL fallback：
-
-```powershell
-Set-Location D:\ceshi\qiwei
-D:\tools\pgsql17\pgsql\bin\pg_ctl.exe -D D:\ceshi\qiwei\custom\experiments\postgres-data -l D:\ceshi\qiwei\custom\experiments\postgres-v222.log -o "-p 55432" start
-```
-
-然后确认：
-
-```powershell
-D:\tools\pgsql17\pgsql\bin\pg_isready.exe -h 127.0.0.1 -p 55432 -U postgres
-```
-
-如果返回 `accepting connections`，再执行 Prisma 和 Playwright。
-
-## 当前本地 PGDATA 约定
-
-V2.3.1 起，`scripts/start-local.ps1` 会自动检查本地 PostgreSQL 数据目录，优先顺序为：
+如果本机 PostgreSQL 没有启动，`start-local.ps1` 会自动检查这些本地数据目录，优先顺序为：
 
 1. `.local/postgres-data`
 2. `tmp/postgres-data`
 3. `custom/experiments/postgres-data`
 
-如果这些目录里已经有 `PG_VERSION`，脚本会直接复用对应 PGDATA；如果都没有初始化完成的数据目录，脚本会自动在 `.local/postgres-data` 执行 `initdb`，再用 `pg_ctl -D <PGDATA> -o "-p 55432" -l <log> start` 启动。
+如果这些目录都还没有初始化，脚本会自动执行 `initdb` 创建默认的 `.local/postgres-data`。
 
-如果 `pg_ctl` / `initdb` 不在 PATH，脚本会输出清晰提示，说明需要安装 PostgreSQL 或把 PostgreSQL `bin` 目录加入 PATH。
+## 推荐启动方式
 
-如果 `pg_ctl` 启动后仍因为 Windows restricted token 等原因没有监听，`scripts/start-local.ps1` 会再打开一个独立 PowerShell 窗口，直接以前台方式运行 `postgres.exe` 作为最后兜底。
-
-## 推荐 PowerShell 入口
-
-所有本地检查都从项目根目录开始：
+### 窗口一：启动本地开发环境
 
 ```powershell
 Set-Location D:\ceshi\qiwei
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\start-local.ps1
 ```
 
-不要使用 `cd /d D:\ceshi\qiwei`，这是 `cmd.exe` 写法，在 PowerShell 中会失败。
+`start-local.ps1` 会在当前 PowerShell 前台完成这些事情：
 
-## Docker 启动数据库
+1. 停掉旧的 node / Next dev 进程。
+2. 清理 `.next`。
+3. 检查 `DATABASE_URL`。
+4. 启动并验证本地 PostgreSQL fallback 的 `55432 LISTENING`。
+5. 执行 `db:generate`、`db:push`、`db:seed`、`typecheck`、`lint`、`build`。
+6. 再次清理 build 产物，避免 Next dev 与生产构建缓存混用。
+7. 最后直接运行 `npm.cmd run dev`。
 
-如果 Docker 可用，执行：
+这个窗口必须保持打开，不要关闭。
+
+### 窗口二：检查本地可打开状态
 
 ```powershell
 Set-Location D:\ceshi\qiwei
-docker compose up -d
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\check-local.ps1
 ```
 
-本项目的 `docker-compose.yml` 只启动 PostgreSQL：
+`check-local.ps1` 会检查：
 
-- 服务名：`postgres`
-- 镜像：`postgres:16`
-- 本地端口：`55432`
-- 容器端口：`5432`
-- 数据库：`wecom_growth_hub_demo`
-- 用户：`postgres`
+1. `55432` 是否 `LISTENING`
+2. `3000` 是否 `LISTENING`
+3. `node` / `postgres` 进程
+4. `/login` 页面是否可访问
 
-## 初始化数据库
+脚本会输出 `Result: OPENABLE` 或 `Result: NOT OPENABLE`。
+
+### 窗口二：执行 smoke 测试
 
 ```powershell
 Set-Location D:\ceshi\qiwei
-npm run db:generate
-npm run db:push
-npm run db:seed
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\test-smoke.ps1
 ```
 
-`db:seed` 复用已有 `prisma/seed.ts`，会生成本地演示账号和演示数据。该 seed 只用于本地开发、演示和测试，不用于生产。
+`test-smoke.ps1` 只负责测试，不会尝试自动拉起 dev server。  
+如果 3000 不可用，先回到窗口一重新运行 `start-local.ps1`。
 
-## 运行 V2.2 / V2.2.1 Smoke
+### 结束与清理
 
 ```powershell
 Set-Location D:\ceshi\qiwei
-npm run test:e2e:v22
-npm run test:e2e:v221
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\stop-local.ps1
 ```
 
-Playwright 配置会自动启动 Next dev server。如果数据库未启动，登录阶段会失败，并出现：
+`stop-local.ps1` 会：
 
-```text
-Can't reach database server at 127.0.0.1:55432
-```
+1. 停止 node / Next dev 进程。
+2. 停止能识别到的本地 PostgreSQL fallback。
+3. 清理 `.next` 和 `test-results`。
+4. 输出 `3000` 和 `55432` 的端口状态。
 
-这是本地数据库环境问题，不是业务代码问题。
+## 手动 PostgreSQL fallback
 
-## 一键检查脚本
+如果需要单独排查本机 PostgreSQL，也可以手动执行：
 
 ```powershell
 Set-Location D:\ceshi\qiwei
-powershell.exe -ExecutionPolicy Bypass -File scripts\dev-check.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\run-postgres-fallback.ps1
 ```
 
-脚本会依次检查 Node、npm、DATABASE_URL、Docker、PostgreSQL，然后执行 Prisma、typecheck、lint、build 和 smoke 测试。
+这只是手动排障入口，正常日常流程仍以 `start-local.ps1` + `check-local.ps1` / `test-smoke.ps1` 为准。
 
-如果 Docker 不可用或 Docker Engine 起不来，脚本会尝试使用本机 PostgreSQL fallback。fallback 也不可用时，会提示：
+## 判断标准
 
-```text
-请修复 Docker Desktop / WSL2，或手动启动本地 PostgreSQL，并确保 127.0.0.1:55432 可连接。
-```
+当以下条件同时满足时，本地环境才算可打开：
+
+1. `55432 LISTENING`
+2. `3000 LISTENING`
+3. `/login` 可访问
+4. `check-local.ps1` 输出 `Result: OPENABLE`
+
+如果任一条件不满足，不要直接继续 smoke 测试，先回到窗口一重新启动。

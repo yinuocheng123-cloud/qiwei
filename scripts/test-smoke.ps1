@@ -1,13 +1,10 @@
-﻿# 文件说明：该脚本用于在已有本地 dev server 上运行 smoke 测试。
-# 功能说明：检查 3000 端口，设置 Playwright 跳过自启动 webServer，然后依次执行四组 smoke 测试并输出 git status。
-#
-# 结构概览：
-#   第一部分：通用工具函数
-#   第二部分：项目与 dev server 检查
-#   第三部分：执行 smoke 测试
-#   第四部分：输出 git 状态
+# File: smoke test runner for an existing local dev server.
+# Purpose: check port 3000 and then run the four smoke test suites.
 
 $ErrorActionPreference = "Stop"
+
+$repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
+Set-Location $repoRoot
 
 function Write-Step {
   param([string]$Message)
@@ -26,7 +23,7 @@ function Run-Step {
   $global:LASTEXITCODE = 0
   & $Command
   if ($null -ne $global:LASTEXITCODE -and $global:LASTEXITCODE -ne 0) {
-    throw "$Title 失败，退出码：$global:LASTEXITCODE"
+    throw "$Title failed, exit code: $global:LASTEXITCODE"
   }
 }
 
@@ -65,22 +62,22 @@ function Test-LoginPageReady {
   }
 }
 
-Run-Step "检查项目根目录" {
-  if (-not (Test-Path "package.json")) {
-    throw "请先执行：Set-Location D:\ceshi\qiwei，然后再运行 scripts\test-smoke.ps1。"
+Run-Step "Check project root" {
+  if (-not (Test-Path -LiteralPath "package.json")) {
+    throw "Run from D:\ceshi\qiwei first, then rerun scripts\test-smoke.ps1."
   }
-  Get-Location
+  Write-Host "Current directory: $(Get-Location)"
 }
 
-Run-Step "检查 dev server" {
+Run-Step "Check dev server" {
   if (-not (Test-TcpPort -HostName "127.0.0.1" -Port 3000)) {
-    Write-Host "未检测到 127.0.0.1:3000。"
-    Write-Host "请先在另一个 PowerShell 窗口运行：powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\start-local.ps1"
-    throw "dev server 未启动。"
+    Write-Host "127.0.0.1:3000 was not detected."
+    Write-Host "First run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\start-local.ps1"
+    throw "dev server is not running."
   }
-  Write-Host "127.0.0.1:3000 已可用。"
+  Write-Host "127.0.0.1:3000 is available."
 
-  Write-Host "等待 /login 页面真正可用..."
+  Write-Host "Waiting for /login to become ready..."
   $ready = $false
   for ($i = 1; $i -le 120; $i++) {
     if (Test-LoginPageReady) {
@@ -91,10 +88,10 @@ Run-Step "检查 dev server" {
   }
 
   if (-not $ready) {
-    throw "127.0.0.1:3000 已监听，但 /login 页面仍未准备好。请先重新运行 scripts\start-local.ps1。"
+    throw "127.0.0.1:3000 is listening, but /login is still not ready. Keep the start-local.ps1 window open, or rerun scripts\start-local.ps1."
   }
 
-  Write-Host "/login 页面已就绪。"
+  Write-Host "/login is ready."
 }
 
 $env:PLAYWRIGHT_SKIP_WEBSERVER = "1"
@@ -108,14 +105,14 @@ $smokeSpecs = @(
 )
 
 foreach ($spec in $smokeSpecs) {
-  Run-Step "Smoke：$spec" {
+  Run-Step "Smoke: $spec" {
     npx.cmd playwright test $spec --workers=1 --reporter=list
   }
 }
 
-Run-Step "当前 git status" {
+Run-Step "Current git status" {
   git status --short --branch
 }
 
 Write-Host ""
-Write-Host "四组 smoke 测试执行完成。"
+Write-Host "Four smoke suites completed."
