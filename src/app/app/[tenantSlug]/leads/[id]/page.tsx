@@ -33,6 +33,14 @@ import { getLatestReplySuggestionBatch } from "@/lib/reply-suggestions";
 
 export const dynamic = "force-dynamic";
 
+async function safeLeadDetailRead<T>(read: () => Promise<T>, fallback: T): Promise<{ data: T; unavailable: boolean }> {
+  try {
+    return { data: await read(), unavailable: false };
+  } catch {
+    return { data: fallback, unavailable: true };
+  }
+}
+
 export default async function LeadDetailPage({ params }: { params: { tenantSlug: string; id: string } }) {
   const { user, tenant } = await requireLeadAccess(params.tenantSlug, params.id);
   const lead = await prisma.lead.findFirst({
@@ -48,85 +56,132 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
   if (!lead) notFound();
   const cnasData = readCnasExtraData(lead.extraData);
 
-  const [strategy, materials, assistantMaterials, owners, taskTemplates, currentTasks, replySuggestions, marketClawDrafts, marketClawKnowledgeItems, activeBusinessLines] = await Promise.all([
-    prisma.customerTypeStrategy.findUnique({
-      where: { tenantId_customerType: { tenantId: tenant.id, customerType: lead.customerType } }
-    }),
-    prisma.material.findMany({
-      where: { tenantId: tenant.id, OR: [{ customerType: lead.customerType }, { customerType: null }] },
-      orderBy: { createdAt: "desc" }
-    }),
-    prisma.material.findMany({
-      where: { tenantId: tenant.id },
-      orderBy: { createdAt: "desc" }
-    }),
-    prisma.user.findMany({
-      where: {
-        tenantId: tenant.id,
-        status: "active",
-        role: { in: ["SALES", "OPERATOR"] }
-      },
-      orderBy: [{ role: "asc" }, { createdAt: "asc" }]
-    }),
-    prisma.taskTemplate.findMany({
-      where: {
-        tenantId: tenant.id,
-        isActive: true,
-        AND: [{ OR: [{ customerType: lead.customerType }, { customerType: null }] }, { OR: [{ stage: lead.stage }, { stage: null }] }]
-      },
-      orderBy: [{ customerType: "desc" }, { updatedAt: "desc" }]
-    }),
-    prisma.followTask.findMany({
-      where: {
-        tenantId: tenant.id,
-        leadId: lead.id,
-        status: { in: ["PENDING", "DELAYED", "DONE"] }
-      },
-      include: { owner: true },
-      orderBy: [{ dueAt: "asc" }, { updatedAt: "desc" }],
-      take: 6
-    }),
-    getLatestReplySuggestionBatch(tenant.id, lead.id, user.id),
-    prisma.marketClawReplyDraft.findMany({
-      where: {
-        tenantId: tenant.id,
-        leadId: lead.id,
-        createdById: user.id
-      },
-      include: {
-        trainingCase: {
-          select: {
-            reviewStatus: true,
-            reviewComment: true
-          }
-        }
-      },
-      orderBy: { createdAt: "desc" },
-      take: 3
-    }),
-    prisma.marketClawKnowledgeItem.findMany({
-      where: {
-        tenantId: tenant.id,
-        status: "ACTIVE"
-      },
-      select: { id: true, title: true },
-      orderBy: { updatedAt: "desc" }
-    }),
-    prisma.businessLine.findMany({
-      where: {
-        tenantId: tenant.id,
-        status: "ACTIVE"
-      },
-      select: { id: true, name: true },
-      orderBy: [{ priority: "asc" }, { updatedAt: "desc" }]
-    })
+  const [
+    strategyResult,
+    materialsResult,
+    assistantMaterialsResult,
+    ownersResult,
+    taskTemplatesResult,
+    currentTasksResult,
+    replySuggestionsResult,
+    marketClawDraftsResult,
+    marketClawKnowledgeItemsResult,
+    activeBusinessLinesResult
+  ] = await Promise.all([
+    safeLeadDetailRead(() => prisma.customerTypeStrategy.findUnique({ where: { tenantId_customerType: { tenantId: tenant.id, customerType: lead.customerType } } }), null),
+    safeLeadDetailRead(
+      () =>
+        prisma.material.findMany({
+          where: { tenantId: tenant.id, OR: [{ customerType: lead.customerType }, { customerType: null }] },
+          orderBy: { createdAt: "desc" }
+        }),
+      []
+    ),
+    safeLeadDetailRead(() => prisma.material.findMany({ where: { tenantId: tenant.id }, orderBy: { createdAt: "desc" } }), []),
+    safeLeadDetailRead(
+      () =>
+        prisma.user.findMany({
+          where: {
+            tenantId: tenant.id,
+            status: "active",
+            role: { in: ["SALES", "OPERATOR"] }
+          },
+          orderBy: [{ role: "asc" }, { createdAt: "asc" }]
+        }),
+      []
+    ),
+    safeLeadDetailRead(
+      () =>
+        prisma.taskTemplate.findMany({
+          where: {
+            tenantId: tenant.id,
+            isActive: true,
+            AND: [{ OR: [{ customerType: lead.customerType }, { customerType: null }] }, { OR: [{ stage: lead.stage }, { stage: null }] }]
+          },
+          orderBy: [{ customerType: "desc" }, { updatedAt: "desc" }]
+        }),
+      []
+    ),
+    safeLeadDetailRead(
+      () =>
+        prisma.followTask.findMany({
+          where: {
+            tenantId: tenant.id,
+            leadId: lead.id,
+            status: { in: ["PENDING", "DELAYED", "DONE"] }
+          },
+          include: { owner: true },
+          orderBy: [{ dueAt: "asc" }, { updatedAt: "desc" }],
+          take: 6
+        }),
+      []
+    ),
+    safeLeadDetailRead(() => getLatestReplySuggestionBatch(tenant.id, lead.id, user.id), []),
+    safeLeadDetailRead(
+      () =>
+        prisma.marketClawReplyDraft.findMany({
+          where: {
+            tenantId: tenant.id,
+            leadId: lead.id,
+            createdById: user.id
+          },
+          include: {
+            trainingCase: {
+              select: {
+                reviewStatus: true,
+                reviewComment: true
+              }
+            }
+          },
+          orderBy: { createdAt: "desc" },
+          take: 3
+        }),
+      []
+    ),
+    safeLeadDetailRead(
+      () =>
+        prisma.marketClawKnowledgeItem.findMany({
+          where: {
+            tenantId: tenant.id,
+            status: "ACTIVE"
+          },
+          select: { id: true, title: true },
+          orderBy: { updatedAt: "desc" }
+        }),
+      []
+    ),
+    safeLeadDetailRead(
+      () =>
+        prisma.businessLine.findMany({
+          where: {
+            tenantId: tenant.id,
+            status: "ACTIVE"
+          },
+          select: { id: true, name: true },
+          orderBy: [{ priority: "asc" }, { updatedAt: "desc" }]
+        }),
+      []
+    )
   ]);
+  const strategy = strategyResult.data;
+  const materials = materialsResult.data;
+  const assistantMaterials = assistantMaterialsResult.data;
+  const owners = ownersResult.data;
+  const taskTemplates = taskTemplatesResult.data;
+  const currentTasks = currentTasksResult.data;
+  const replySuggestions = replySuggestionsResult.data;
+  const marketClawDrafts = marketClawDraftsResult.data;
+  const marketClawKnowledgeItems = marketClawKnowledgeItemsResult.data;
+  const activeBusinessLines = activeBusinessLinesResult.data;
+  const aiRecommendationUnavailable =
+    assistantMaterialsResult.unavailable || marketClawDraftsResult.unavailable || marketClawKnowledgeItemsResult.unavailable || activeBusinessLinesResult.unavailable;
 
   const followAction = addFollowUp.bind(null, tenant.slug, lead.id);
   const assignAction = assignLeadOwner.bind(null, tenant.slug, lead.id);
   const manualTaskAction = createManualTask.bind(null, tenant.slug, lead.id);
   const notifyAction = triggerWecomInternalNotification.bind(null, tenant.slug);
   const canAssign = user.role === "TENANT_ADMIN" || user.role === "OPERATOR";
+  const showAdvancedOperations = user.role !== "SALES";
 
   const ownerOptions = [{ value: "", label: "未分配" }, ...owners.map((owner) => ({ value: owner.id, label: `${owner.name}（${owner.role}）` }))];
   const taskOwnerOptions = owners.map((owner) => ({ value: owner.id, label: `${owner.name}（${owner.role}）` }));
@@ -166,7 +221,7 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
             {lead.message ? <p className="mt-4 rounded-md bg-slate-50 p-3 text-sm text-slate-700">{lead.message}</p> : null}
           </Card>
 
-          {lead.sourceAttribution ? (
+          {showAdvancedOperations && lead.sourceAttribution ? (
             <Card>
               <h2 className="mb-2 text-base font-semibold">来源归因</h2>
               <p className="mb-4 text-sm leading-6 text-slate-600">
@@ -193,7 +248,7 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
             </Card>
           ) : null}
 
-          {cnasData ? (
+          {showAdvancedOperations && cnasData ? (
             <Card>
               <h2 className="mb-4 text-base font-semibold">CNAS 初步判断</h2>
               <div className="grid gap-3 text-sm md:grid-cols-2">
@@ -226,6 +281,7 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
             </Card>
           ) : null}
 
+          {showAdvancedOperations ? (
           <Card>
             <h2 className="mb-4 text-base font-semibold">标签</h2>
             <div className="flex flex-wrap gap-2">
@@ -240,6 +296,7 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
               )}
             </div>
           </Card>
+          ) : null}
 
           <Card>
             <h2 className="mb-4 text-base font-semibold">销售跟进记录</h2>
@@ -289,10 +346,10 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
         </div>
 
         <aside className="space-y-6">
-          <Callout title={user.role === "SALES" ? "销售使用路径" : "当前页面路径"} tone={user.role === "SALES" ? "emerald" : "slate"}>
+          <Callout title={user.role === "SALES" ? "销售作战卡片" : "当前页面路径"} tone={user.role === "SALES" ? "emerald" : "slate"}>
             {user.role === "SALES"
-              ? "先看客户当前阶段和任务，再在这里使用 Market Claw 生成回复，回复后补一条跟进记录并确认下一步动作。"
-              : "这里是客户管理和 Market Claw 的交汇点，既能看客户状态，也能直接验证回复、资料和跟进建议是否匹配。"}
+              ? "先看客户当前阶段和任务，再在这里查看 AI 推荐回复，人工修改后保存跟进并确认下一步动作。"
+              : "这里是客户管理和 AI 推荐回复的交汇点，既能看客户状态，也能验证回复、资料和跟进建议是否匹配。"}
           </Callout>
 
           <MarketClawAssistant
@@ -303,8 +360,11 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
             materials={assistantMaterials.map((material) => ({ id: material.id, title: material.title }))}
             knowledgeItems={marketClawKnowledgeItems}
             existingTags={lead.tags.map((tag) => ({ id: tag.id, tagName: tag.tagName, tagGroup: tag.tagGroup }))}
+            showGovernance={showAdvancedOperations}
+            unavailable={aiRecommendationUnavailable}
           />
 
+          {showAdvancedOperations ? (
           <LeadReplyAssistant
             tenantSlug={tenant.slug}
             leadId={lead.id}
@@ -315,7 +375,9 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
             materials={assistantMaterials.map((material) => ({ id: material.id, title: material.title }))}
             existingTags={lead.tags.map((tag) => ({ id: tag.id, tagName: tag.tagName }))}
           />
+          ) : null}
 
+          {showAdvancedOperations ? (
           <Card>
             <h2 className="mb-4 text-base font-semibold">推荐转化策略</h2>
             {strategy ? (
@@ -334,7 +396,9 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
               <p className="text-sm text-slate-500">当前客户类型暂未配置策略。</p>
             )}
           </Card>
+          ) : null}
 
+          {showAdvancedOperations ? (
           <Card>
             <h2 className="mb-4 text-base font-semibold">绑定资料包</h2>
             <div className="space-y-2 text-sm">
@@ -350,7 +414,9 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
               )}
             </div>
           </Card>
+          ) : null}
 
+          {showAdvancedOperations ? (
           <Card>
             <h2 className="mb-4 text-base font-semibold">内部工作提醒</h2>
             <p className="mb-4 text-sm leading-6 text-slate-600">
@@ -365,7 +431,9 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
               <SubmitButton>发送客户跟进提醒</SubmitButton>
             </form>
           </Card>
+          ) : null}
 
+          {showAdvancedOperations ? (
           <Card>
             <h2 className="mb-4 text-base font-semibold">创建任务</h2>
             <form action={manualTaskAction} className="space-y-4">
@@ -384,6 +452,7 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
               <SubmitButton>创建任务</SubmitButton>
             </form>
           </Card>
+          ) : null}
 
           <Card>
             <h2 className="mb-4 text-base font-semibold">新增跟进</h2>

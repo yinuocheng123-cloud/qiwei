@@ -1,0 +1,26 @@
+# 文件说明：本文件为本地开发和 Playwright smoke 测试提供 PostgreSQL。
+# 功能说明：启动与 .env 中 DATABASE_URL 对齐的本地数据库，不包含 Redis、pgAdmin 或生产服务。
+#
+# 结构概览：
+#   第一部分：PostgreSQL 服务
+#   第二部分：本地持久化卷
+services:
+  postgres:
+    image: postgres:16
+    container_name: qiwei-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: wecom_growth_hub_demo
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "55432:5432"
+    volumes:
+      - qiwei-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d wecom_growth_hub_demo"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  qiwei-postgres-data:

@@ -1531,9 +1531,9 @@ V2.1.3 新增企业微信内部工作提醒的基础能力，目标是让系统�
 
 V2.1.4 统一修订 `/app/[tenantSlug]/onboarding` 初始化向导。初始化不再假设所有企业都应该第一天走完同一套七步流程，而是先判断企业画像、当前阶段和推荐路径，再给出本周优先动作与第一批准备清单。
 
-企业画像用于回答“这套系统主要帮企业管什么”。当前支持销售型、渠道型、项目型、服务型、招商型、制造型、咨询交付型、平台会员型和通用企业。页面允许管理员临时选择企业使用场景做路径预览，本轮不新增画像持久化表。
+企业画像用于回答“这套系统主要帮企业管什么”。当前支持销售型、渠道型、项目型、服务型、合作型、制造型、咨询交付型、平台会员型和通用企业。页面允许管理员临时选择企业使用场景做路径预览，本轮不新增画像持久化表。
 
-推荐初始化路径包括最小启动、客户导入优先、资料投喂优先、销售训练优先、渠道招商、项目服务、平台会员和标准化运营。系统基于业务线数量、客户数量、资料投喂、候选知识、已采纳知识、训练样本、销售用户和风险边界等现有数据做规则版判断，不引入复杂 AI。
+推荐初始化路径包括最小启动、客户导入优先、资料投喂优先、销售训练优先、渠道合作、项目服务、平台会员和标准化运营。系统基于业务线数量、客户数量、资料投喂、候选知识、已采纳知识、训练样本、销售用户和风险边界等现有数据做规则版判断，不引入复杂 AI。
 
 本周优先动作帮助企业先完成最有收益的 3～5 件事，例如建立 1 条业务线、导入第一批客户、投喂第一份资料、采纳第一批 FAQ 或让 1 名销售完成一次真实客户回复测试。第一批准备清单则提醒企业优先准备客户、业务线、企业资料、常见问题、销售人员、风险边界、案例和跟进任务。
 
@@ -1725,3 +1725,260 @@ V2.1.8 只优化导航和入口体验，不改客户、任务、业务线、Mark
 本轮正式记录：
 
 - `custom/notes/v2.1.8-navigation-dropdown-homepage-cleanup.md`
+
+## V2.1.9 试点演示路径固化与系统入口极简收口
+
+V2.1.9 不新增业务功能，重点是把系统从“功能集合”收口为“试点工作台”。本轮围绕客户导入、销售今日跟进、Market Claw 回复建议三条主路径进行首页和模块入口优化，同时弱化 AI、企微、合规等低频配置入口。
+
+首页从数据看板优先调整为试点工作台优先：先展示客户导入 / 客户列表、销售今日跟进、Market Claw 回复建议，再把基础配置和更多设置收起。Market Claw 总览页拆成“销售使用路径”和“后台治理路径”，业务配置页拆成“业务基础”和“系统基础配置”。
+
+本轮不修改数据库 schema、seed 或 migration，不改客户、任务、业务线、AI 能力、企业微信提醒和 Market Claw 的核心业务逻辑。
+
+专项验证文件：
+
+- `tests/v219-pilot-demo-path-simplification-e2e.spec.ts`
+
+本轮正式记录：
+
+- `custom/notes/v2.1.9-pilot-demo-path-simplification.md`
+
+## V2.2 试点工作台模式
+
+V2.2 不新增业务功能，重点是把当前系统从“功能平台”进一步收口为“销售试点工作台”。当前定位不是自助 SaaS，而是熟客陪跑试点工作台：先让销售和运营跑通一条稳定客户跟进主线，再根据试点反馈决定是否继续开放更多后台能力。
+
+销售主路径固定为：
+
+工作台 -> 客户 -> AI 推荐回复 -> 保存跟进
+
+管理员与运营路径固定为：
+
+客户导入 -> 资料维护 -> AI 治理 -> 运营复盘
+
+本轮把首页、导航、Market Claw 和设置入口继续做减法：销售侧只保留工作台、客户、跟进、资料等日常入口；AI 能力配置、企业微信提醒配置、合规配置、审计日志、训练审核、资料投喂和知识维护等能力没有删除，而是转入设置、资料维护或后台治理路径，不再打断销售日常使用。
+
+企业微信当前仍以内部联系、提醒和配置预留为主，不描述为客户侧自动回复闭环；AI 当前仍是销售建议和后台治理能力，不自动回复客户、不自动发送消息、不替销售做最终判断。
+
+V2.2 演示材料集中放在：
+
+- `custom/demo/demo-script.md`
+- `custom/demo/demo-data-guide.md`
+- `custom/demo/sales-demo-path.md`
+- `custom/demo/v2.2-smoke-checklist.md`
+
+本轮正式记录：
+
+- `custom/notes/v2.2-pilot-workbench-consolidation.md`
+
+## V2.2.1 隐藏复杂度与 AI 后台化
+
+V2.2.1 继续坚持“试点工作台”方向：系统主路径不是 AI 平台，而是销售每天打开就能工作的客户跟进工作台。AI 不作为销售入口，只作为客户详情页里的推荐回复能力。
+
+销售只关心四件事：
+
+1. 今天跟谁。
+2. 客户说了什么。
+3. 建议怎么回复。
+4. 下一步做什么。
+
+Market Claw 的治理能力进入设置页，由管理员和运营处理知识维护、回复样本审核、AI 治理和试点运营复盘。销售主导航不显示 Market Claw、沙盒、Provider、训练审核、知识候选、企业微信配置、合规配置或审计日志。
+
+管理员和运营才需要关心：
+
+- 知识维护
+- 回复样本审核
+- AI 治理
+- 企业微信内部提醒配置
+- 沟通合规与审计
+- 试点运营复盘
+
+本轮仍不接真实企业微信，不接真实 AI，不做客户侧自动回复，不新增 Agent，不做 SaaS 化扩展。
+
+本轮正式记录：
+
+- `custom/notes/v2.2.1-hide-ai-complexity.md`
+
+## 本地开发环境与 E2E 测试
+
+V2.2.2 开始，本地开发和 Playwright smoke 测试推荐使用 Docker Desktop 启动 PostgreSQL。当前 `.env` 中的数据库端口是 `55432`：
+
+```text
+DATABASE_URL="postgresql://postgres@127.0.0.1:55432/wecom_growth_hub_demo?schema=public"
+```
+
+这表示本地应用会连接 `127.0.0.1:55432`，Docker Compose 会把宿主机 `55432` 映射到容器 PostgreSQL 的 `5432`。
+
+### 第一次启动步骤
+
+PowerShell 必须先进入项目目录：
+
+```powershell
+Set-Location D:\ceshi\qiwei
+```
+
+不要使用 `cd /d D:\ceshi\qiwei`，那是 `cmd.exe` 写法，在 PowerShell 中会导致后续命令跑到错误目录。
+
+确认 Docker 可用：
+
+```powershell
+docker --version
+docker compose version
+```
+
+启动 PostgreSQL：
+
+```powershell
+docker compose up -d
+```
+
+### 数据库初始化步骤
+
+```powershell
+Set-Location D:\ceshi\qiwei
+npm run db:generate
+npm run db:push
+npm run db:seed
+```
+
+`db:seed` 复用已有 `prisma/seed.ts`，用于本地开发、演示和测试账号准备，不用于生产。
+
+### 运行 V2.2 / V2.2.1 Smoke 测试
+
+```powershell
+Set-Location D:\ceshi\qiwei
+npm run test:e2e:v22
+npm run test:e2e:v221
+```
+
+Playwright 配置会自动启动 Next dev server。如果登录阶段出现：
+
+```text
+Can't reach database server at 127.0.0.1:55432
+```
+
+说明 PostgreSQL 没有启动或端口不可连接，不是业务代码问题。
+
+### 如果 Docker 不可用
+
+如果 PowerShell 报：
+
+```text
+docker : The term 'docker' is not recognized
+```
+
+说明当前机器未安装或未识别 Docker。可选处理方式：
+
+1. 安装 Docker Desktop。
+2. 启动 Docker Desktop 并等待 Docker Engine ready。
+3. 重新打开 PowerShell。
+4. 再执行 `docker --version` 和 `docker compose version` 验证。
+
+也可以手动启动本地 PostgreSQL，但必须确保 `127.0.0.1:55432` 可连接，并且数据库名、用户名与 `.env` 对齐。
+
+### 常用本地脚本
+
+V2.3.1 开始，本地日常启动、smoke 测试和停止清理可以直接使用三个 PowerShell 脚本，减少手动输入命令和 Next 缓存混用问题。
+
+启动本地开发环境：
+
+```powershell
+Set-Location D:\ceshi\qiwei
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\start-local.ps1
+```
+
+`start-local.ps1` 会停止旧 node 进程、清理 `.next`、检查 `DATABASE_URL` 和 `127.0.0.1:55432`，必要时尝试启动本机 PostgreSQL fallback，然后执行 `db:generate`、`db:push`、`db:seed`、`typecheck`、`lint`、`build`。构建后会再次清理 `.next`，最后进入 `npm.cmd run dev` 持续运行状态。
+
+另开一个 PowerShell 窗口执行 smoke 测试：
+
+```powershell
+Set-Location D:\ceshi\qiwei
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\test-smoke.ps1
+```
+
+`test-smoke.ps1` 会设置 `PLAYWRIGHT_SKIP_WEBSERVER=1` 和 `APP_URL=http://127.0.0.1:3000`，依次执行 V2.2、V2.2.1、V2.2.4、V2.2.7 四组 smoke 测试，最后输出 `git status`。
+
+停止本地开发服务并清理缓存：
+
+```powershell
+Set-Location D:\ceshi\qiwei
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\stop-local.ps1
+```
+
+`stop-local.ps1` 会停止 node / Next dev 进程，清理 `.next` 和 `test-results`，并检查 3000 端口是否仍被占用。
+
+当前机器也支持本机 PostgreSQL fallback。若 Docker CLI 可用但 Docker Engine 报 `Docker Desktop is unable to start`，可以使用：
+
+```powershell
+Set-Location D:\ceshi\qiwei
+D:\tools\pgsql17\pgsql\bin\pg_ctl.exe -D D:\ceshi\qiwei\custom\experiments\postgres-data -l D:\ceshi\qiwei\custom\experiments\postgres-v222.log -o "-p 55432" start
+D:\tools\pgsql17\pgsql\bin\pg_isready.exe -h 127.0.0.1 -p 55432 -U postgres
+```
+
+确认返回 `accepting connections` 后，再执行 `npm run db:generate`、`npm run db:push`、`npm run db:seed` 和 smoke 测试。
+
+### 一键检查脚本
+
+```powershell
+Set-Location D:\ceshi\qiwei
+powershell.exe -ExecutionPolicy Bypass -File scripts\dev-check.ps1
+```
+
+该脚本会检查 Node / npm / DATABASE_URL / Docker / PostgreSQL，并在数据库可用时依次执行 Prisma、Seed、typecheck、lint、build、V2.2 smoke 和 V2.2.1 smoke。
+
+本轮正式记录：
+
+- `custom/notes/v2.2.2-local-env-e2e-standardization.md`
+- `custom/notes/v2.2.3-docker-desktop-e2e-recovery.md`
+
+## V2.2.4 稳定性收口
+
+V2.2.4 不新增业务功能，重点是让试点工作台在局部数据读取异常时仍能保持可用。当前系统已支持本机 PostgreSQL fallback；如果 dashboard 的单个统计、AI 推荐记录或后台复盘数据暂时不可用，页面会显示业务化提示，并使用 0 或空列表兜底，不让整页崩掉。
+
+销售主流程仍然是：工作台 -> 客户 -> AI 推荐回复 -> 保存跟进。AI 推荐暂不可用时，销售仍可先手工记录跟进；后台治理页的数据暂不可用时，也不影响销售主路径。
+
+本阶段仍不是自助 SaaS，而是熟客试点工作台。稳定性收口只处理容错、兜底和 smoke 测试，不接真实 AI、不接真实企业微信、不做自动客户回复。
+
+本轮正式记录：
+
+- `custom/notes/v2.2.4-stability-hardening.md`
+
+## V2.2.6 AI 训练独立模块边界
+
+V2.2.6 借鉴 Twenty 这类成熟 CRM 的对象模型、视图、导入、权限、工作流和自托管经验，但不把当前系统改成重型 CRM 平台。当前产品继续保留轻量销售主线：工作台 -> 客户 -> AI 推荐回复 -> 保存跟进。
+
+本轮修正 V2.2.1 的一个表达边界：AI 复杂度仍然不进入销售主路径，但 AI 训练不再被“系统设置”吞掉。对 TENANT_ADMIN 和 OPERATOR 来说，AI 训练是独立运营模块，用来承接回复训练、训练审核、资料投喂、回复记录和训练复盘；对 SALES 来说，仍然只看到客户详情页里的 AI 推荐回复结果。
+
+设置页继续收纳 AI Provider、企业微信、合规、审计和权限说明等系统级低频配置。AI 训练和系统设置分开后，角色心智更清楚：销售只做跟进，运营维护训练，管理员治理配置。
+
+本轮仍不接真实 AI、不接真实企业微信、不做客户侧自动回复、不新增 Agent，也不修改数据库结构。
+
+本轮正式记录：
+
+- `custom/notes/v2.2.6-ai-training-module-boundary.md`
+
+## V2.2.7 资料包清单化收口
+
+V2.2.7 不改变销售主线，只优化资料页的信息密度。资料页从“后台内容列表”调整为“按客户类型归类的销售资料清单”，默认展示资料包完整度、资料标题、状态和类型，链接、描述、创建时间和编辑表单只在展开后显示。
+
+完整度优先复用客户类型策略里的首发资料清单：例如潜在客户资料包会按策略库预期资料计算 `4/4`，缺少资料或描述时显示“待补充”。如果某类客户没有预期模板，则按当前已配置资料显示“已配置 x 项”。
+
+SALES 可以打开资料页查看资料是否齐全，但不显示新增和编辑表单；TENANT_ADMIN / OPERATOR 可以新增资料，并按需展开详情编辑。当前不新增资料模型，不修改数据库结构，不引入新依赖。
+
+本轮正式记录：
+
+- `custom/notes/v2.2.7-materials-checklist-consolidation.md`
+
+## V2.3 平台化销售工作台收口
+
+V2.3 把当前系统从行业演示版收口为通用的 `MarketClaw 销售助手` 平台底座。当前产品定位统一为“客户跟进与销售协作工作台”，主线只围绕客户、跟进、资料、下一步任务、工作台和管理员配置展开。
+
+本轮将 seed、演示说明、资料清单、回复建议和测试断言中的强行业表达替换为平台化表达。客户类型展示统一收口为潜在客户、意向客户、合作伙伴和重点客户；资料内容统一收口为产品介绍、成功案例、服务流程、报价说明、合作方案和常见问题。
+
+AI 与企业微信继续保留为可选能力：AI 推荐回复只是辅助建议，企业微信只作为后续连接器或内部提醒通道，不进入销售主路径。本轮不接真实 AI，不接真实企业微信，不做客户侧自动回复，也不把系统描述为全自动增长闭环。
+
+销售路径保持轻量：SALES 继续只看到工作台、客户、跟进和资料。TENANT_ADMIN / OPERATOR 可以看到 AI训练和设置，用于维护资料、训练样本、系统配置与治理能力。
+
+本轮没有修改数据库 schema，没有新增复杂功能，也没有扩大 SALES 权限。
+
+本轮正式记录：
+
+- `custom/notes/v2.3-platform-sales-workbench.md`

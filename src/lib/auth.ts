@@ -234,7 +234,7 @@ export function canAccessMarketClawKnowledge(role: UserRole) {
 }
 
 export function canAccessMarketClawTraining(role: UserRole) {
-  return role === "TENANT_ADMIN" || role === "OPERATOR" || role === "SALES";
+  return role === "TENANT_ADMIN" || role === "OPERATOR";
 }
 
 export function canReviewMarketClawTraining(role: UserRole) {
@@ -242,7 +242,7 @@ export function canReviewMarketClawTraining(role: UserRole) {
 }
 
 export function canAccessMarketClawReplies(role: UserRole) {
-  return role === "TENANT_ADMIN" || role === "OPERATOR" || role === "SALES";
+  return role === "TENANT_ADMIN" || role === "OPERATOR";
 }
 
 export function canAccessMarketClawIngestion(role: UserRole) {
@@ -250,7 +250,7 @@ export function canAccessMarketClawIngestion(role: UserRole) {
 }
 
 export function canAccessMarketClawInsights(role: UserRole) {
-  return role === "TENANT_ADMIN" || role === "OPERATOR" || role === "SALES";
+  return role === "TENANT_ADMIN" || role === "OPERATOR";
 }
 
 export function canAccessMarketClawSandbox(role: UserRole) {

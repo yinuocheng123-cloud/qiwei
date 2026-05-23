@@ -12,6 +12,7 @@ import {
   saveMarketClawTrainingAsPersonalKnowledge,
   submitMarketClawTrainingForReview
 } from "@/lib/actions";
+import { redirect } from "next/navigation";
 import { canAccessMarketClawTraining, canReviewMarketClawTraining, requireTenantAccess } from "@/lib/auth";
 import {
   marketClawReplyRiskLevelLabels,
@@ -63,6 +64,14 @@ function buildScopeTabs(tenantSlug: string, role: string) {
   }));
 }
 
+async function safeTrainingRead<T>(read: () => Promise<T>, fallback: T): Promise<{ data: T; unavailable: boolean }> {
+  try {
+    return { data: await read(), unavailable: false };
+  } catch {
+    return { data: fallback, unavailable: true };
+  }
+}
+
 export default async function MarketClawTrainingPage({
   params,
   searchParams
@@ -72,66 +81,84 @@ export default async function MarketClawTrainingPage({
 }) {
   const { user, tenant } = await requireTenantAccess(params.tenantSlug, ["TENANT_ADMIN", "OPERATOR", "SALES"]);
   if (!canAccessMarketClawTraining(user.role)) {
-    return null;
+    redirect("/forbidden");
   }
+  const roleView = user.role as string;
 
   const availableScopes =
-    user.role === "SALES" ? ["SALES_SELF_TRAINING"] : marketClawTrainingScopeOptions.map((item) => item.value);
+    roleView === "SALES" ? ["SALES_SELF_TRAINING"] : marketClawTrainingScopeOptions.map((item) => item.value);
   const requestedScope = typeof searchParams?.scope === "string" ? searchParams.scope : "";
   const currentScope = availableScopes.includes(requestedScope) ? requestedScope : availableScopes[0];
 
-  const [businessLines, trainingCases] = await Promise.all([
-    prisma.businessLine.findMany({
-      where: { tenantId: tenant.id, status: "ACTIVE" },
-      orderBy: [{ priority: "asc" }, { updatedAt: "desc" }]
-    }),
-    prisma.marketClawTrainingCase.findMany({
-      where: {
-        tenantId: tenant.id,
-        ...(user.role === "SALES" ? { ownerUserId: user.id } : {}),
-        ...(currentScope ? { trainingScope: currentScope as never } : {})
-      },
-      include: {
-        businessLine: true,
-        createdBy: true,
-        promotedKnowledgeItem: true
-      },
-      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-      take: 20
-    })
+  const [businessLinesResult, trainingCasesResult] = await Promise.all([
+    safeTrainingRead(
+      () =>
+        prisma.businessLine.findMany({
+          where: { tenantId: tenant.id, status: "ACTIVE" },
+          orderBy: [{ priority: "asc" }, { updatedAt: "desc" }]
+        }),
+      []
+    ),
+    safeTrainingRead(
+      () =>
+        prisma.marketClawTrainingCase.findMany({
+          where: {
+            tenantId: tenant.id,
+            ...(roleView === "SALES" ? { ownerUserId: user.id } : {}),
+            ...(currentScope ? { trainingScope: currentScope as never } : {})
+          },
+          include: {
+            businessLine: true,
+            createdBy: true,
+            promotedKnowledgeItem: true
+          },
+          orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+          take: 20
+        }),
+      []
+    )
   ]);
+  const businessLines = businessLinesResult.data;
+  const trainingCases = trainingCasesResult.data;
+  const trainingDataUnavailable = businessLinesResult.unavailable || trainingCasesResult.unavailable;
 
   const generateAction = generateMarketClawTrainingCase.bind(null, tenant.slug);
 
   return (
     <PageShell
       tenant={tenant}
-      title={user.role === "SALES" ? "Market Claw 我的训练" : "Market Claw 回复训练场"}
+      title={roleView === "SALES" ? "Market Claw 我的训练" : "Market Claw 回复训练场"}
       breadcrumbs={[
         { label: "Market Claw", href: `/app/${tenant.slug}/market-claw` },
-        { label: user.role === "SALES" ? "我的训练" : "回复训练场" }
+        { label: roleView === "SALES" ? "我的训练" : "回复训练场" }
       ]}
       description={
-        user.role === "SALES"
+        roleView === "SALES"
           ? "把一线真实客户问题练成自己的常用话术。个人训练默认只供自己使用，提交审核后才可能升级为团队标准或企业标准。"
           : "在这里区分企业训练、部门训练、业务线训练和销售自我训练，保证训练素材能沉淀，但不会直接污染企业标准知识。"
       }
     >
-      <SectionTabs current="training" items={buildOverviewTabs(tenant.slug, user.role)} className="mb-4" />
-      <SectionTabs current={currentScope} items={buildScopeTabs(tenant.slug, user.role)} className="mb-6" />
+      <SectionTabs current="training" items={buildOverviewTabs(tenant.slug, roleView)} className="mb-4" />
+      <SectionTabs current={currentScope} items={buildScopeTabs(tenant.slug, roleView)} className="mb-6" />
 
-      <Callout title={user.role === "SALES" ? "销售训练原则" : "训练分层原则"} tone={user.role === "SALES" ? "emerald" : "amber"}>
-        {user.role === "SALES"
+      {trainingDataUnavailable ? (
+        <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          当前复盘数据暂不可用，不影响销售主流程。
+        </div>
+      ) : null}
+
+      <Callout title={roleView === "SALES" ? "销售训练原则" : "训练分层原则"} tone={roleView === "SALES" ? "emerald" : "amber"}>
+        {roleView === "SALES"
           ? "先把客户真实问题练成自己的可用回复，再决定是否提交审核。个人常用话术不会直接进入企业知识库，也不能覆盖不能承诺事项。"
           : "企业训练、部门训练、业务线训练和销售自我训练必须分层保存。任何个人训练都要经过审核后，才能升级为团队标准或企业标准。"}
       </Callout>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[380px_1fr]">
         <Card>
-          <h2 className="mb-4 text-base font-semibold text-slate-950">{user.role === "SALES" ? "开始我的训练" : "开始新一轮训练"}</h2>
+          <h2 className="mb-4 text-base font-semibold text-slate-950">{roleView === "SALES" ? "开始我的训练" : "开始新一轮训练"}</h2>
           <form action={generateAction} className="space-y-4">
-            {user.role === "SALES" ? <input name="trainingScope" type="hidden" value="SALES_SELF_TRAINING" /> : null}
-            {user.role !== "SALES" ? (
+            {roleView === "SALES" ? <input name="trainingScope" type="hidden" value="SALES_SELF_TRAINING" /> : null}
+            {roleView !== "SALES" ? (
               <Select label="训练类型" name="trainingScope" options={marketClawTrainingScopeOptions} defaultValue={currentScope} />
             ) : null}
             <Textarea label="客户真实问题" name="customerQuestion" rows={4} />
@@ -147,10 +174,10 @@ export default async function MarketClawTrainingPage({
             <Select label="客户类型" name="customerType" options={customerTypeOptions} defaultValue="FACTORY_CLIENT" />
             <Select label="客户阶段" name="customerStage" options={stageOptions} defaultValue="NEW" />
             <Textarea label="客户标签" name="customerTags" rows={2} />
-            <Input label="回复风格备注" name="replyStyle" defaultValue={user.role === "SALES" ? "像销售本人，不像客服" : "像销售，不像客服"} />
+            <Input label="回复风格备注" name="replyStyle" defaultValue={roleView === "SALES" ? "像销售本人，不像客服" : "像销售，不像客服"} />
             <Input label="回复长度备注" name="replyLength" defaultValue="微信可直接发" />
             <Textarea label="销售备注" name="salesNote" rows={3} />
-            <SubmitButton>{user.role === "SALES" ? "生成我的训练回复" : "生成训练结果"}</SubmitButton>
+            <SubmitButton>{roleView === "SALES" ? "生成我的训练回复" : "生成训练结果"}</SubmitButton>
           </form>
         </Card>
 
@@ -213,7 +240,7 @@ export default async function MarketClawTrainingPage({
                   <Info label="驳回或审核意见" value={item.reviewComment ?? "-"} />
                 </div>
 
-                {user.role === "SALES" ? (
+                {roleView === "SALES" ? (
                   <div className="mt-4 grid gap-4 lg:grid-cols-2">
                     <form
                       action={saveMarketClawTrainingAsPersonalKnowledge.bind(null, tenant.slug, item.id)}
@@ -260,7 +287,7 @@ export default async function MarketClawTrainingPage({
           ) : (
             <Card>
               <p className="text-sm text-slate-500">
-                {user.role === "SALES"
+                {roleView === "SALES"
                   ? "你还没有“我的训练”记录。先拿一个真实客户问题练一轮回复，再决定是保存为个人话术还是提交审核。"
                   : "当前训练类型下还没有训练记录。先跑一轮问题，再根据回复质量决定是否进入审核。"}
               </p>

@@ -11,6 +11,7 @@ import { canAccessMarketClawInsights, requireTenantAccess } from "@/lib/auth";
 import { getMarketClawTrainingInsights } from "@/lib/market-claw";
 import { PageShell } from "@/components/Shell";
 import { Callout, Card, SectionTabs, StatCard } from "@/components/Ui";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -60,17 +61,56 @@ function EmptyState({ text }: { text: string }) {
   );
 }
 
+type TrainingInsights = Awaited<ReturnType<typeof getMarketClawTrainingInsights>>;
+
+function emptyInsights(role: string): TrainingInsights {
+  return {
+    roleView: role === "SALES" ? "PERSONAL" : "GLOBAL",
+    summaryMetrics: {
+      trainingTotal: 0,
+      myTrainingCount: 0,
+      pendingTrainingCount: 0,
+      adoptedTrainingCount: 0,
+      rejectedTrainingCount: 0,
+      personalScriptCount: 0,
+      ingestionBatchCount: 0,
+      candidateCount: 0,
+      adoptedCandidateCount: 0,
+      mergedCandidateCount: 0,
+      rejectedCandidateCount: 0,
+      enterpriseKnowledgeCount: 0,
+      teamKnowledgeCount: 0,
+      businessLineKnowledgeCount: 0,
+      personalKnowledgeCount: 0
+    },
+    frequentQuestions: [],
+    riskQuestionStats: [],
+    knowledgeGaps: [],
+    adoptionStats: { recentAdoptions: [], topContributors: [] },
+    mergeStats: { recentMerges: [], mostMergedKnowledgeItems: [], duplicateRejectedTypes: [] },
+    maturityStage: null,
+    personalReviewProgress: []
+  };
+}
+
 export default async function MarketClawInsightsPage({ params }: { params: { tenantSlug: string } }) {
   const { user, tenant } = await requireTenantAccess(params.tenantSlug, ["TENANT_ADMIN", "OPERATOR", "SALES"]);
   if (!canAccessMarketClawInsights(user.role)) {
-    return null;
+    redirect("/forbidden");
   }
 
-  const insights = await getMarketClawTrainingInsights({
-    tenantId: tenant.id,
-    role: user.role,
-    userId: user.id
-  });
+  let insightsUnavailable = false;
+  let insights: TrainingInsights;
+  try {
+    insights = await getMarketClawTrainingInsights({
+      tenantId: tenant.id,
+      role: user.role,
+      userId: user.id
+    });
+  } catch {
+    insights = emptyInsights(user.role);
+    insightsUnavailable = true;
+  }
   const isPersonalView = insights.roleView === "PERSONAL";
 
   const summaryCards = isPersonalView
@@ -114,6 +154,12 @@ export default async function MarketClawInsightsPage({ params }: { params: { ten
       }
     >
       <SectionTabs current="insights" items={buildOverviewTabs(tenant.slug, user.role)} className="mb-6" />
+
+      {insightsUnavailable ? (
+        <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          当前复盘数据暂不可用，不影响销售主流程。
+        </div>
+      ) : null}
 
       <Callout title={isPersonalView ? "个人视图说明" : "治理视图说明"} tone={isPersonalView ? "emerald" : "amber"}>
         {isPersonalView

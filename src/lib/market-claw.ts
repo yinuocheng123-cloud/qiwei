@@ -449,8 +449,8 @@ const priceKeywords = ["价格", "费用", "多少钱", "报价", "贵不贵", "
 const effectKeywords = ["保证", "一定", "肯定", "效果", "排名", "推荐", "通过"];
 const caseKeywords = ["案例", "有没有做过", "样板", "落地", "客户"];
 const geoKeywords = ["geo", "ai", "ai搜索", "推荐", "收录", "关键词", "seo"];
-const membershipKeywords = ["会员", "整木网", "增信", "背书", "联盟", "加入", "行业露出"];
-const wuzhenKeywords = ["乌镇", "活动", "峰会", "榜单", "白皮书", "奖项", "露出"];
+const membershipKeywords = ["会员", "MarketClaw", "信任建设", "背书", "联盟", "加入", "行业露出"];
+const wuzhenKeywords = ["活动", "活动", "峰会", "榜单", "白皮书", "奖项", "露出"];
 const cnasKeywords = ["cnas", "认可", "实验室", "评审", "体系文件", "整改", "人员设备", "认可范围"];
 const highIntentKeywords = ["什么时候开始", "能不能尽快", "今天聊", "明天聊", "发合同", "怎么付款", "报价发我", "约时间"];
 const lowIntentKeywords = ["先了解", "不着急", "以后再说", "暂时不用", "没有预算"];
@@ -1279,18 +1279,18 @@ function buildSuggestedTags(signals: MarketClawSignal) {
   const tags: MarketClawSuggestedTag[] = [];
 
   if (signals.geo) {
-    appendUniqueTag(tags, { tagName: "GEO意向", tagGroup: "CUSTOM", reason: "客户问题涉及 GEO、AI 搜索或品牌可见性。" });
+    appendUniqueTag(tags, { tagName: "增长推广意向", tagGroup: "CUSTOM", reason: "客户问题涉及增长推广、AI 搜索或客户可见性。" });
     appendUniqueTag(tags, { tagName: "AI推广关注", tagGroup: "NEED", reason: "客户正在关注 AI 搜索与推荐入口。" });
     appendUniqueTag(tags, { tagName: "待诊断", tagGroup: "STAGE", reason: "建议先做一轮 AI 可见性诊断。" });
   }
 
   if (signals.membership) {
-    appendUniqueTag(tags, { tagName: "会员意向", tagGroup: "CUSTOM", reason: "客户正在了解会员、增信或行业背书。" });
-    appendUniqueTag(tags, { tagName: "品牌增信关注", tagGroup: "NEED", reason: "客户对品牌背书和增信价值有明显兴趣。" });
+    appendUniqueTag(tags, { tagName: "会员意向", tagGroup: "CUSTOM", reason: "客户正在了解会员、信任建设或行业背书。" });
+    appendUniqueTag(tags, { tagName: "信任建设关注", tagGroup: "NEED", reason: "客户对品牌背书和信任建设价值有明显兴趣。" });
   }
 
   if (signals.wuzhen) {
-    appendUniqueTag(tags, { tagName: "乌镇资源关注", tagGroup: "NEED", reason: "客户问题涉及乌镇、活动资源或行业露出。" });
+    appendUniqueTag(tags, { tagName: "活动资源关注", tagGroup: "NEED", reason: "客户问题涉及活动资源或行业露出。" });
     appendUniqueTag(tags, { tagName: "活动资源意向", tagGroup: "CUSTOM", reason: "适合继续判断活动资源合作边界。" });
   }
 
@@ -1422,16 +1422,16 @@ function buildBaseSummary(lead: LeadLike, question: string, knowledgeItems: Know
 
 function buildShortReply(lead: LeadLike, question: string, knowledgeItems: KnowledgeLike[], signals: MarketClawSignal, businessLine?: BusinessLineLike | null) {
   if (signals.geo) {
-    return "这个问题可以先不用急着承诺结果，我们通常会先看品牌现在在 AI 搜索里的可见性，再判断是先补关键词和内容底座，还是直接进入 GEO 方案。";
+    return "这个问题可以先不用急着承诺结果，我们通常会先看品牌现在在 AI 搜索里的可见性，再判断是先补关键词和内容底座，还是直接进入增长推广方案。";
   }
   if (signals.cnas) {
     return "CNAS 这类问题不建议一上来先做材料，先判断你现在处在了解、建设、体系文件还是准备申请阶段，会更省时间。";
   }
   if (signals.membership) {
-    return "整木网会员不是单纯买展示位，更核心的是增信、链接和增长协同，先看你现在更需要哪一块。";
+    return "平台会员不是单纯买展示位，更核心的是信任建设、链接和增长协同，先看你现在更需要哪一块。";
   }
   if (signals.wuzhen) {
-    return "乌镇和活动资源这类合作更适合先判断你是要露出、背书还是资源链接，不建议先把结果说满。";
+    return "活动和资源合作这类合作更适合先判断你是要露出、背书还是资源链接，不建议先把结果说满。";
   }
   if (signals.price) {
     return "价格这类问题我建议先不空口报死价，先结合你的业务线、服务范围和当前情况判断，给到你的信息会更准。";

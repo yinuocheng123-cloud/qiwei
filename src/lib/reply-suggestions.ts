@@ -36,7 +36,7 @@ export type TagSuggestionTopic =
   | "COOPERATION"
   | "CASE"
   | "DELIVERY"
-  | "GEO_AI"
+  | "GROWTH_PROMOTION"
   | "MEMBERSHIP"
   | "EVENT_RESOURCE"
   | "TRAINING"
@@ -108,9 +108,9 @@ const tagTopicKeywords: { type: TagSuggestionTopic; keywords: string[] }[] = [
   { type: "COOPERATION", keywords: ["合作", "加盟", "代理", "政策", "利润", "区域", "扶持"] },
   { type: "CASE", keywords: ["案例", "效果", "样板", "落地", "有没有做过"] },
   { type: "DELIVERY", keywords: ["交付", "安装", "售后", "周期", "服务", "能不能做好", "环保"] },
-  { type: "GEO_AI", keywords: ["geo", "ai", "ai搜索", "推荐", "收录", "关键词", "搜索", "seo"] },
-  { type: "MEMBERSHIP", keywords: ["会员", "权益", "增信", "背书", "整木网", "联盟", "加入"] },
-  { type: "EVENT_RESOURCE", keywords: ["乌镇", "活动", "峰会", "榜单", "白皮书", "露出", "奖项", "资源"] },
+  { type: "GROWTH_PROMOTION", keywords: ["geo", "ai", "ai搜索", "推荐", "收录", "关键词", "搜索", "seo"] },
+  { type: "MEMBERSHIP", keywords: ["会员", "权益", "增信", "背书", "MarketClaw", "联盟", "加入"] },
+  { type: "EVENT_RESOURCE", keywords: ["活动", "活动", "峰会", "榜单", "白皮书", "露出", "奖项", "资源"] },
   { type: "TRAINING", keywords: ["课程", "培训", "学习", "报名", "课纲", "老师", "训练营"] },
   { type: "AFTERMARKET", keywords: ["一清一护", "后市场", "养护", "清洁", "门店合作", "上门服务"] }
 ];
@@ -137,9 +137,9 @@ export const tagTopicLabels: Record<TagSuggestionTopic, string> = {
   COOPERATION: "合作类",
   CASE: "案例类",
   DELIVERY: "交付类",
-  GEO_AI: "GEO／AI 推广类",
+  GROWTH_PROMOTION: "增长推广类",
   MEMBERSHIP: "会员服务类",
-  EVENT_RESOURCE: "活动／乌镇资源类",
+  EVENT_RESOURCE: "活动／活动资源类",
   TRAINING: "培训课程类",
   AFTERMARKET: "一清一护后市场类",
   UNCLEAR: "不明确类"
@@ -285,12 +285,12 @@ function getCustomerTypeConfig(customerType: CustomerType): CustomerTypeConfig {
   if (customerType === "OWNER_CLIENT") {
     return {
       materialTitles: {
-        PRICE: ["整木定制避坑清单", "真实案例图册"],
-        COOPERATION: ["真实案例图册", "交付流程说明"],
-        CASE: ["真实案例图册", "整木定制避坑清单"],
+        PRICE: ["产品服务避坑清单", "成功案例"],
+        COOPERATION: ["成功案例", "交付流程说明"],
+        CASE: ["成功案例", "产品服务避坑清单"],
         DELIVERY: ["交付流程说明", "环保与售后说明"],
-        SYSTEM_COMPARE: ["真实案例图册", "环保与售后说明"],
-        UNCLEAR: ["真实案例图册", "交付流程说明"]
+        SYSTEM_COMPARE: ["成功案例", "环保与售后说明"],
+        UNCLEAR: ["成功案例", "交付流程说明"]
       },
       nextActions: {
         PRICE: "了解房屋面积、装修阶段和预算区间",
@@ -310,7 +310,7 @@ function getCustomerTypeConfig(customerType: CustomerType): CustomerTypeConfig {
       },
       warnings: {
         PRICE: "不要先报死价，先确认面积、材质和阶段。",
-        COOPERATION: "不要把业主沟通带成招商口径。",
+        COOPERATION: "不要把潜在客户沟通带成合作口径。",
         CASE: "不要只发图，记得追问偏好。",
         DELIVERY: "不要承诺绝对周期，先确认现场条件。",
         SYSTEM_COMPARE: "不要把系统说成自动成交工具。",
@@ -322,27 +322,27 @@ function getCustomerTypeConfig(customerType: CustomerType): CustomerTypeConfig {
   if (customerType === "DEALER_CLIENT") {
     return {
       materialTitles: {
-        PRICE: ["合作政策说明", "招商手册"],
-        COOPERATION: ["招商手册", "合作政策说明", "样板门店案例"],
+        PRICE: ["合作政策说明", "合作方案"],
+        COOPERATION: ["合作方案", "合作政策说明", "样板门店案例"],
         CASE: ["样板门店案例", "产品体系说明"],
         DELIVERY: ["产品体系说明", "样板门店案例"],
-        SYSTEM_COMPARE: ["合作政策说明", "招商手册"],
-        UNCLEAR: ["招商手册", "产品体系说明"]
+        SYSTEM_COMPARE: ["合作政策说明", "合作方案"],
+        UNCLEAR: ["合作方案", "产品体系说明"]
       },
       nextActions: {
         PRICE: "了解城市、门店情况和经营品类",
-        COOPERATION: "安排招商负责人沟通或到厂考察",
+        COOPERATION: "安排合作负责人沟通或现场评估",
         CASE: "确认客户更想看样板门店还是产品体系",
         DELIVERY: "确认门店进度和总部支持需求",
         SYSTEM_COMPARE: "判断客户更关心政策、利润还是总部支持",
         UNCLEAR: "先问清所在城市和门店现状"
       },
       answers: {
-        PRICE: "经销合作不只看一个价格，通常要结合城市、门店基础和合作方式一起判断。",
+        PRICE: "合作伙伴协作不只看一个价格，通常要结合城市、门店基础和合作方式一起判断。",
         COOPERATION: "如果您是在看合作，这边重点会先把利润、政策、区域保护和总部支持讲清楚。",
         CASE: "样板门店和实际落地案例可以先给您看，这样判断会更直观。",
         DELIVERY: "门店落地支持关键看样板、培训和总部协同，不只是发一份政策。",
-        SYSTEM_COMPARE: "这不只是个 CRM 或群发工具，重点是把招商线索、资料和推进动作跑顺。",
+        SYSTEM_COMPARE: "这不只是个 CRM 或群发工具，重点是把合作线索、资料和推进动作跑顺。",
         UNCLEAR: "先把您现在的门店阶段和合作目标摸清楚，后面建议才不会跑偏。"
       },
       warnings: {
@@ -360,16 +360,16 @@ function getCustomerTypeConfig(customerType: CustomerType): CustomerTypeConfig {
     return {
       materialTitles: {
         PRICE: ["材料样册", "工艺节点说明"],
-        COOPERATION: ["设计师合作机制", "项目配合流程"],
-        CASE: ["高定案例图册", "工艺节点说明"],
+        COOPERATION: ["方案协作机制", "项目配合流程"],
+        CASE: ["成功案例", "工艺节点说明"],
         DELIVERY: ["工艺节点说明", "项目配合流程"],
-        SYSTEM_COMPARE: ["设计师合作机制", "高定案例图册"],
-        UNCLEAR: ["高定案例图册", "材料样册"]
+        SYSTEM_COMPARE: ["方案协作机制", "成功案例"],
+        UNCLEAR: ["成功案例", "材料样册"]
       },
       nextActions: {
         PRICE: "了解项目类型、预算和落地要求",
         COOPERATION: "确认是否需要项目报价配合",
-        CASE: "请设计师发项目风格方向或图纸",
+        CASE: "请意向客户发项目风格方向或图纸",
         DELIVERY: "确认是否需要工艺节点和项目配合",
         SYSTEM_COMPARE: "判断对方更关心案例、工艺还是配合效率",
         UNCLEAR: "先了解当前项目类型和客户层级"
@@ -377,14 +377,14 @@ function getCustomerTypeConfig(customerType: CustomerType): CustomerTypeConfig {
       answers: {
         PRICE: "设计项目这块报价通常要结合体量、材料和工艺节点，不适合只看一个数字。",
         COOPERATION: "如果是合作，重点会先把案例质感、工艺落地和项目配合方式对齐。",
-        CASE: "案例和落地细节这边可以先给您看真实高定项目，不先空讲概念。",
+        CASE: "案例和落地细节这边可以先给您看真实高客单项目，不先空讲概念。",
         DELIVERY: "设计落地关键在节点、材料和项目配合节奏，不只是后端安装。",
         SYSTEM_COMPARE: "这不是冷冰冰的客户表，更像帮销售把资料、节点和下一步动作理顺。",
         UNCLEAR: "先把您当前在做什么类型项目问清楚，建议会更贴近。"
       },
       warnings: {
         PRICE: "不要脱离项目体量直接报价。",
-        COOPERATION: "不要把设计师沟通带成招商口径。",
+        COOPERATION: "不要把意向客户沟通带成合作口径。",
         CASE: "不要只发图，记得追问项目类型。",
         DELIVERY: "不要直接承诺所有工艺都能做，先看图纸。",
         SYSTEM_COMPARE: "不要把系统说成自动化设计工具。",
@@ -396,12 +396,12 @@ function getCustomerTypeConfig(customerType: CustomerType): CustomerTypeConfig {
   if (customerType === "FACTORY_CLIENT") {
     return {
       materialTitles: {
-        PRICE: ["业务增长中台合作建议", "整木企业增长诊断表"],
-        COOPERATION: ["业务增长中台合作建议", "品牌增信方案"],
-        CASE: ["品牌增信方案", "业务增长中台合作建议"],
-        DELIVERY: ["企业微信承接自查表", "整木企业增长诊断表"],
-        SYSTEM_COMPARE: ["业务增长中台合作建议", "企业微信承接自查表", "整木企业增长诊断表"],
-        UNCLEAR: ["整木企业增长诊断表", "企业微信承接自查表"]
+        PRICE: ["销售协作工作台合作建议", "客户增长诊断表"],
+        COOPERATION: ["销售协作工作台合作建议", "信任建设方案"],
+        CASE: ["信任建设方案", "销售协作工作台合作建议"],
+        DELIVERY: ["内部提醒承接自查表", "客户增长诊断表"],
+        SYSTEM_COMPARE: ["销售协作工作台合作建议", "内部提醒承接自查表", "客户增长诊断表"],
+        UNCLEAR: ["客户增长诊断表", "内部提醒承接自查表"]
       },
       nextActions: {
         PRICE: "判断当前卡在获客、承接还是成交",
@@ -409,14 +409,14 @@ function getCustomerTypeConfig(customerType: CustomerType): CustomerTypeConfig {
         CASE: "确认更想看增长路径还是承接流程",
         DELIVERY: "确认当前企业微信承接和销售协作问题",
         SYSTEM_COMPARE: "先判断是 CRM、SCRM 还是承接流程的问题",
-        UNCLEAR: "先问现在最卡的是线索、承接还是老板看板"
+        UNCLEAR: "先问现在最卡的是线索、承接还是管理看板"
       },
       answers: {
         PRICE: "这类合作费用通常跟企业当前卡点、账号数量和服务深度一起看，不适合先报一个死价。",
-        COOPERATION: "如果要合作，我们更看重先把获客、承接、跟进和老板看板这条线跑清楚。",
+        COOPERATION: "如果要合作，我们更看重先把获客、承接、跟进和管理看板这条线跑清楚。",
         CASE: "案例可以给您看，但更重要的是先判断您现在卡在获客、承接还是成交。",
-        DELIVERY: "这类系统能不能用起来，关键在企微承接和销售跟进有没有接上，不只是把后台搭出来。",
-        SYSTEM_COMPARE: "它不是 AI 客服，也不是单纯 CRM，更像把客户来源、承接、跟进和老板看板串起来。",
+        DELIVERY: "这类系统能不能用起来，关键在内部提醒承接和销售跟进有没有接上，不只是把后台搭出来。",
+        SYSTEM_COMPARE: "它不是 AI 客服，也不是单纯 CRM，更像把客户来源、承接、跟进和管理看板串起来。",
         UNCLEAR: "这个问题可以先不急着下结论，先把您现在最卡的环节摸清楚。"
       },
       warnings: {
@@ -433,26 +433,26 @@ function getCustomerTypeConfig(customerType: CustomerType): CustomerTypeConfig {
   if (customerType === "PLATFORM_FACTORY_OWNER") {
     return {
       materialTitles: {
-        PRICE: ["整木企业增长诊断表", "企业微信业务增长中台说明"],
-        COOPERATION: ["整木企业品牌增信方案", "整木高定产业增长联盟说明"],
-        CASE: ["整木企业品牌增信方案", "整木企业增长诊断表"],
-        DELIVERY: ["企业微信业务增长中台说明", "整木企业增长诊断表"],
-        SYSTEM_COMPARE: ["企业微信业务增长中台说明", "GEO 推广服务说明"],
-        UNCLEAR: ["整木企业增长诊断表", "整木企业品牌增信方案"]
+        PRICE: ["客户增长诊断表", "客户跟进与销售协作工作台说明"],
+        COOPERATION: ["客户信任建设方案", "销售协作伙伴计划说明"],
+        CASE: ["客户信任建设方案", "客户增长诊断表"],
+        DELIVERY: ["客户跟进与销售协作工作台说明", "客户增长诊断表"],
+        SYSTEM_COMPARE: ["客户跟进与销售协作工作台说明", "增长推广服务说明"],
+        UNCLEAR: ["客户增长诊断表", "客户信任建设方案"]
       },
       nextActions: {
         PRICE: "先判断企业当前卡在获客、承接还是成交",
         COOPERATION: "安排一次增长诊断沟通",
-        CASE: "确认更想看品牌增信还是增长协同案例",
-        DELIVERY: "先问清企微承接和销售协作现状",
-        SYSTEM_COMPARE: "先判断更想解决 GEO、企微承接还是老板看板",
+        CASE: "确认更想看信任建设还是增长协同案例",
+        DELIVERY: "先问清内部提醒承接和销售协作现状",
+        SYSTEM_COMPARE: "先判断更想解决增长推广、内部提醒承接还是管理看板",
         UNCLEAR: "先追问企业当前最卡的业务环节"
       },
       answers: {
         PRICE: "这类合作通常要先看企业现在卡在哪个环节，再判断适合的投入和节奏。",
-        COOPERATION: "如果要推进合作，我们会先把获客、承接、跟进和老板看板这条线看清楚。",
+        COOPERATION: "如果要推进合作，我们会先把获客、承接、跟进和管理看板这条线看清楚。",
         CASE: "案例可以先给您看，但更重要的是先判断您现在最想补的是品牌信任还是转化承接。",
-        DELIVERY: "能不能用起来，关键不只是搭后台，而是企微承接、销售动作和老板视角有没有接上。",
+        DELIVERY: "能不能用起来，关键不只是搭后台，而是内部提醒承接、销售动作和老板视角有没有接上。",
         SYSTEM_COMPARE: "它不是 AI 客服，也不是普通代运营，重点是把增长过程和销售推进跑清楚。",
         UNCLEAR: "这个问题先不急着一句说满，先把您现在的真实卡点摸清楚会更准。"
       },
@@ -470,12 +470,12 @@ function getCustomerTypeConfig(customerType: CustomerType): CustomerTypeConfig {
   if (customerType === "PLATFORM_MEMBERSHIP_CLIENT") {
     return {
       materialTitles: {
-        PRICE: ["整木网会员服务说明", "会员权益说明"],
-        COOPERATION: ["整木网会员服务说明", "整木网行业增信价值说明"],
-        CASE: ["整木网行业增信价值说明", "基础增信服务清单"],
+        PRICE: ["MarketClaw会员服务说明", "会员权益说明"],
+        COOPERATION: ["MarketClaw会员服务说明", "MarketClaw行业增信价值说明"],
+        CASE: ["MarketClaw行业增信价值说明", "基础增信服务清单"],
         DELIVERY: ["会员权益说明", "声望增长服务清单"],
-        SYSTEM_COMPARE: ["整木网会员服务说明", "整木网行业增信价值说明"],
-        UNCLEAR: ["整木网会员服务说明", "会员权益说明"]
+        SYSTEM_COMPARE: ["MarketClaw会员服务说明", "MarketClaw行业增信价值说明"],
+        UNCLEAR: ["MarketClaw会员服务说明", "会员权益说明"]
       },
       nextActions: {
         PRICE: "先判断更适合基础增信、声望增长还是高阶服务",
@@ -507,26 +507,26 @@ function getCustomerTypeConfig(customerType: CustomerType): CustomerTypeConfig {
   if (customerType === "PLATFORM_GEO_AI_CLIENT") {
     return {
       materialTitles: {
-        PRICE: ["GEO 推广服务说明", "整木企业 AI 搜索可见性自查表"],
-        COOPERATION: ["GEO 推广服务说明", "AI 时代品牌增信方案"],
-        CASE: ["AI 时代品牌增信方案", "关键词与内容底座建设说明"],
-        DELIVERY: ["整木企业 AI 搜索可见性自查表", "关键词与内容底座建设说明"],
-        SYSTEM_COMPARE: ["GEO 推广服务说明", "AI 时代品牌增信方案"],
-        UNCLEAR: ["整木企业 AI 搜索可见性自查表", "GEO 推广服务说明"]
+        PRICE: ["增长推广服务说明", "客户增长可见性自查表"],
+        COOPERATION: ["增长推广服务说明", "AI 时代信任建设方案"],
+        CASE: ["AI 时代信任建设方案", "关键词与内容底座建设说明"],
+        DELIVERY: ["客户增长可见性自查表", "关键词与内容底座建设说明"],
+        SYSTEM_COMPARE: ["增长推广服务说明", "AI 时代信任建设方案"],
+        UNCLEAR: ["客户增长可见性自查表", "增长推广服务说明"]
       },
       nextActions: {
         PRICE: "先做一次 AI 可见性诊断",
-        COOPERATION: "梳理品牌关键词并判断是否启动 GEO 服务",
+        COOPERATION: "梳理品牌关键词并判断是否启动增长推广服务",
         CASE: "确认更关心收录、推荐还是品牌信任",
         DELIVERY: "先判断内容底座、关键词还是品牌资料在卡点",
-        SYSTEM_COMPARE: "先讲清 GEO 和 SEO、代运营的边界",
+        SYSTEM_COMPARE: "先讲清增长推广和 SEO、代运营的边界",
         UNCLEAR: "先问当前最想提升哪类搜索可见性"
       },
       answers: {
-        PRICE: "GEO 这类服务通常要先看品牌关键词、内容底座和当前可见性，再判断投入更准确。",
-        COOPERATION: "如果要推进，通常先做一轮可见性诊断，再看适不适合直接启动 GEO。",
+        PRICE: "增长推广这类服务通常要先看品牌关键词、内容底座和当前可见性，再判断投入更准确。",
+        COOPERATION: "如果要推进，通常先做一轮可见性诊断，再看适不适合直接启动增长推广。",
         CASE: "这块不只是看有没有案例，更要先判断您现在是想要收录、推荐还是品牌信任提升。",
-        DELIVERY: "GEO 能不能跑起来，关键在关键词、内容底座和品牌资料是否先准备到位。",
+        DELIVERY: "增长推广能不能跑起来，关键在关键词、内容底座和品牌资料是否先准备到位。",
         SYSTEM_COMPARE: "它和传统 SEO、代运营不完全一样，更偏 AI 搜索时代的可见性和品牌信任建设。",
         UNCLEAR: "这个问题可以先不急着展开，先把您想解决的搜索场景说清楚。"
       },
@@ -534,7 +534,7 @@ function getCustomerTypeConfig(customerType: CustomerType): CustomerTypeConfig {
         PRICE: "不要承诺固定周期见效。",
         COOPERATION: "不要一上来承诺结果，先诊断。",
         CASE: "不要只讲案例，记得问关键词。",
-        DELIVERY: "不要把 GEO 说成一次性动作。",
+        DELIVERY: "不要把增长推广说成一次性动作。",
         SYSTEM_COMPARE: "不要混同成普通 SEO 套餐。",
         UNCLEAR: "先问搜索场景和品牌现状。"
       }
@@ -581,12 +581,12 @@ function getCustomerTypeConfig(customerType: CustomerType): CustomerTypeConfig {
   if (customerType === "PLATFORM_EVENT_RESOURCE_CLIENT") {
     return {
       materialTitles: {
-        PRICE: ["乌镇设计周合作说明", "品牌露出权益说明"],
-        COOPERATION: ["乌镇设计周合作说明", "行业峰会资源说明"],
+        PRICE: ["活动合作说明", "品牌露出权益说明"],
+        COOPERATION: ["活动合作说明", "行业峰会资源说明"],
         CASE: ["榜单与趋势发布说明", "品牌露出权益说明"],
         DELIVERY: ["行业峰会资源说明", "品牌露出权益说明"],
-        SYSTEM_COMPARE: ["乌镇设计周合作说明", "榜单与趋势发布说明"],
-        UNCLEAR: ["乌镇设计周合作说明", "行业峰会资源说明"]
+        SYSTEM_COMPARE: ["活动合作说明", "榜单与趋势发布说明"],
+        UNCLEAR: ["活动合作说明", "行业峰会资源说明"]
       },
       nextActions: {
         PRICE: "判断更适合活动露出、峰会合作还是榜单发布",
@@ -599,7 +599,7 @@ function getCustomerTypeConfig(customerType: CustomerType): CustomerTypeConfig {
       answers: {
         PRICE: "活动资源这块不是只看一个价格，更要看您现在更需要露出、背书还是资源链接。",
         COOPERATION: "如果要推进活动合作，通常先把适合的资源位和沟通节奏定清楚。",
-        CASE: "这块可以先给您看乌镇、峰会和榜单资源，再判断哪种更适合您当前目标。",
+        CASE: "这块可以先给您看活动、峰会和榜单资源，再判断哪种更适合您当前目标。",
         DELIVERY: "活动合作能不能发挥价值，关键要看节点、权益和后续承接有没有一起设计。",
         SYSTEM_COMPARE: "它和普通广告投放不一样，更偏行业影响力、资源对接和品牌露出路径。",
         UNCLEAR: "先把您最想获得的活动价值点说清楚，我再给您更贴近的建议。"
@@ -762,13 +762,13 @@ function buildNextQuestion(customerType: CustomerType, questionType: QuestionTyp
   }
 
   if (customerType === "FACTORY_CLIENT") {
-    if (questionType === "SYSTEM_COMPARE") return "现在更卡在线索承接、销售跟进还是老板看板";
+    if (questionType === "SYSTEM_COMPARE") return "现在更卡在线索承接、销售跟进还是管理看板";
     if (questionType === "PRICE") return "当前主要卡点和服务深度";
     return "您现在最卡在获客、承接还是成交";
   }
 
   if (customerType === "PLATFORM_FACTORY_OWNER") {
-    if (questionType === "SYSTEM_COMPARE") return "您现在更卡在 GEO、企微承接还是老板看板";
+    if (questionType === "SYSTEM_COMPARE") return "您现在更卡在增长推广、内部提醒承接还是管理看板";
     if (questionType === "PRICE") return "当前最卡的增长环节和预期投入";
     return "您现在最想优先补的是获客、增信还是承接";
   }
@@ -779,7 +779,7 @@ function buildNextQuestion(customerType: CustomerType, questionType: QuestionTyp
   }
 
   if (customerType === "PLATFORM_GEO_AI_CLIENT") {
-    if (questionType === "SYSTEM_COMPARE") return "您是在比较 GEO、SEO 还是代运营";
+    if (questionType === "SYSTEM_COMPARE") return "您是在比较增长推广、SEO 还是代运营";
     if (questionType === "PRICE") return "品牌关键词、内容底座和当前可见性情况";
     return "您现在最想提升哪一类 AI 搜索可见性";
   }
@@ -872,7 +872,7 @@ function buildSuggestedTags(lead: LeadContext, customerQuestion: string): Sugges
       break;
     case "COOPERATION":
       addTag("合作意向", "需求标签", "客户正在了解合作方向，后续需要继续判断合作深度。", "HIGH");
-      addTag("招商意向", "业务标签", "客户问题涉及加盟、代理或区域合作，适合按招商路径推进。", "HIGH");
+      addTag("合作意向", "业务标签", "客户问题涉及加盟、代理或区域合作，适合按合作路径推进。", "HIGH");
       addTag("政策关注", "业务标签", "客户正在关注政策、利润或扶持条件，建议补充政策资料。", "MEDIUM");
       break;
     case "CASE":
@@ -884,19 +884,19 @@ function buildSuggestedTags(lead: LeadContext, customerQuestion: string): Sugges
       addTag("售后关注", "需求标签", "客户问题涉及售后或服务保障，建议补充售后说明。", "MEDIUM");
       addTag("风险顾虑", "风险标签", "客户对落地风险仍有顾虑，需要销售谨慎承诺。", "MEDIUM");
       break;
-    case "GEO_AI":
-      addTag("GEO意向", "业务标签", "客户正在关注 GEO、搜索可见性或 AI 搜索入口，适合引导做一次诊断。", "HIGH");
+    case "GROWTH_PROMOTION":
+      addTag("增长推广意向", "业务标签", "客户正在关注增长推广、搜索可见性或 AI 搜索入口，适合引导做一次诊断。", "HIGH");
       addTag("AI推广关注", "需求标签", "客户在问 AI 推广或推荐曝光，适合补充推广思路说明。", "HIGH");
       addTag("待诊断", "阶段标签", "该类问题更适合先做现状诊断，再决定下一步合作方向。", "MEDIUM");
       break;
     case "MEMBERSHIP":
       addTag("会员意向", "业务标签", "客户正在了解会员或加入方式，适合补充会员服务说明。", "HIGH");
-      addTag("品牌增信关注", "需求标签", "客户关心背书、增信或联盟价值，适合发送增信相关资料。", "MEDIUM");
+      addTag("信任建设关注", "需求标签", "客户关心背书、增信或联盟价值，适合发送增信相关资料。", "MEDIUM");
       addTag("联盟合作意向", "业务标签", "客户对联盟或加入合作有兴趣，适合继续判断合作边界。", "MEDIUM");
       break;
     case "EVENT_RESOURCE":
       addTag("活动资源意向", "业务标签", "客户对活动资源和行业露出有兴趣，适合补充活动权益说明。", "HIGH");
-      addTag("乌镇资源关注", "需求标签", "客户明确提到乌镇或峰会资源，适合补充对应资源内容。", "HIGH");
+      addTag("活动资源关注", "需求标签", "客户明确提到活动或峰会资源，适合补充对应资源内容。", "HIGH");
       addTag("品牌露出关注", "需求标签", "客户正在评估榜单、白皮书或奖项露出的价值。", "MEDIUM");
       break;
     case "TRAINING":
@@ -916,44 +916,44 @@ function buildSuggestedTags(lead: LeadContext, customerQuestion: string): Sugges
 
   switch (lead.customerType) {
     case "OWNER_CLIENT":
-      addTag("业主客户", "客户类型标签", "当前客户类型为业主客户，后续建议围绕效果、价格和交付推进。", "HIGH");
-      addTag("效果关注", "需求标签", "业主客户普遍会关注案例效果和落地呈现，适合优先补充案例。", "MEDIUM");
-      addTag("交付关注", "需求标签", "业主客户通常会问交付与安装保障，建议结合节点继续解释。", "MEDIUM");
-      addTag("售后关注", "需求标签", "业主路径需要强调售后与安心感，适合提前铺垫保障说明。", "MEDIUM");
+      addTag("潜在客户", "客户类型标签", "当前客户类型为潜在客户，后续建议围绕效果、价格和交付推进。", "HIGH");
+      addTag("效果关注", "需求标签", "潜在客户普遍会关注案例效果和落地呈现，适合优先补充案例。", "MEDIUM");
+      addTag("交付关注", "需求标签", "潜在客户通常会问交付与安装保障，建议结合节点继续解释。", "MEDIUM");
+      addTag("售后关注", "需求标签", "潜在客户路径需要强调售后与安心感，适合提前铺垫保障说明。", "MEDIUM");
       break;
     case "DEALER_CLIENT":
-      addTag("经销商客户", "客户类型标签", "当前客户类型为经销商客户，建议按招商与合作判断路径推进。", "HIGH");
-      addTag("合作意向", "需求标签", "经销商路径核心是合作判断，适合继续收口合作条件。", "MEDIUM");
-      addTag("招商意向", "业务标签", "经销商客户适合进入招商沟通或到厂考察路径。", "HIGH");
-      addTag("政策关注", "业务标签", "经销商客户通常会重点看政策、利润和支持体系。", "MEDIUM");
+      addTag("合作伙伴", "客户类型标签", "当前客户类型为合作伙伴，建议按合作条件判断路径推进。", "HIGH");
+      addTag("合作意向", "需求标签", "合作伙伴路径核心是合作判断，适合继续收口合作条件。", "MEDIUM");
+      addTag("合作意向", "业务标签", "合作伙伴适合进入合作沟通或现场评估路径。", "HIGH");
+      addTag("政策关注", "业务标签", "合作伙伴通常会重点看政策、利润和支持体系。", "MEDIUM");
       break;
     case "DESIGNER_CLIENT":
-      addTag("设计师客户", "客户类型标签", "当前客户类型为设计师客户，后续建议围绕案例、工艺和项目配合沟通。", "HIGH");
-      addTag("案例关注", "需求标签", "设计师更容易通过案例和质感建立兴趣。", "MEDIUM");
-      addTag("工艺关注", "需求标签", "设计师路径需要更早补充工艺与材料节点。", "MEDIUM");
-      addTag("项目合作意向", "业务标签", "设计师客户更适合按项目合作入口继续推进。", "MEDIUM");
+      addTag("意向客户", "客户类型标签", "当前客户类型为意向客户，后续建议围绕案例、工艺和项目配合沟通。", "HIGH");
+      addTag("案例关注", "需求标签", "意向客户更容易通过案例和质感建立兴趣。", "MEDIUM");
+      addTag("工艺关注", "需求标签", "意向客户路径需要更早补充工艺与材料节点。", "MEDIUM");
+      addTag("项目合作意向", "业务标签", "意向客户更适合按项目合作入口继续推进。", "MEDIUM");
       break;
     case "FACTORY_CLIENT":
-      addTag("工厂客户", "客户类型标签", "当前客户类型为工厂客户，更适合围绕增长系统与承接问题推进。", "HIGH");
-      addTag("增长诊断意向", "业务标签", "工厂客户更适合先做增长诊断，判断卡点所在。", "HIGH");
-      addTag("GEO意向", "业务标签", "工厂客户常关注推广和搜索可见性，适合引导到 GEO 诊断。", "MEDIUM");
-      addTag("品牌增信关注", "需求标签", "工厂客户通常会关注品牌信任与增信路径。", "MEDIUM");
-      addTag("业务增长中台意向", "业务标签", "工厂客户与增长中台合作路径高度相关，适合继续做系统化判断。", "MEDIUM");
+      addTag("重点客户", "客户类型标签", "当前客户类型为重点客户，更适合围绕增长系统与承接问题推进。", "HIGH");
+      addTag("增长诊断意向", "业务标签", "重点客户更适合先做增长诊断，判断卡点所在。", "HIGH");
+      addTag("增长推广意向", "业务标签", "重点客户常关注推广和搜索可见性，适合引导到增长推广诊断。", "MEDIUM");
+      addTag("信任建设关注", "需求标签", "重点客户通常会关注品牌信任与增信路径。", "MEDIUM");
+      addTag("销售协作工作台意向", "业务标签", "重点客户与销售协作工作台合作路径高度相关，适合继续做系统化判断。", "MEDIUM");
       break;
     case "PLATFORM_FACTORY_OWNER":
-      addTag("整木工厂老板", "客户类型标签", "当前客户是整木网自用工作台里的工厂老板客户。", "HIGH");
+      addTag("重点客户", "客户类型标签", "当前客户是MarketClaw 平台工作台里的重点客户。", "HIGH");
       addTag("增长诊断意向", "业务标签", "适合先做增长诊断，判断获客、增信和承接卡点。", "HIGH");
-      addTag("品牌增信关注", "需求标签", "该类客户通常同时关注行业背书和品牌信任。", "MEDIUM");
-      addTag("业务增长中台意向", "业务标签", "适合继续引导到企微承接和老板看板能力。", "MEDIUM");
+      addTag("信任建设关注", "需求标签", "该类客户通常同时关注行业背书和品牌信任。", "MEDIUM");
+      addTag("销售协作工作台意向", "业务标签", "适合继续引导到内部提醒承接和管理看板能力。", "MEDIUM");
       break;
     case "PLATFORM_MEMBERSHIP_CLIENT":
       addTag("会员意向客户", "客户类型标签", "当前客户类型为会员意向客户，建议围绕会员权益和增信价值推进。", "HIGH");
       addTag("会员服务", "业务标签", "该类客户适合优先进入会员服务沟通。", "HIGH");
-      addTag("品牌增信关注", "需求标签", "会员意向客户通常会同时关注背书和增信。", "MEDIUM");
+      addTag("信任建设关注", "需求标签", "会员意向客户通常会同时关注背书和增信。", "MEDIUM");
       break;
     case "PLATFORM_GEO_AI_CLIENT":
-      addTag("GEO／AI 推广客户", "客户类型标签", "当前客户类型为 GEO／AI 推广客户。", "HIGH");
-      addTag("GEO意向", "业务标签", "该类客户适合先做 AI 搜索可见性诊断。", "HIGH");
+      addTag("增长推广客户", "客户类型标签", "当前客户类型为增长推广客户。", "HIGH");
+      addTag("增长推广意向", "业务标签", "该类客户适合先做 AI 搜索可见性诊断。", "HIGH");
       addTag("AI推广关注", "需求标签", "客户更容易继续追问推荐、收录和关键词。", "MEDIUM");
       break;
     case "PLATFORM_TRAINING_CLIENT":
@@ -962,8 +962,8 @@ function buildSuggestedTags(lead: LeadContext, customerQuestion: string): Sugges
       addTag("课程报名关注", "需求标签", "建议继续确认参训角色和报名节奏。", "MEDIUM");
       break;
     case "PLATFORM_EVENT_RESOURCE_CLIENT":
-      addTag("活动资源客户", "客户类型标签", "当前客户类型为活动／乌镇资源客户。", "HIGH");
-      addTag("乌镇资源关注", "需求标签", "适合继续围绕乌镇设计周和峰会资源推进。", "HIGH");
+      addTag("活动资源客户", "客户类型标签", "当前客户类型为活动／活动资源客户。", "HIGH");
+      addTag("活动资源关注", "需求标签", "适合继续围绕活动合作和峰会资源推进。", "HIGH");
       addTag("品牌露出关注", "需求标签", "活动客户往往同时关注行业露出和背书。", "MEDIUM");
       break;
     case "PLATFORM_SUPPLY_CHAIN_CLIENT":
@@ -992,11 +992,11 @@ function buildSuggestedTags(lead: LeadContext, customerQuestion: string): Sugges
       break;
     case "COOPERATION":
     case "INVESTMENT_JOIN":
-      addTag("合作意向", "需求标签", "当前需求类型已指向合作或招商，适合继续判断合作条件。", "MEDIUM");
-      addTag("招商意向", "业务标签", "当前需求与招商路径匹配，适合继续推进合作判断。", "MEDIUM");
+      addTag("合作意向", "需求标签", "当前需求类型已指向合作或合作，适合继续判断合作条件。", "MEDIUM");
+      addTag("合作意向", "业务标签", "当前需求与合作路径匹配，适合继续推进合作判断。", "MEDIUM");
       break;
     case "GROWTH_SYSTEM":
-      addTag("业务增长中台意向", "业务标签", "当前需求类型已指向增长系统，适合继续安排诊断或方案沟通。", "HIGH");
+      addTag("销售协作工作台意向", "业务标签", "当前需求类型已指向增长系统，适合继续安排诊断或方案沟通。", "HIGH");
       addTag("待诊断", "阶段标签", "增长系统类需求更适合先做现状诊断。", "MEDIUM");
       break;
     case "AFTER_SALES":

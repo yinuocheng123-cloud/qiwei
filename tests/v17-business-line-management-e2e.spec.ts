@@ -45,8 +45,8 @@ test.describe.serial("V1.7 业务线／产品管理", () => {
 
     await expect(page.getByRole("heading", { name: "业务线／产品管理" })).toBeVisible();
     await expect(businessLineCard(page, "会员服务")).toBeVisible();
-    await expect(businessLineCard(page, "GEO／AI 推广")).toBeVisible();
-    await expect(businessLineCard(page, "乌镇设计周")).toBeVisible();
+    await expect(businessLineCard(page, "增长推广")).toBeVisible();
+    await expect(businessLineCard(page, "活动合作")).toBeVisible();
 
     const createCard = page.locator("div.rounded-md.border.border-slate-200.bg-white").filter({
       has: page.getByRole("heading", { name: "新增业务线／产品" })
@@ -83,8 +83,8 @@ test.describe.serial("V1.7 业务线／产品管理", () => {
     await page.goto("/logout");
     await login(page, "boss@zhengmu.local");
     await page.goto("/app/zhengmu-demo/business-lines");
-    await expect(page.getByRole("heading", { name: "业主整木定制" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "整木工厂增长服务" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "潜在客户产品服务" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "重点客户增长服务" })).toBeVisible();
 
     await page.goto("/app/zhengmu-platform/business-lines");
     await expect(page).toHaveURL(/\/forbidden$/);
@@ -95,10 +95,10 @@ test.describe.serial("V1.7 业务线／产品管理", () => {
     await page.goto("/app/zhengmu-platform/leads/platform-lead-009");
 
     await expect(page.getByRole("heading", { name: "智能跟进助手" })).toBeVisible();
-    await generateSuggestions(page, "你们 GEO 服务怎么做，能不能先做一次诊断？");
+    await generateSuggestions(page, "你们 增长推广 服务怎么做，能不能先做一次诊断？");
 
     const panel = tagSuggestionPanel(page);
-    await expect(panel.getByText("GEO意向", { exact: true })).toBeVisible();
-    await expect(panel.getByText("GEO方案待发", { exact: true })).toBeVisible();
+    await expect(panel.getByText("增长推广意向", { exact: true })).toBeVisible();
+    await expect(panel.getByText("增长推广方案待发", { exact: true })).toBeVisible();
   });
 });

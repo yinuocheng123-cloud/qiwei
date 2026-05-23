@@ -22,12 +22,12 @@ test.describe.serial("V1.4.1 演示说明页", () => {
     await page.goto("/app/zhengmu-demo/demo-guide");
 
     await expect(page).toHaveURL(/\/app\/zhengmu-demo\/demo-guide$/);
-    await expect(page.getByRole("heading", { name: "整木行业演示说明" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "平台销售工作台演示说明" })).toBeVisible();
     await expect(page.getByText("推荐演示顺序")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "业主客户" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "经销商客户" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "设计师客户" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "工厂客户" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "潜在客户" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "合作伙伴" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "意向客户" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "重点客户" })).toBeVisible();
     await expect(page.getByText("第一步：看 dashboard")).toBeVisible();
     await expect(page.getByRole("link", { name: "演示说明" })).toBeVisible();
   });
@@ -37,7 +37,7 @@ test.describe.serial("V1.4.1 演示说明页", () => {
     await page.goto("/app/zhengmu-demo/demo-guide");
 
     await expect(page).toHaveURL(/\/app\/zhengmu-demo\/demo-guide$/);
-    await expect(page.getByRole("heading", { name: "整木行业演示说明" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "平台销售工作台演示说明" })).toBeVisible();
     await expect(page.getByText("销售视角")).toBeVisible();
   });
 

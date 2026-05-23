@@ -1,10 +1,10 @@
 /*
- * 文件说明：该文件为 V1.4 本地开发环境写入可演示的整木行业样板数据。
+ * 文件说明：该文件为 V1.4 本地开发环境写入可演示的通用销售样板数据。
  * 功能说明：创建平台管理员、两个租户、企业角色账号、四类客户策略、资料包、任务模板、线索、跟进记录和任务。
  *
  * 结构概览：
  *   第一部分：导入依赖与基础类型
- *   第二部分：整木行业策略、资料和模板数据
+ *   第二部分：通用销售策略、资料和模板数据
  *   第三部分：线索与任务样板数据
  *   第四部分：租户数据写入函数
  *   第五部分：主种子流程
@@ -159,172 +159,172 @@ function uniqueById(values: { id: string }[]) {
 const strategyTemplates: StrategyTemplate[] = [
   {
     customerType: "OWNER_CLIENT",
-    name: "业主客户转化策略",
+    name: "潜在客户跟进策略",
     painPoints: ["效果", "环保", "价格", "交付", "售后", "设计落地"],
-    firstMaterials: ["整木定制避坑清单", "真实案例图册", "交付流程说明", "环保与售后说明"],
-    welcomeScript: "您好，已收到您的整木定制需求。我们先发您真实案例和避坑清单，方便您快速判断风格、预算和落地节奏。",
+    firstMaterials: ["产品服务避坑清单", "成功案例", "交付流程说明", "环保与售后说明"],
+    welcomeScript: "您好，已收到您的产品服务需求。我们先发您真实案例和避坑清单，方便您快速判断风格、预算和落地节奏。",
     day3Script: "您目前更关注整体效果、环保材料还是预算控制？我可以按您的房屋情况先给一版建议。",
-    day7Script: "如果方便发一下户型、面积或装修阶段，我们可以进一步判断更适合的整木方案和交付节奏。",
+    day7Script: "如果方便发一下户型、面积或装修阶段，我们可以进一步判断更适合的客户增长方案和交付节奏。",
     day15Script: "前面发您的案例和说明是否有帮助？如果近期准备推进装修，可以先预约一次初步方案沟通。",
     manualTriggerRules: ["发送户型图", "询问价格", "咨询环保", "关注交付周期", "预约到店沟通"],
     recommendedNextAction: "预约初步方案",
-    recommendedPrivateContent: "别墅整木案例、环保说明、交付节点记录、售后服务说明"
+    recommendedPrivateContent: "别墅客户增长案例、环保说明、交付节点记录、售后服务说明"
   },
   {
     customerType: "DEALER_CLIENT",
-    name: "经销商客户转化策略",
+    name: "合作伙伴跟进策略",
     painPoints: ["利润", "政策", "区域保护", "总部支持", "样板门店", "风险"],
-    firstMaterials: ["招商手册", "产品体系说明", "合作政策说明", "样板门店案例", "到厂考察邀请"],
-    welcomeScript: "您好，感谢关注整木合作。先发您招商手册和产品体系，您可以先看利润空间、区域政策和总部支持方式。",
+    firstMaterials: ["合作方案", "产品体系说明", "合作政策说明", "样板门店案例", "现场评估邀请"],
+    welcomeScript: "您好，感谢关注客户增长合作。先发您合作方案和产品体系，您可以先看利润空间、区域政策和总部支持方式。",
     day3Script: "您现在更关注利润模型、区域保护，还是样板门店和落地支持？我可以按您所在城市给您说明。",
-    day7Script: "如果您方便提供城市和门店情况，我们可以进一步判断合作政策、样板支持和到厂考察安排。",
-    day15Script: "近期如果还在评估项目，可以先安排一次招商负责人沟通，把政策和投入边界讲清楚。",
+    day7Script: "如果您方便提供城市和门店情况，我们可以进一步判断合作政策、样板支持和现场评估安排。",
+    day15Script: "近期如果还在评估项目，可以先安排一次合作负责人沟通，把政策和投入边界讲清楚。",
     manualTriggerRules: ["询问代理政策", "提供城市信息", "了解门店情况", "关注利润模型", "预约到厂"],
-    recommendedNextAction: "安排招商负责人沟通",
-    recommendedPrivateContent: "样板门店案例、合作政策说明、经销商答疑纪要"
+    recommendedNextAction: "安排合作负责人沟通",
+    recommendedPrivateContent: "样板门店案例、合作政策说明、合作伙伴答疑纪要"
   },
   {
     customerType: "DESIGNER_CLIENT",
-    name: "设计师客户转化策略",
+    name: "意向客户跟进策略",
     painPoints: ["审美", "落地", "工艺", "材料", "案例", "项目配合"],
-    firstMaterials: ["高定案例图册", "工艺节点说明", "材料样册", "设计师合作机制", "项目配合流程"],
-    welcomeScript: "您好，已收到您的设计合作需求。先发您高定案例、工艺节点和材料样册，方便您判断审美方向和落地配合。",
+    firstMaterials: ["成功案例", "工艺节点说明", "材料样册", "方案协作机制", "项目配合流程"],
+    welcomeScript: "您好，已收到您的设计合作需求。先发您成功案例、工艺节点和材料样册，方便您判断审美方向和落地配合。",
     day3Script: "您近期主要在做哪类项目？如果有图纸或风格方向，我们可以先给一版材料与工艺建议。",
     day7Script: "我们可以配合报价、深化、材料确认和交付节点，您更希望先从哪一块开始沟通？",
     day15Script: "如果近期有项目在推进，可以先建立项目群或项目协作沟通，避免后期工艺和报价来回反复。",
     manualTriggerRules: ["发送图纸", "询问工艺", "想看案例", "询问材料", "需要项目报价配合"],
     recommendedNextAction: "建立项目合作沟通",
-    recommendedPrivateContent: "高定案例图册、材料样册、设计师合作案例、工艺落地说明"
+    recommendedPrivateContent: "成功案例、材料样册、方案协作案例、工艺落地说明"
   },
   {
     customerType: "FACTORY_CLIENT",
-    name: "工厂客户增长策略",
-    painPoints: ["获客", "招商", "品牌", "成交", "企业微信", "AI推广", "GEO"],
-    firstMaterials: ["企业微信承接自查表", "整木企业增长诊断表", "品牌增信方案", "GEO推广说明", "业务增长中台合作建议"],
-    welcomeScript: "您好，已收到您的增长咨询。先发您企业微信承接自查表和增长诊断表，方便判断当前获客、承接和成交的主要断点。",
-    day3Script: "您现在更卡在获客、招商、承接还是老板看板？我可以先按现状给您一个诊断方向。",
-    day7Script: "如果方便说一下企业规模和主要渠道，我们可以判断先做企微承接、品牌增信，还是先做 GEO 推广更合适。",
+    name: "重点客户增长策略",
+    painPoints: ["获客", "合作", "品牌", "成交", "企业微信", "AI推广", "增长推广"],
+    firstMaterials: ["内部提醒承接自查表", "客户增长诊断表", "信任建设方案", "增长推广说明", "销售协作工作台合作建议"],
+    welcomeScript: "您好，已收到您的增长咨询。先发您内部提醒承接自查表和增长诊断表，方便判断当前获客、承接和成交的主要断点。",
+    day3Script: "您现在更卡在获客、合作、承接还是管理看板？我可以先按现状给您一个诊断方向。",
+    day7Script: "如果方便说一下企业规模和主要渠道，我们可以判断先做内部提醒承接、信任建设，还是先做增长推广更合适。",
     day15Script: "近期如果准备系统化推进增长，建议安排一次深度诊断，把渠道、企微、销售跟进和看板串起来。",
     manualTriggerRules: ["询问合作费用", "介绍企业规模", "希望做推广", "想看企微方案", "安排老板沟通"],
     recommendedNextAction: "安排深度诊断",
-    recommendedPrivateContent: "增长中台案例、企微承接流程、品牌增信方案、GEO 推广思路"
+    recommendedPrivateContent: "销售协作工作台案例、内部提醒承接流程、信任建设方案、增长推广思路"
   }
 ];
 
 const materialTemplates: MaterialTemplate[] = [
-  { customerType: "OWNER_CLIENT", title: "整木定制避坑清单", description: "帮助业主快速排查预算、工艺和交付常见风险。", url: "https://example.com/owner-avoid-pitfalls" },
-  { customerType: "OWNER_CLIENT", title: "真实案例图册", description: "展示别墅、大平层和整木空间的真实落地案例。", url: "https://example.com/owner-casebook" },
+  { customerType: "OWNER_CLIENT", title: "产品服务避坑清单", description: "帮助潜在客户快速排查预算、工艺和交付常见风险。", url: "https://example.com/owner-avoid-pitfalls" },
+  { customerType: "OWNER_CLIENT", title: "成功案例", description: "展示别墅、大平层和产品服务场景的真实落地案例。", url: "https://example.com/owner-casebook" },
   { customerType: "OWNER_CLIENT", title: "交付流程说明", description: "说明从测量、深化、生产到安装交付的完整流程。", url: "https://example.com/owner-delivery-flow" },
-  { customerType: "OWNER_CLIENT", title: "环保与售后说明", description: "适合业主客户重点了解环保、售后和材料边界。", url: "https://example.com/owner-service" },
-  { customerType: "DEALER_CLIENT", title: "招商手册", description: "帮助经销商快速了解品牌定位、利润模型和合作方式。", url: "https://example.com/dealer-investment-book" },
-  { customerType: "DEALER_CLIENT", title: "产品体系说明", description: "覆盖整木产品线、客单结构和样板空间组合。", url: "https://example.com/dealer-product-system" },
+  { customerType: "OWNER_CLIENT", title: "环保与售后说明", description: "适合潜在客户重点了解环保、售后和材料边界。", url: "https://example.com/owner-service" },
+  { customerType: "DEALER_CLIENT", title: "合作方案", description: "帮助合作伙伴快速了解品牌定位、利润模型和合作方式。", url: "https://example.com/dealer-investment-book" },
+  { customerType: "DEALER_CLIENT", title: "产品体系说明", description: "覆盖产品服务线、客单结构和样板空间组合。", url: "https://example.com/dealer-product-system" },
   { customerType: "DEALER_CLIENT", title: "合作政策说明", description: "讲清区域保护、返利和总部支持方式。", url: "https://example.com/dealer-policy" },
-  { customerType: "DEALER_CLIENT", title: "样板门店案例", description: "展示门店落地效果和招商转化案例。", url: "https://example.com/dealer-showroom" },
-  { customerType: "DEALER_CLIENT", title: "到厂考察邀请", description: "适合推动经销商客户进入考察和政策确认阶段。", url: "https://example.com/dealer-factory-visit" },
-  { customerType: "DESIGNER_CLIENT", title: "高定案例图册", description: "适合设计师筛选审美方向和风格落地样本。", url: "https://example.com/designer-casebook" },
-  { customerType: "DESIGNER_CLIENT", title: "工艺节点说明", description: "帮助设计师确认工艺可行性和施工衔接。", url: "https://example.com/designer-craft" },
-  { customerType: "DESIGNER_CLIENT", title: "材料样册", description: "展示常用整木材料、饰面和五金搭配。", url: "https://example.com/designer-material-swatch" },
-  { customerType: "DESIGNER_CLIENT", title: "设计师合作机制", description: "说明项目合作、报价支持和设计协同方式。", url: "https://example.com/designer-cooperation" },
-  { customerType: "DESIGNER_CLIENT", title: "项目配合流程", description: "帮助设计师判断从深化到交付的协作节奏。", url: "https://example.com/designer-project-flow" },
-  { customerType: "FACTORY_CLIENT", title: "企业微信承接自查表", description: "帮助工厂客户排查企微承接和线索分配断点。", url: "https://example.com/factory-wecom-check" },
-  { customerType: "FACTORY_CLIENT", title: "整木企业增长诊断表", description: "用于梳理获客、招商、内容和成交的系统问题。", url: "https://example.com/factory-growth-diagnosis" },
-  { customerType: "FACTORY_CLIENT", title: "品牌增信方案", description: "帮助工厂客户理解老板 IP、品牌内容和增信路径。", url: "https://example.com/factory-brand-trust" },
-  { customerType: "FACTORY_CLIENT", title: "GEO 推广说明", description: "介绍本地搜索、地图和内容分发的增长方式。", url: "https://example.com/factory-geo" },
-  { customerType: "FACTORY_CLIENT", title: "业务增长中台合作建议", description: "适合工厂客户评估企微承接和老板看板合作。", url: "https://example.com/factory-growth-hub" }
+  { customerType: "DEALER_CLIENT", title: "样板门店案例", description: "展示门店落地效果和合作转化案例。", url: "https://example.com/dealer-showroom" },
+  { customerType: "DEALER_CLIENT", title: "现场评估邀请", description: "适合推动合作伙伴进入考察和政策确认阶段。", url: "https://example.com/dealer-factory-visit" },
+  { customerType: "DESIGNER_CLIENT", title: "成功案例", description: "适合意向客户筛选审美方向和风格落地样本。", url: "https://example.com/designer-casebook" },
+  { customerType: "DESIGNER_CLIENT", title: "工艺节点说明", description: "帮助意向客户确认工艺可行性和施工衔接。", url: "https://example.com/designer-craft" },
+  { customerType: "DESIGNER_CLIENT", title: "材料样册", description: "展示常用产品资料、饰面和五金搭配。", url: "https://example.com/designer-material-swatch" },
+  { customerType: "DESIGNER_CLIENT", title: "方案协作机制", description: "说明项目合作、报价支持和设计协同方式。", url: "https://example.com/designer-cooperation" },
+  { customerType: "DESIGNER_CLIENT", title: "项目配合流程", description: "帮助意向客户判断从深化到交付的协作节奏。", url: "https://example.com/designer-project-flow" },
+  { customerType: "FACTORY_CLIENT", title: "内部提醒承接自查表", description: "帮助重点客户排查内部提醒承接和线索分配断点。", url: "https://example.com/factory-wecom-check" },
+  { customerType: "FACTORY_CLIENT", title: "客户增长诊断表", description: "用于梳理获客、合作、内容和成交的系统问题。", url: "https://example.com/factory-growth-diagnosis" },
+  { customerType: "FACTORY_CLIENT", title: "信任建设方案", description: "帮助重点客户理解老板 IP、品牌内容和增信路径。", url: "https://example.com/factory-brand-trust" },
+  { customerType: "FACTORY_CLIENT", title: "增长推广说明", description: "介绍本地搜索、地图和内容分发的增长方式。", url: "https://example.com/factory-geo" },
+  { customerType: "FACTORY_CLIENT", title: "销售协作工作台合作建议", description: "适合重点客户评估内部提醒承接和管理看板合作。", url: "https://example.com/factory-growth-hub" }
 ];
 
 const taskTemplateSeeds: TaskTemplateSeed[] = [
-  { customerType: "OWNER_CLIENT", name: "首次沟通", title: "首次沟通业主客户", description: "确认房屋面积、装修阶段、预算和风格偏好。", type: "FIRST_FOLLOW", priority: "HIGH", defaultDueDays: 1 },
-  { customerType: "OWNER_CLIENT", name: "发送案例图册", title: "发送业主案例图册", description: "发送真实案例图册和避坑清单，建立初步信任。", type: "SEND_MATERIAL", priority: "NORMAL", defaultDueDays: 1 },
+  { customerType: "OWNER_CLIENT", name: "首次沟通", title: "首次沟通潜在客户", description: "确认房屋面积、装修阶段、预算和风格偏好。", type: "FIRST_FOLLOW", priority: "HIGH", defaultDueDays: 1 },
+  { customerType: "OWNER_CLIENT", name: "发送成功案例", title: "发送潜在客户成功案例", description: "发送成功案例和避坑清单，建立初步信任。", type: "SEND_MATERIAL", priority: "NORMAL", defaultDueDays: 1 },
   { customerType: "OWNER_CLIENT", name: "了解房屋面积和装修阶段", title: "了解房屋面积和装修阶段", description: "收集户型、面积和当前装修进度。", type: "PHONE_CALL", priority: "NORMAL", defaultDueDays: 2 },
   { customerType: "OWNER_CLIENT", name: "预约初步方案", title: "预约初步方案沟通", description: "推动客户进入一对一方案沟通。", type: "PHONE_CALL", priority: "HIGH", defaultDueDays: 3 },
-  { customerType: "OWNER_CLIENT", name: "报价后跟进", title: "报价后跟进业主客户", description: "跟进业主对报价、环保和交付的反馈。", type: "QUOTE_FOLLOW", priority: "HIGH", defaultDueDays: 2, stage: "QUOTED" },
-  { customerType: "OWNER_CLIENT", name: "15 天沉默激活", title: "15 天沉默激活业主客户", description: "对沉默客户重新激活并引导二次沟通。", type: "REACTIVATE", priority: "NORMAL", defaultDueDays: 0, stage: "TO_REACTIVATE" },
-  { customerType: "DEALER_CLIENT", name: "发送招商资料", title: "发送招商资料包", description: "发送招商手册、产品体系和合作政策。", type: "SEND_MATERIAL", priority: "HIGH", defaultDueDays: 1 },
+  { customerType: "OWNER_CLIENT", name: "报价后跟进", title: "报价后跟进潜在客户", description: "跟进潜在客户对报价、环保和交付的反馈。", type: "QUOTE_FOLLOW", priority: "HIGH", defaultDueDays: 2, stage: "QUOTED" },
+  { customerType: "OWNER_CLIENT", name: "15 天沉默激活", title: "15 天沉默激活潜在客户", description: "对沉默客户重新激活并引导二次沟通。", type: "REACTIVATE", priority: "NORMAL", defaultDueDays: 0, stage: "TO_REACTIVATE" },
+  { customerType: "DEALER_CLIENT", name: "发送合作资料", title: "发送合作资料包", description: "发送合作方案、产品体系和合作政策。", type: "SEND_MATERIAL", priority: "HIGH", defaultDueDays: 1 },
   { customerType: "DEALER_CLIENT", name: "了解所在城市和门店情况", title: "了解城市和门店情况", description: "确认客户所在城市、门店现状和团队基础。", type: "PHONE_CALL", priority: "NORMAL", defaultDueDays: 2 },
-  { customerType: "DEALER_CLIENT", name: "招商负责人沟通", title: "安排招商负责人沟通", description: "由招商主管进一步判断合作可行性。", type: "PHONE_CALL", priority: "HIGH", defaultDueDays: 3 },
-  { customerType: "DEALER_CLIENT", name: "邀约到厂考察", title: "邀约到厂考察", description: "推动经销商客户到厂考察样板和政策。", type: "VISIT_INVITE", priority: "HIGH", defaultDueDays: 5 },
+  { customerType: "DEALER_CLIENT", name: "合作负责人沟通", title: "安排合作负责人沟通", description: "由合作主管进一步判断合作可行性。", type: "PHONE_CALL", priority: "HIGH", defaultDueDays: 3 },
+  { customerType: "DEALER_CLIENT", name: "邀约现场评估", title: "邀约现场评估", description: "推动合作伙伴现场评估样板和政策。", type: "VISIT_INVITE", priority: "HIGH", defaultDueDays: 5 },
   { customerType: "DEALER_CLIENT", name: "政策确认跟进", title: "政策确认跟进", description: "跟进利润模型、区域保护和签约条件。", type: "DEAL_PUSH", priority: "HIGH", defaultDueDays: 2, stage: "PENDING_DEAL" },
-  { customerType: "DESIGNER_CLIENT", name: "发送案例图册", title: "发送设计师案例图册", description: "发送高定案例图册，帮助对齐审美方向。", type: "SEND_MATERIAL", priority: "NORMAL", defaultDueDays: 1 },
-  { customerType: "DESIGNER_CLIENT", name: "了解设计师项目类型", title: "了解设计师项目类型", description: "确认设计师当前项目类型、客户层级和合作边界。", type: "PHONE_CALL", priority: "NORMAL", defaultDueDays: 2 },
+  { customerType: "DESIGNER_CLIENT", name: "发送成功案例", title: "发送意向客户成功案例", description: "发送成功案例，帮助对齐审美方向。", type: "SEND_MATERIAL", priority: "NORMAL", defaultDueDays: 1 },
+  { customerType: "DESIGNER_CLIENT", name: "了解客户项目类型", title: "了解客户项目类型", description: "确认意向客户当前项目类型、客户层级和合作边界。", type: "PHONE_CALL", priority: "NORMAL", defaultDueDays: 2 },
   { customerType: "DESIGNER_CLIENT", name: "建立项目合作沟通", title: "建立项目合作沟通", description: "建立项目群或专项协作沟通。", type: "WECHAT_FOLLOW", priority: "HIGH", defaultDueDays: 2 },
   { customerType: "DESIGNER_CLIENT", name: "发送工艺节点", title: "发送工艺节点说明", description: "补充工艺节点和材料搭配说明。", type: "SEND_MATERIAL", priority: "NORMAL", defaultDueDays: 1 },
-  { customerType: "DESIGNER_CLIENT", name: "项目报价配合", title: "项目报价配合", description: "在设计师项目推进阶段配合报价和深化。", type: "QUOTE_FOLLOW", priority: "HIGH", defaultDueDays: 2, stage: "PENDING_DEAL" },
-  { customerType: "FACTORY_CLIENT", name: "发送增长诊断表", title: "发送增长诊断表", description: "发送企微承接自查表和增长诊断表。", type: "SEND_MATERIAL", priority: "HIGH", defaultDueDays: 1 },
-  { customerType: "FACTORY_CLIENT", name: "了解企业获客方式", title: "了解企业获客方式", description: "确认企业当前获客、招商和销售协作方式。", type: "PHONE_CALL", priority: "NORMAL", defaultDueDays: 2 },
-  { customerType: "FACTORY_CLIENT", name: "判断承接问题", title: "判断承接问题", description: "识别获客到企微承接、销售跟进的主要堵点。", type: "CUSTOM", priority: "HIGH", defaultDueDays: 2 },
+  { customerType: "DESIGNER_CLIENT", name: "项目报价配合", title: "项目报价配合", description: "在客户项目推进阶段配合报价和深化。", type: "QUOTE_FOLLOW", priority: "HIGH", defaultDueDays: 2, stage: "PENDING_DEAL" },
+  { customerType: "FACTORY_CLIENT", name: "发送增长诊断表", title: "发送增长诊断表", description: "发送内部提醒承接自查表和增长诊断表。", type: "SEND_MATERIAL", priority: "HIGH", defaultDueDays: 1 },
+  { customerType: "FACTORY_CLIENT", name: "了解企业获客方式", title: "了解企业获客方式", description: "确认企业当前获客、合作和销售协作方式。", type: "PHONE_CALL", priority: "NORMAL", defaultDueDays: 2 },
+  { customerType: "FACTORY_CLIENT", name: "判断承接问题", title: "判断承接问题", description: "识别获客到内部提醒承接、销售跟进的主要堵点。", type: "CUSTOM", priority: "HIGH", defaultDueDays: 2 },
   { customerType: "FACTORY_CLIENT", name: "安排深度诊断", title: "安排深度诊断", description: "推进老板或负责人进入深度诊断沟通。", type: "PHONE_CALL", priority: "URGENT", defaultDueDays: 3 },
-  { customerType: "FACTORY_CLIENT", name: "推动合作沟通", title: "推动合作沟通", description: "围绕品牌增信、企微和老板看板推进合作。", type: "DEAL_PUSH", priority: "URGENT", defaultDueDays: 2, stage: "QUOTED" }
+  { customerType: "FACTORY_CLIENT", name: "推动合作沟通", title: "推动合作沟通", description: "围绕信任建设、企微和管理看板推进合作。", type: "DEAL_PUSH", priority: "URGENT", defaultDueDays: 2, stage: "QUOTED" }
 ];
 
 const demoBusinessLineSeeds: BusinessLineSeed[] = [
   {
-    name: "业主整木定制",
+    name: "潜在客户产品服务",
     slug: "owner-wood-customization",
-    description: "面向业主客户的整木定制业务线，重点覆盖案例效果、环保、价格、交付和售后沟通。",
+    description: "面向潜在客户的产品服务业务线，重点覆盖案例效果、环保、价格、交付和售后沟通。",
     category: "PRODUCT",
     priority: 10,
     targetCustomerTypes: ["OWNER_CLIENT"],
     recommendedTags: [
-      { tagName: "业主客户", tagGroup: "客户类型标签" },
+      { tagName: "潜在客户", tagGroup: "客户类型标签" },
       { tagName: "效果关注", tagGroup: "需求标签" },
       { tagName: "交付关注", tagGroup: "需求标签" }
     ],
-    recommendedMaterialTitles: ["整木定制避坑清单", "真实案例图册", "交付流程说明", "环保与售后说明"],
-    recommendedTaskTemplateNames: ["首次沟通", "发送案例图册", "预约初步方案", "报价后跟进"],
+    recommendedMaterialTitles: ["产品服务避坑清单", "成功案例", "交付流程说明", "环保与售后说明"],
+    recommendedTaskTemplateNames: ["首次沟通", "发送成功案例", "预约初步方案", "报价后跟进"],
     defaultNextAction: "了解房屋情况、装修阶段和预算区间",
-    notes: "适合用于业主整装、别墅木作和高定落地沟通。"
+    notes: "适合用于潜在客户咨询、别墅木作和高客单落地沟通。"
   },
   {
-    name: "经销商招商合作",
+    name: "合作伙伴伙伴合作",
     slug: "dealer-investment-cooperation",
-    description: "面向经销商客户的招商合作业务线，重点沟通城市、门店基础、政策、利润和到厂考察。",
+    description: "面向合作伙伴的伙伴合作业务线，重点沟通城市、门店基础、政策、利润和现场评估。",
     category: "PARTNERSHIP",
     priority: 20,
     targetCustomerTypes: ["DEALER_CLIENT"],
     recommendedTags: [
-      { tagName: "经销商客户", tagGroup: "客户类型标签" },
+      { tagName: "合作伙伴", tagGroup: "客户类型标签" },
       { tagName: "合作意向", tagGroup: "需求标签" },
-      { tagName: "招商意向", tagGroup: "业务标签" }
+      { tagName: "合作意向", tagGroup: "业务标签" }
     ],
-    recommendedMaterialTitles: ["招商手册", "产品体系说明", "合作政策说明", "样板门店案例"],
-    recommendedTaskTemplateNames: ["发送招商资料", "了解所在城市和门店情况", "招商负责人沟通", "邀约到厂考察"],
-    defaultNextAction: "安排招商负责人沟通或到厂考察",
+    recommendedMaterialTitles: ["合作方案", "产品体系说明", "合作政策说明", "样板门店案例"],
+    recommendedTaskTemplateNames: ["发送合作资料", "了解所在城市和门店情况", "合作负责人沟通", "邀约现场评估"],
+    defaultNextAction: "安排合作负责人沟通或现场评估",
     notes: "适合围绕合作政策、利润模型和样板门店推进。"
   },
   {
-    name: "设计师项目合作",
+    name: "客户项目合作",
     slug: "designer-project-cooperation",
-    description: "面向设计师客户的项目合作业务线，重点沟通高定案例、工艺节点、材料和项目配合节奏。",
+    description: "面向意向客户的项目合作业务线，重点沟通成功案例、工艺节点、材料和项目配合节奏。",
     category: "SERVICE",
     priority: 30,
     targetCustomerTypes: ["DESIGNER_CLIENT"],
     recommendedTags: [
-      { tagName: "设计师客户", tagGroup: "客户类型标签" },
+      { tagName: "意向客户", tagGroup: "客户类型标签" },
       { tagName: "案例关注", tagGroup: "需求标签" },
       { tagName: "项目合作意向", tagGroup: "业务标签" }
     ],
-    recommendedMaterialTitles: ["高定案例图册", "工艺节点说明", "材料样册", "设计师合作机制"],
-    recommendedTaskTemplateNames: ["发送案例图册", "了解设计师项目类型", "建立项目合作沟通", "发送工艺节点"],
+    recommendedMaterialTitles: ["成功案例", "工艺节点说明", "材料样册", "方案协作机制"],
+    recommendedTaskTemplateNames: ["发送成功案例", "了解客户项目类型", "建立项目合作沟通", "发送工艺节点"],
     defaultNextAction: "了解项目类型、图纸和落地配合要求",
-    notes: "适合设计师项目协同、工艺解释和材料配合。"
+    notes: "适合客户项目协同、工艺解释和材料配合。"
   },
   {
-    name: "整木工厂增长服务",
+    name: "重点客户增长服务",
     slug: "factory-growth-service",
-    description: "面向整木工厂客户的增长服务业务线，重点沟通获客、承接、销售跟进、品牌增信和 GEO 推广。",
+    description: "面向重点客户的增长服务业务线，重点沟通获客、承接、销售跟进、信任建设和增长推广。",
     category: "SERVICE",
     priority: 40,
     targetCustomerTypes: ["FACTORY_CLIENT"],
     recommendedTags: [
-      { tagName: "工厂客户", tagGroup: "客户类型标签" },
+      { tagName: "重点客户", tagGroup: "客户类型标签" },
       { tagName: "增长诊断意向", tagGroup: "业务标签" },
-      { tagName: "工厂增长服务", tagGroup: "业务标签" }
+      { tagName: "重点客户增长服务", tagGroup: "业务标签" }
     ],
-    recommendedMaterialTitles: ["企业微信承接自查表", "整木企业增长诊断表", "品牌增信方案", "GEO 推广说明", "业务增长中台合作建议"],
+    recommendedMaterialTitles: ["内部提醒承接自查表", "客户增长诊断表", "信任建设方案", "增长推广说明", "销售协作工作台合作建议"],
     recommendedTaskTemplateNames: ["发送增长诊断表", "了解企业获客方式", "判断承接问题", "安排深度诊断"],
-    defaultNextAction: "判断当前卡在获客、承接、成交还是老板看板",
-    notes: "适合对外讲客户增长中台和工厂增长诊断服务。"
+    defaultNextAction: "判断当前卡在获客、承接、成交还是管理看板",
+    notes: "适合对外讲客户销售协作工作台和重点客户诊断服务。"
   }
 ];
 
@@ -332,54 +332,54 @@ const platformBusinessLineSeeds: BusinessLineSeed[] = [
   {
     name: "会员服务",
     slug: "membership-service",
-    description: "面向会员意向客户的业务线，重点沟通会员权益、行业背书、品牌增信和资源露出。",
+    description: "面向会员意向客户的业务线，重点沟通会员权益、行业背书、信任建设和资源露出。",
     category: "MEMBERSHIP",
     priority: 10,
     targetCustomerTypes: ["PLATFORM_MEMBERSHIP_CLIENT"],
     recommendedTags: [
       { tagName: "会员意向", tagGroup: "业务标签" },
-      { tagName: "品牌增信关注", tagGroup: "需求标签" },
+      { tagName: "信任建设关注", tagGroup: "需求标签" },
       { tagName: "联盟合作意向", tagGroup: "业务标签" }
     ],
-    recommendedMaterialTitles: ["整木网会员服务说明", "会员权益说明", "整木企业品牌增信方案"],
+    recommendedMaterialTitles: ["MarketClaw会员服务说明", "会员权益说明", "客户信任建设方案"],
     recommendedTaskTemplateNames: ["发送会员说明", "安排会员沟通", "发送报价", "续费提醒"],
     defaultNextAction: "发送会员说明并判断适合基础增信还是高阶服务",
-    notes: "适合围绕整木网会员、增信与行业背书推进。"
+    notes: "适合围绕MarketClaw会员、增信与行业背书推进。"
   },
   {
-    name: "GEO／AI 推广",
+    name: "增长推广",
     slug: "geo-ai-promotion",
-    description: "面向 GEO、AI 搜索和品牌可见性客户的业务线，重点沟通 AI 搜索可见性、关键词、收录与诊断。",
+    description: "面向增长推广、AI 搜索和品牌可见性客户的业务线，重点沟通 AI 搜索可见性、关键词、收录与诊断。",
     category: "SERVICE",
     priority: 20,
     targetCustomerTypes: ["PLATFORM_GEO_AI_CLIENT", "PLATFORM_FACTORY_OWNER"],
     recommendedTags: [
-      { tagName: "GEO意向", tagGroup: "业务标签" },
+      { tagName: "增长推广意向", tagGroup: "业务标签" },
       { tagName: "AI推广关注", tagGroup: "需求标签" },
       { tagName: "待诊断", tagGroup: "阶段标签" },
-      { tagName: "GEO方案待发", tagGroup: "业务标签" }
+      { tagName: "增长推广方案待发", tagGroup: "业务标签" }
     ],
-    recommendedMaterialTitles: ["GEO 推广服务说明", "AI 时代品牌增信方案", "整木企业 AI 搜索可见性自查表", "关键词与内容底座建设说明"],
-    recommendedTaskTemplateNames: ["发送 GEO 方案", "安排增长诊断", "发送报价"],
-    defaultNextAction: "先安排一次 AI 可见性诊断，再判断是否进入 GEO 服务",
-    notes: "适合整木工厂老板和 GEO／AI 推广意向客户。"
+    recommendedMaterialTitles: ["增长推广服务说明", "AI 时代信任建设方案", "客户增长可见性自查表", "关键词与内容底座建设说明"],
+    recommendedTaskTemplateNames: ["发送增长推广方案", "安排增长诊断", "发送报价"],
+    defaultNextAction: "先安排一次 AI 可见性诊断，再判断是否进入增长推广服务",
+    notes: "适合重点客户和增长推广意向客户。"
   },
   {
-    name: "乌镇设计周",
+    name: "活动合作",
     slug: "wuzhen-design-week",
-    description: "面向活动资源客户的业务线，重点沟通乌镇设计周、峰会、榜单、白皮书和品牌露出。",
+    description: "面向活动资源客户的业务线，重点沟通活动合作、峰会、榜单、白皮书和品牌露出。",
     category: "ACTIVITY",
     priority: 30,
     targetCustomerTypes: ["PLATFORM_EVENT_RESOURCE_CLIENT", "PLATFORM_FACTORY_OWNER"],
     recommendedTags: [
-      { tagName: "乌镇资源关注", tagGroup: "需求标签" },
+      { tagName: "活动资源关注", tagGroup: "需求标签" },
       { tagName: "活动资源意向", tagGroup: "业务标签" },
       { tagName: "品牌露出关注", tagGroup: "需求标签" }
     ],
-    recommendedMaterialTitles: ["乌镇设计周合作说明", "行业峰会资源说明", "品牌露出权益说明"],
-    recommendedTaskTemplateNames: ["邀请参加活动", "乌镇资源跟进"],
+    recommendedMaterialTitles: ["活动合作说明", "行业峰会资源说明", "品牌露出权益说明"],
+    recommendedTaskTemplateNames: ["邀请参加活动", "活动资源跟进"],
     defaultNextAction: "判断客户更看重露出、背书还是资源链接",
-    notes: "适合围绕乌镇设计周与行业活动露出沟通。"
+    notes: "适合围绕活动合作与行业活动露出沟通。"
   },
   {
     name: "培训课程",
@@ -431,20 +431,20 @@ const platformBusinessLineSeeds: BusinessLineSeed[] = [
     notes: "适合后市场项目、门店合作和上门服务沟通。"
   },
   {
-    name: "品牌增信",
+    name: "信任建设",
     slug: "brand-trust",
-    description: "面向品牌增信客户的业务线，重点沟通行业背书、声望增长、可见性和品牌内容沉淀。",
+    description: "面向信任建设客户的业务线，重点沟通行业背书、声望增长、可见性和品牌内容沉淀。",
     category: "SERVICE",
     priority: 70,
     targetCustomerTypes: ["PLATFORM_FACTORY_OWNER", "PLATFORM_MEMBERSHIP_CLIENT", "PLATFORM_GEO_AI_CLIENT"],
     recommendedTags: [
-      { tagName: "品牌增信关注", tagGroup: "需求标签" },
+      { tagName: "信任建设关注", tagGroup: "需求标签" },
       { tagName: "待诊断", tagGroup: "阶段标签" }
     ],
-    recommendedMaterialTitles: ["整木企业品牌增信方案", "AI 时代品牌增信方案"],
+    recommendedMaterialTitles: ["客户信任建设方案", "AI 时代信任建设方案"],
     recommendedTaskTemplateNames: ["安排增长诊断", "发送报价"],
     defaultNextAction: "判断客户更需要背书、露出还是搜索可见性增信",
-    notes: "适合和会员、GEO、工厂老板路径做联动。"
+    notes: "适合和会员、增长推广、重点客户老板路径做联动。"
   },
   {
     name: "联盟合作",
@@ -457,8 +457,8 @@ const platformBusinessLineSeeds: BusinessLineSeed[] = [
       { tagName: "联盟合作", tagGroup: "业务标签" },
       { tagName: "内容共创", tagGroup: "业务标签" }
     ],
-    recommendedMaterialTitles: ["整木高定产业增长联盟说明", "合作伙伴说明", "资源共创方案", "合作边界说明"],
-    recommendedTaskTemplateNames: ["乌镇资源跟进", "沉默客户激活"],
+    recommendedMaterialTitles: ["销售协作伙伴计划说明", "合作伙伴说明", "资源共创方案", "合作边界说明"],
+    recommendedTaskTemplateNames: ["活动资源跟进", "沉默客户激活"],
     defaultNextAction: "安排合作沟通并明确双方资源边界",
     notes: "适合平台合作伙伴与资源共创场景。"
   },
@@ -502,7 +502,7 @@ const platformBusinessLineSeeds: BusinessLineSeed[] = [
     ],
     recommendedTaskTemplateNames: ["CNAS高意向路径梳理", "CNAS基础条件核对", "CNAS内容培育跟进"],
     defaultNextAction: "根据问卷结果判断是否适合进入 30 分钟认可路径梳理。",
-    notes: "用于在整木网自用租户中承接 CNAS 专业服务线索，不单独新开系统。"
+    notes: "用于在MarketClaw 平台租户中承接 CNAS 专业服务线索，不单独新开系统。"
   }
 ];
 
@@ -519,17 +519,17 @@ const zhengmuLeads: LeadTemplate[] = [
     intentionLevel: "STRONG",
     stage: "NEW",
     owner: "sales",
-    message: "抖音看到别墅整木案例，希望尽快沟通整体效果和环保方案。",
+    message: "抖音看到别墅客户增长案例，希望尽快沟通整体效果和环保方案。",
     followUp: {
       content: "客户已经确认想先看真实案例，并愿意补充户型图和装修时间表。",
-      nextAction: "发送案例图册并收集户型",
+      nextAction: "发送成功案例并收集户型",
       stageBefore: "NEW",
       stageAfter: "NEW",
       createdDaysAgo: 1,
       nextFollowOffsetDays: 1
     },
     task: {
-      title: "业主首次沟通：陈先生",
+      title: "潜在客户首次沟通：陈先生",
       description: "确认户型、预算和环保需求，准备进入初步方案沟通。",
       type: "FIRST_FOLLOW",
       status: "PENDING",
@@ -549,9 +549,9 @@ const zhengmuLeads: LeadTemplate[] = [
     intentionLevel: "HIGH",
     stage: "MATERIAL_SENT",
     owner: "sales",
-    message: "小红书咨询环保与售后，希望先看案例图册和交付说明。",
+    message: "小红书咨询环保与售后，希望先看成功案例和交付说明。",
     followUp: {
-      content: "已发送案例图册和环保说明，客户正在确认房屋面积和装修阶段。",
+      content: "已发送成功案例和环保说明，客户正在确认房屋面积和装修阶段。",
       nextAction: "了解房屋面积和装修阶段",
       stageBefore: "NEW",
       stageAfter: "MATERIAL_SENT",
@@ -559,8 +559,8 @@ const zhengmuLeads: LeadTemplate[] = [
       nextFollowOffsetDays: 0
     },
     task: {
-      title: "发送案例图册：李女士",
-      description: "继续跟进业主客户对案例、环保和售后说明的反馈。",
+      title: "发送成功案例：李女士",
+      description: "继续跟进潜在客户对案例、环保和售后说明的反馈。",
       type: "SEND_MATERIAL",
       status: "PENDING",
       priority: "HIGH",
@@ -572,8 +572,8 @@ const zhengmuLeads: LeadTemplate[] = [
     name: "周总",
     phone: "13800000003",
     wechat: "zhou-dealer",
-    company: "合肥某高定馆",
-    industry: "整木门店",
+    company: "合肥某高客单馆",
+    industry: "客户增长门店",
     city: "合肥",
     source: "shipinhao",
     customerType: "DEALER_CLIENT",
@@ -581,18 +581,18 @@ const zhengmuLeads: LeadTemplate[] = [
     intentionLevel: "HIGH",
     stage: "CONTACTED",
     owner: "sales",
-    message: "视频号看到招商内容，重点关注区域政策、利润和样板门店支持。",
+    message: "视频号看到合作内容，重点关注区域政策、利润和样板门店支持。",
     followUp: {
-      content: "已沟通所在城市和门店现状，客户希望先看招商资料和合作政策。",
-      nextAction: "发送招商资料",
+      content: "已沟通所在城市和门店现状，客户希望先看合作资料和合作政策。",
+      nextAction: "发送合作资料",
       stageBefore: "NEW",
       stageAfter: "CONTACTED",
       createdDaysAgo: 3,
       nextFollowOffsetDays: 0
     },
     task: {
-      title: "发送招商资料：周总",
-      description: "发送招商手册、产品体系和合作政策，并约定下一次沟通。",
+      title: "发送合作资料：周总",
+      description: "发送合作方案、产品体系和合作政策，并约定下一次沟通。",
       type: "SEND_MATERIAL",
       status: "PENDING",
       priority: "HIGH",
@@ -601,7 +601,7 @@ const zhengmuLeads: LeadTemplate[] = [
   },
   {
     id: "demo-lead-004",
-    name: "王设计",
+    name: "王总",
     phone: "13800000004",
     wechat: "wang-design",
     company: "南京木语设计",
@@ -613,9 +613,9 @@ const zhengmuLeads: LeadTemplate[] = [
     intentionLevel: "MEDIUM",
     stage: "DIAGNOSED",
     owner: "operator",
-    message: "朋友圈咨询高定项目配合，希望确认工艺节点和设计落地能力。",
+    message: "朋友圈咨询高客单项目配合，希望确认工艺节点和设计落地能力。",
     followUp: {
-      content: "已经确认项目在方案阶段，设计师希望先看工艺节点和材料样册。",
+      content: "已经确认项目在方案阶段，意向客户希望先看工艺节点和材料样册。",
       nextAction: "发送工艺节点说明",
       stageBefore: "CONTACTED",
       stageAfter: "DIAGNOSED",
@@ -623,8 +623,8 @@ const zhengmuLeads: LeadTemplate[] = [
       nextFollowOffsetDays: 2
     },
     task: {
-      title: "发送案例图册：王设计",
-      description: "补充设计师案例、材料样册和项目配合机制。",
+      title: "发送成功案例：王总",
+      description: "补充成功案例、材料样册和项目配合机制。",
       type: "SEND_MATERIAL",
       status: "PENDING",
       priority: "NORMAL",
@@ -636,8 +636,8 @@ const zhengmuLeads: LeadTemplate[] = [
     name: "赵厂长",
     phone: "13800000005",
     wechat: "zhao-factory",
-    company: "佛山某整木工厂",
-    industry: "整木制造",
+    company: "佛山某重点客户",
+    industry: "客户增长制造",
     city: "佛山",
     source: "website",
     customerType: "FACTORY_CLIENT",
@@ -645,7 +645,7 @@ const zhengmuLeads: LeadTemplate[] = [
     intentionLevel: "STRONG",
     stage: "QUOTED",
     owner: "admin",
-    message: "官网留资，想搭企业微信承接、老板看板和内容增长协同。",
+    message: "官网留资，想搭企业微信承接、管理看板和内容增长协同。",
     followUp: {
       content: "已完成初步诊断并发送合作建议，客户正在评估深度合作范围。",
       nextAction: "推动合作沟通",
@@ -656,7 +656,7 @@ const zhengmuLeads: LeadTemplate[] = [
     },
     task: {
       title: "安排深度诊断：赵厂长",
-      description: "围绕企微承接、老板看板和 GEO 推广推进深度诊断。",
+      description: "围绕内部提醒承接、管理看板和增长推广推进深度诊断。",
       type: "DEAL_PUSH",
       status: "PENDING",
       priority: "URGENT",
@@ -668,8 +668,8 @@ const zhengmuLeads: LeadTemplate[] = [
     name: "吴经理",
     phone: "13800000006",
     wechat: "wu-channel",
-    company: "成都某整木馆",
-    industry: "经销商",
+    company: "成都某客户增长馆",
+    industry: "合作伙伴",
     city: "成都",
     source: "referral",
     customerType: "DEALER_CLIENT",
@@ -718,7 +718,7 @@ const zhengmuLeads: LeadTemplate[] = [
     },
     task: {
       title: "15 天沉默激活：郑先生",
-      description: "重新唤醒业主客户，确认近期装修进展和沟通意愿。",
+      description: "重新唤醒潜在客户，确认近期装修进展和沟通意愿。",
       type: "REACTIVATE",
       status: "PENDING",
       priority: "LOW",
@@ -730,8 +730,8 @@ const zhengmuLeads: LeadTemplate[] = [
     name: "孙总",
     phone: "13800000008",
     wechat: "sun-growth",
-    company: "湖州某木作工厂",
-    industry: "整木制造",
+    company: "湖州某木作重点客户",
+    industry: "客户增长制造",
     city: "湖州",
     source: "referral",
     customerType: "FACTORY_CLIENT",
@@ -741,7 +741,7 @@ const zhengmuLeads: LeadTemplate[] = [
     owner: "sales",
     message: "转介绍客户，已完成增长诊断合作，准备进入系统搭建阶段。",
     followUp: {
-      content: "已确认老板看板和企微承接方案，客户对阶段合作结果满意。",
+      content: "已确认管理看板和内部提醒承接方案，客户对阶段合作结果满意。",
       nextAction: "沉淀案例并准备二期方案",
       stageBefore: "PENDING_DEAL",
       stageAfter: "DEAL_DONE",
@@ -750,7 +750,7 @@ const zhengmuLeads: LeadTemplate[] = [
     },
     task: {
       title: "推动合作沟通：孙总",
-      description: "该工厂客户已进入已成交状态，任务用于演示已完成阶段。",
+      description: "该重点客户已进入已成交状态，任务用于演示已完成阶段。",
       type: "DEAL_PUSH",
       status: "DONE",
       priority: "HIGH",
@@ -771,9 +771,9 @@ const zhengmuLeads: LeadTemplate[] = [
     intentionLevel: "MEDIUM",
     stage: "QUOTED",
     owner: "admin",
-    message: "官网咨询整木报价，重点比较效果落地、环保等级和预算边界。",
+    message: "官网咨询客户增长报价，重点比较效果落地、环保等级和预算边界。",
     followUp: {
-      content: "已完成报价说明，客户正在和设计师确认材料与预算方案。",
+      content: "已完成报价说明，客户正在和意向客户确认材料与预算方案。",
       nextAction: "报价后跟进",
       stageBefore: "DIAGNOSED",
       stageAfter: "QUOTED",
@@ -794,7 +794,7 @@ const zhengmuLeads: LeadTemplate[] = [
     name: "何总",
     phone: "13800000010",
     wechat: "he-dealer",
-    company: "苏南某整木馆",
+    company: "苏南某客户增长馆",
     industry: "经销门店",
     city: "无锡",
     source: "gongzhonghao",
@@ -803,18 +803,18 @@ const zhengmuLeads: LeadTemplate[] = [
     intentionLevel: "STRONG",
     stage: "DIAGNOSED",
     owner: "operator",
-    message: "公众号看完招商文章后留资，想评估样板门店和总部支持力度。",
+    message: "公众号看完合作文章后留资，想评估样板门店和总部支持力度。",
     followUp: {
-      content: "已沟通门店现状和预算，下一步要安排招商主管深聊合作条件。",
-      nextAction: "招商负责人沟通",
+      content: "已沟通门店现状和预算，下一步要安排合作主管深聊合作条件。",
+      nextAction: "合作负责人沟通",
       stageBefore: "CONTACTED",
       stageAfter: "DIAGNOSED",
       createdDaysAgo: 1,
       nextFollowOffsetDays: 3
     },
     task: {
-      title: "招商负责人沟通：何总",
-      description: "安排招商主管进一步讲解合作政策和样板门店支持。",
+      title: "合作负责人沟通：何总",
+      description: "安排合作主管进一步讲解合作政策和样板门店支持。",
       type: "PHONE_CALL",
       status: "PENDING",
       priority: "URGENT",
@@ -826,7 +826,7 @@ const zhengmuLeads: LeadTemplate[] = [
     name: "马总",
     phone: "13800000011",
     wechat: "ma-dealer",
-    company: "鲁南某高定馆",
+    company: "鲁南某高客单馆",
     industry: "经销门店",
     city: "临沂",
     source: "offline_event",
@@ -835,9 +835,9 @@ const zhengmuLeads: LeadTemplate[] = [
     intentionLevel: "LOW",
     stage: "DEAL_DONE",
     owner: "admin",
-    message: "展会成交客户，已经完成到厂考察和签约演示案例。",
+    message: "展会成交客户，已经完成现场评估和签约演示案例。",
     followUp: {
-      content: "已完成到厂考察和政策确认，客户进入签约落地阶段。",
+      content: "已完成现场评估和政策确认，客户进入签约落地阶段。",
       nextAction: "交接总部启动支持",
       stageBefore: "PENDING_DEAL",
       stageAfter: "DEAL_DONE",
@@ -845,8 +845,8 @@ const zhengmuLeads: LeadTemplate[] = [
       nextFollowOffsetDays: null
     },
     task: {
-      title: "邀约到厂考察：马总",
-      description: "该经销商客户已成交，任务用于演示经销商路线的已完成状态。",
+      title: "邀约现场评估：马总",
+      description: "该合作伙伴已成交，任务用于演示合作伙伴路线的已完成状态。",
       type: "VISIT_INVITE",
       status: "DONE",
       priority: "NORMAL",
@@ -856,7 +856,7 @@ const zhengmuLeads: LeadTemplate[] = [
   },
   {
     id: "demo-lead-012",
-    name: "许设计",
+    name: "许经理",
     phone: "13800000012",
     wechat: "xu-design",
     company: "杭州木意设计",
@@ -868,18 +868,18 @@ const zhengmuLeads: LeadTemplate[] = [
     intentionLevel: "HIGH",
     stage: "NEW",
     owner: "sales",
-    message: "小红书看到高定案例，希望先看案例图册和合作机制。",
+    message: "小红书看到成功案例，希望先看成功案例和合作机制。",
     followUp: {
-      content: "设计师先想看项目案例和材料样册，后续再评估是否建立项目合作沟通。",
-      nextAction: "发送案例图册",
+      content: "意向客户先想看项目案例和材料样册，后续再评估是否建立项目合作沟通。",
+      nextAction: "发送成功案例",
       stageBefore: "NEW",
       stageAfter: "NEW",
       createdDaysAgo: 1,
       nextFollowOffsetDays: 0
     },
     task: {
-      title: "发送案例图册：许设计",
-      description: "先发案例图册和设计师合作机制，帮助设计师建立第一印象。",
+      title: "发送成功案例：许经理",
+      description: "先发成功案例和方案协作机制，帮助意向客户建立第一印象。",
       type: "SEND_MATERIAL",
       status: "PENDING",
       priority: "HIGH",
@@ -902,7 +902,7 @@ const zhengmuLeads: LeadTemplate[] = [
     owner: "sales",
     message: "同行转介绍，希望建立长期项目合作和报价配合机制。",
     followUp: {
-      content: "已确认近期有高定项目在推进，希望建立专项沟通并共享工艺节点。",
+      content: "已确认近期有高客单项目在推进，希望建立专项沟通并共享工艺节点。",
       nextAction: "建立项目合作沟通",
       stageBefore: "NEW",
       stageAfter: "CONTACTED",
@@ -920,7 +920,7 @@ const zhengmuLeads: LeadTemplate[] = [
   },
   {
     id: "demo-lead-014",
-    name: "唐设计",
+    name: "唐总",
     phone: "13800000014",
     wechat: "tang-design",
     company: "宁波观木设计",
@@ -942,8 +942,8 @@ const zhengmuLeads: LeadTemplate[] = [
       nextFollowOffsetDays: 3
     },
     task: {
-      title: "项目报价配合：唐设计",
-      description: "配合设计师完成项目报价和材料细节确认。",
+      title: "项目报价配合：唐总",
+      description: "配合意向客户完成项目报价和材料细节确认。",
       type: "QUOTE_FOLLOW",
       status: "PENDING",
       priority: "NORMAL",
@@ -955,8 +955,8 @@ const zhengmuLeads: LeadTemplate[] = [
     name: "宋总",
     phone: "13800000015",
     wechat: "song-growth",
-    company: "广州某整木工厂",
-    industry: "整木制造",
+    company: "广州某重点客户",
+    industry: "客户增长制造",
     city: "广州",
     source: "gongzhonghao",
     customerType: "FACTORY_CLIENT",
@@ -964,9 +964,9 @@ const zhengmuLeads: LeadTemplate[] = [
     intentionLevel: "MEDIUM",
     stage: "MATERIAL_SENT",
     owner: "sales",
-    message: "公众号咨询品牌增信和 GEO 推广，希望先看诊断表和承接自查表。",
+    message: "公众号咨询信任建设和增长推广，希望先看诊断表和承接自查表。",
     followUp: {
-      content: "已经发送增长诊断表和企微承接自查表，客户准备梳理现有渠道数据。",
+      content: "已经发送增长诊断表和内部提醒承接自查表，客户准备梳理现有渠道数据。",
       nextAction: "了解企业获客方式",
       stageBefore: "NEW",
       stageAfter: "MATERIAL_SENT",
@@ -975,7 +975,7 @@ const zhengmuLeads: LeadTemplate[] = [
     },
     task: {
       title: "发送增长诊断表：宋总",
-      description: "继续跟进工厂客户对承接自查表和诊断表的反馈。",
+      description: "继续跟进重点客户对承接自查表和诊断表的反馈。",
       type: "SEND_MATERIAL",
       status: "DELAYED",
       priority: "NORMAL",
@@ -987,8 +987,8 @@ const zhengmuLeads: LeadTemplate[] = [
     name: "吕厂",
     phone: "13800000016",
     wechat: "lv-factory",
-    company: "绍兴某木作工厂",
-    industry: "整木制造",
+    company: "绍兴某木作重点客户",
+    industry: "客户增长制造",
     city: "绍兴",
     source: "shipinhao",
     customerType: "FACTORY_CLIENT",
@@ -996,9 +996,9 @@ const zhengmuLeads: LeadTemplate[] = [
     intentionLevel: "LOW",
     stage: "TO_REACTIVATE",
     owner: "sales",
-    message: "视频号咨询过老板看板和 GEO 推广，但近期沟通中断，需要重新激活。",
+    message: "视频号咨询过管理看板和增长推广，但近期沟通中断，需要重新激活。",
     followUp: {
-      content: "客户暂时搁置项目，近期重新启动品牌增信和渠道承接梳理。",
+      content: "客户暂时搁置项目，近期重新启动信任建设和渠道承接梳理。",
       nextAction: "判断承接问题",
       stageBefore: "CONTACTED",
       stageAfter: "TO_REACTIVATE",
@@ -1007,7 +1007,7 @@ const zhengmuLeads: LeadTemplate[] = [
     },
     task: {
       title: "判断承接问题：吕厂",
-      description: "重新梳理工厂客户的企微承接和销售协作问题。",
+      description: "重新梳理重点客户的内部提醒承接和销售协作问题。",
       type: "CUSTOM",
       status: "PENDING",
       priority: "LOW",
@@ -1019,22 +1019,22 @@ const zhengmuLeads: LeadTemplate[] = [
 const platformStrategyTemplates: StrategyTemplate[] = [
   {
     customerType: "PLATFORM_FACTORY_OWNER",
-    name: "整木工厂老板跟进策略",
-    painPoints: ["获客", "招商", "品牌", "成交", "行业背书", "AI 推广", "企业微信承接"],
-    firstMaterials: ["整木企业增长诊断表", "整木企业品牌增信方案", "企业微信业务增长中台说明", "GEO 推广服务说明", "整木高定产业增长联盟说明"],
-    welcomeScript: "先发您增长诊断表和品牌增信方案，方便先判断现在更卡在客户来源、品牌信任，还是企微承接和销售跟进。",
-    day3Script: "您现在更想先补获客、品牌增信，还是销售跟进这条线？我可以按这个方向给您收一版建议。",
-    day7Script: "如果方便，您可以先说一下主要渠道和销售现状，我再判断先做 GEO、企微承接，还是先做老板看板。",
+    name: "重点客户跟进策略",
+    painPoints: ["获客", "合作", "品牌", "成交", "行业背书", "AI 推广", "企业微信承接"],
+    firstMaterials: ["客户增长诊断表", "客户信任建设方案", "客户跟进与销售协作工作台说明", "增长推广服务说明", "销售协作伙伴计划说明"],
+    welcomeScript: "先发您增长诊断表和信任建设方案，方便先判断现在更卡在客户来源、品牌信任，还是内部提醒承接和销售跟进。",
+    day3Script: "您现在更想先补获客、信任建设，还是销售跟进这条线？我可以按这个方向给您收一版建议。",
+    day7Script: "如果方便，您可以先说一下主要渠道和销售现状，我再判断先做增长推广、内部提醒承接，还是先做管理看板。",
     day15Script: "如果近期准备系统化推进，建议先安排一次增长诊断，把获客、承接和成交链路看清楚。",
-    manualTriggerRules: ["问合作费用", "问 GEO", "问企微承接", "问品牌增信", "约老板沟通"],
+    manualTriggerRules: ["问合作费用", "问增长推广", "问内部提醒承接", "问信任建设", "约老板沟通"],
     recommendedNextAction: "安排一次增长诊断",
-    recommendedPrivateContent: "增长诊断表、品牌增信方案、企微承接说明、GEO 服务说明、联盟说明"
+    recommendedPrivateContent: "增长诊断表、信任建设方案、内部提醒承接说明、增长推广服务说明、联盟说明"
   },
   {
     customerType: "PLATFORM_MEMBERSHIP_CLIENT",
     name: "会员意向客户跟进策略",
-    painPoints: ["加入整木网有什么用", "能否提升信任", "有没有资源露出", "是否有客户转化", "和普通广告有什么区别"],
-    firstMaterials: ["整木网会员服务说明", "基础增信服务清单", "声望增长服务清单", "会员权益说明", "整木网行业增信价值说明"],
+    painPoints: ["加入MarketClaw有什么用", "能否提升信任", "有没有资源露出", "是否有客户转化", "和普通广告有什么区别"],
+    firstMaterials: ["MarketClaw会员服务说明", "基础增信服务清单", "声望增长服务清单", "会员权益说明", "MarketClaw行业增信价值说明"],
     welcomeScript: "先把会员服务说明和权益发您，方便您先判断现在更需要增信、露出，还是客户承接支持。",
     day3Script: "您现在更想解决品牌背书、资源露出，还是客户转化问题？我可以按这个方向帮您收口。",
     day7Script: "如果方便，我建议先按基础增信、声望增长和高阶服务三档对一下，判断哪一档更适合。",
@@ -1045,16 +1045,16 @@ const platformStrategyTemplates: StrategyTemplate[] = [
   },
   {
     customerType: "PLATFORM_GEO_AI_CLIENT",
-    name: "GEO／AI 推广客户跟进策略",
-    painPoints: ["什么是 GEO", "AI 搜索为什么重要", "能不能被 AI 推荐", "和 SEO、代运营有什么区别", "多久能看到变化"],
-    firstMaterials: ["GEO 推广服务说明", "AI 时代品牌增信方案", "整木企业 AI 搜索可见性自查表", "关键词与内容底座建设说明"],
-    welcomeScript: "先发您 GEO 服务说明和 AI 搜索可见性自查表，方便先看品牌现在在哪些关键词和场景上不够可见。",
+    name: "增长推广客户跟进策略",
+    painPoints: ["什么是增长推广", "AI 搜索为什么重要", "能不能被 AI 推荐", "和 SEO、代运营有什么区别", "多久能看到变化"],
+    firstMaterials: ["增长推广服务说明", "AI 时代信任建设方案", "客户增长可见性自查表", "关键词与内容底座建设说明"],
+    welcomeScript: "先发您增长推广服务说明和 AI 搜索可见性自查表，方便先看品牌现在在哪些关键词和场景上不够可见。",
     day3Script: "您现在更关心 AI 推荐、品牌收录，还是关键词布局？我可以按这个方向帮您继续拆。",
-    day7Script: "如果方便，先把品牌关键词和现在做过的内容方向说一下，我判断是否适合先做 GEO 诊断。",
-    day15Script: "如果近期准备推进，建议先做一次 AI 可见性诊断，再决定是先补内容底座还是直接开 GEO。",
-    manualTriggerRules: ["问 GEO", "问 AI 搜索", "问 SEO 区别", "问收录", "问关键词"],
+    day7Script: "如果方便，先把品牌关键词和现在做过的内容方向说一下，我判断是否适合先做增长推广诊断。",
+    day15Script: "如果近期准备推进，建议先做一次 AI 可见性诊断，再决定是先补内容底座还是直接开增长推广。",
+    manualTriggerRules: ["问增长推广", "问 AI 搜索", "问 SEO 区别", "问收录", "问关键词"],
     recommendedNextAction: "先做 AI 可见性诊断",
-    recommendedPrivateContent: "GEO 服务说明、AI 搜索自查表、关键词说明、品牌增信方案"
+    recommendedPrivateContent: "增长推广服务说明、AI 搜索自查表、关键词说明、信任建设方案"
   },
   {
     customerType: "PLATFORM_TRAINING_CLIENT",
@@ -1071,16 +1071,16 @@ const platformStrategyTemplates: StrategyTemplate[] = [
   },
   {
     customerType: "PLATFORM_EVENT_RESOURCE_CLIENT",
-    name: "活动／乌镇资源客户跟进策略",
+    name: "活动／活动资源客户跟进策略",
     painPoints: ["参与活动有什么价值", "有没有峰会、榜单、白皮书", "能否提升行业影响力", "有没有客户和资源链接"],
-    firstMaterials: ["乌镇设计周合作说明", "行业峰会资源说明", "榜单与趋势发布说明", "品牌露出权益说明"],
-    welcomeScript: "先发您乌镇和峰会资源说明，方便先判断您更想要品牌露出、行业背书，还是客户资源链接。",
+    firstMaterials: ["活动合作说明", "行业峰会资源说明", "榜单与趋势发布说明", "品牌露出权益说明"],
+    welcomeScript: "先发您活动和峰会资源说明，方便先判断您更想要品牌露出、行业背书，还是客户资源链接。",
     day3Script: "您现在更想看活动露出权益、榜单趋势发布，还是资源对接方式？我按这个方向给您细化。",
     day7Script: "如果方便，先说一下这次更想拿曝光、背书，还是资源链接，我再给您对应资源包。",
     day15Script: "如果准备推进活动合作，建议安排一次资源沟通，把节点、权益和后续承接讲清楚。",
-    manualTriggerRules: ["问乌镇", "问峰会", "问榜单", "问白皮书", "问露出"],
+    manualTriggerRules: ["问活动", "问峰会", "问榜单", "问白皮书", "问露出"],
     recommendedNextAction: "发送资源包并安排活动合作沟通",
-    recommendedPrivateContent: "乌镇说明、峰会资源、榜单与趋势发布、品牌露出权益"
+    recommendedPrivateContent: "活动说明、峰会资源、榜单与趋势发布、品牌露出权益"
   },
   {
     customerType: "PLATFORM_SUPPLY_CHAIN_CLIENT",
@@ -1124,20 +1124,20 @@ const platformStrategyTemplates: StrategyTemplate[] = [
 ];
 
 const platformMaterialTemplates: MaterialTemplate[] = [
-  { customerType: "PLATFORM_MEMBERSHIP_CLIENT", title: "整木网会员服务说明", description: "说明整木网会员服务的核心结构、适合对象和合作边界。", url: "https://example.com/platform-membership-overview" },
+  { customerType: "PLATFORM_MEMBERSHIP_CLIENT", title: "MarketClaw会员服务说明", description: "说明 MarketClaw会员服务的核心结构、适合对象和合作边界。", url: "https://example.com/platform-membership-overview" },
   { customerType: "PLATFORM_MEMBERSHIP_CLIENT", title: "基础增信服务清单", description: "适合先建立行业背书和基础增信认知。", url: "https://example.com/platform-membership-basic-trust" },
   { customerType: "PLATFORM_MEMBERSHIP_CLIENT", title: "声望增长服务清单", description: "适合进一步强化品牌声望和行业影响力。", url: "https://example.com/platform-membership-prestige" },
   { customerType: "PLATFORM_MEMBERSHIP_CLIENT", title: "会员权益说明", description: "梳理会员可获得的增信、露出和业务协同权益。", url: "https://example.com/platform-membership-rights" },
-  { customerType: "PLATFORM_MEMBERSHIP_CLIENT", title: "整木网行业增信价值说明", description: "帮助客户理解整木网在行业背书和品牌信任上的价值。", url: "https://example.com/platform-membership-trust-value" },
-  { customerType: "PLATFORM_FACTORY_OWNER", title: "整木企业品牌增信方案", description: "围绕品牌背书、行业信任和内容资产沉淀给出增信建议。", url: "https://example.com/platform-factory-brand-trust" },
-  { customerType: "PLATFORM_FACTORY_OWNER", title: "企业微信业务增长中台说明", description: "说明整木网如何用企微承接、销售跟进和老板看板跑清业务过程。", url: "https://example.com/platform-growth-hub" },
-  { customerType: "PLATFORM_FACTORY_OWNER", title: "整木企业增长诊断表", description: "用于判断工厂客户当前是卡在线索、承接、品牌还是成交。", url: "https://example.com/platform-growth-diagnosis" },
-  { customerType: "PLATFORM_FACTORY_OWNER", title: "整木高定产业增长联盟说明", description: "说明联盟合作、资源链接和产业协同的基本框架。", url: "https://example.com/platform-growth-alliance" },
-  { customerType: "PLATFORM_GEO_AI_CLIENT", title: "GEO 推广服务说明", description: "说明 AI 搜索时代 GEO 的基本思路、服务边界和适用对象。", url: "https://example.com/platform-geo-service" },
-  { customerType: "PLATFORM_GEO_AI_CLIENT", title: "AI 时代品牌增信方案", description: "帮助客户理解品牌信任与 AI 推荐之间的关系。", url: "https://example.com/platform-ai-brand-trust" },
-  { customerType: "PLATFORM_GEO_AI_CLIENT", title: "整木企业 AI 搜索可见性自查表", description: "用于判断品牌在 AI 搜索入口中的基础可见性。", url: "https://example.com/platform-ai-visibility-check" },
-  { customerType: "PLATFORM_GEO_AI_CLIENT", title: "关键词与内容底座建设说明", description: "说明 GEO 前期关键词、内容底座和品牌资料整理方法。", url: "https://example.com/platform-keyword-content-base" },
-  { customerType: "PLATFORM_EVENT_RESOURCE_CLIENT", title: "乌镇设计周合作说明", description: "说明乌镇设计周合作路径、资源位和沟通边界。", url: "https://example.com/platform-wuzhen" },
+  { customerType: "PLATFORM_MEMBERSHIP_CLIENT", title: "MarketClaw行业增信价值说明", description: "帮助客户理解MarketClaw在行业背书和品牌信任上的价值。", url: "https://example.com/platform-membership-trust-value" },
+  { customerType: "PLATFORM_FACTORY_OWNER", title: "客户信任建设方案", description: "围绕品牌背书、行业信任和内容资产沉淀给出增信建议。", url: "https://example.com/platform-factory-brand-trust" },
+  { customerType: "PLATFORM_FACTORY_OWNER", title: "客户跟进与销售协作工作台说明", description: "说明 MarketClaw如何用内部提醒承接、销售跟进和管理看板跑清业务过程。", url: "https://example.com/platform-growth-hub" },
+  { customerType: "PLATFORM_FACTORY_OWNER", title: "客户增长诊断表", description: "用于判断重点客户当前是卡在线索、承接、品牌还是成交。", url: "https://example.com/platform-growth-diagnosis" },
+  { customerType: "PLATFORM_FACTORY_OWNER", title: "销售协作伙伴计划说明", description: "说明联盟合作、资源链接和产业协同的基本框架。", url: "https://example.com/platform-growth-alliance" },
+  { customerType: "PLATFORM_GEO_AI_CLIENT", title: "增长推广服务说明", description: "说明 AI 搜索时代增长推广的基本思路、服务边界和适用对象。", url: "https://example.com/platform-geo-service" },
+  { customerType: "PLATFORM_GEO_AI_CLIENT", title: "AI 时代信任建设方案", description: "帮助客户理解品牌信任与 AI 推荐之间的关系。", url: "https://example.com/platform-ai-brand-trust" },
+  { customerType: "PLATFORM_GEO_AI_CLIENT", title: "客户增长可见性自查表", description: "用于判断品牌在 AI 搜索入口中的基础可见性。", url: "https://example.com/platform-ai-visibility-check" },
+  { customerType: "PLATFORM_GEO_AI_CLIENT", title: "关键词与内容底座建设说明", description: "说明增长推广前期关键词、内容底座和品牌资料整理方法。", url: "https://example.com/platform-keyword-content-base" },
+  { customerType: "PLATFORM_EVENT_RESOURCE_CLIENT", title: "活动合作说明", description: "说明活动合作合作路径、资源位和沟通边界。", url: "https://example.com/platform-wuzhen" },
   { customerType: "PLATFORM_EVENT_RESOURCE_CLIENT", title: "行业峰会资源说明", description: "梳理峰会资源、到场价值和可联动的行业资源。", url: "https://example.com/platform-summit" },
   { customerType: "PLATFORM_EVENT_RESOURCE_CLIENT", title: "榜单与趋势发布说明", description: "说明榜单、趋势发布和行业白皮书的使用场景。", url: "https://example.com/platform-ranking-trends" },
   { customerType: "PLATFORM_EVENT_RESOURCE_CLIENT", title: "品牌露出权益说明", description: "帮助客户理解活动露出与行业背书的结合方式。", url: "https://example.com/platform-brand-exposure" },
@@ -1170,14 +1170,14 @@ const platformMaterialTemplates: MaterialTemplate[] = [
 ];
 
 const platformTaskTemplateSeeds: TaskTemplateSeed[] = [
-  { name: "首次沟通", title: "首次沟通整木网业务客户", description: "先判断客户属于哪条业务线，再决定优先发什么资料。", type: "FIRST_FOLLOW", priority: "HIGH", defaultDueDays: 1, customerType: null },
+  { name: "首次沟通", title: "首次沟通MarketClaw业务客户", description: "先判断客户属于哪条业务线，再决定优先发什么资料。", type: "FIRST_FOLLOW", priority: "HIGH", defaultDueDays: 1, customerType: null },
   { name: "发送会员说明", title: "发送会员服务说明", description: "发送会员服务说明、权益和增信价值资料。", type: "SEND_MATERIAL", priority: "HIGH", defaultDueDays: 1, customerType: "PLATFORM_MEMBERSHIP_CLIENT" },
-  { name: "发送 GEO 方案", title: "发送 GEO 推广说明", description: "发送 GEO 服务说明和 AI 搜索可见性自查表。", type: "SEND_MATERIAL", priority: "HIGH", defaultDueDays: 1, customerType: "PLATFORM_GEO_AI_CLIENT" },
-  { name: "安排增长诊断", title: "安排增长诊断沟通", description: "围绕工厂老板客户的获客、增信和企微承接做诊断。", type: "PHONE_CALL", priority: "URGENT", defaultDueDays: 2, customerType: "PLATFORM_FACTORY_OWNER" },
+  { name: "发送增长推广方案", title: "发送增长推广说明", description: "发送增长推广服务说明和 AI 搜索可见性自查表。", type: "SEND_MATERIAL", priority: "HIGH", defaultDueDays: 1, customerType: "PLATFORM_GEO_AI_CLIENT" },
+  { name: "安排增长诊断", title: "安排增长诊断沟通", description: "围绕重点客户的获客、增信和内部提醒承接做诊断。", type: "PHONE_CALL", priority: "URGENT", defaultDueDays: 2, customerType: "PLATFORM_FACTORY_OWNER" },
   { name: "发送报价", title: "发送业务合作报价", description: "针对已进入报价阶段的客户发送方案与报价说明。", type: "QUOTE_FOLLOW", priority: "HIGH", defaultDueDays: 1, customerType: null, stage: "QUOTED" },
-  { name: "邀请参加活动", title: "邀请参加活动资源沟通", description: "邀请客户进入活动、峰会或乌镇相关沟通。", type: "VISIT_INVITE", priority: "HIGH", defaultDueDays: 2, customerType: "PLATFORM_EVENT_RESOURCE_CLIENT" },
+  { name: "邀请参加活动", title: "邀请参加活动资源沟通", description: "邀请客户进入活动、峰会或活动相关沟通。", type: "VISIT_INVITE", priority: "HIGH", defaultDueDays: 2, customerType: "PLATFORM_EVENT_RESOURCE_CLIENT" },
   { name: "提醒报名课程", title: "提醒报名培训课程", description: "围绕报名节点继续推进课程报名。", type: "WECHAT_FOLLOW", priority: "NORMAL", defaultDueDays: 2, customerType: "PLATFORM_TRAINING_CLIENT" },
-  { name: "乌镇资源跟进", title: "乌镇资源跟进", description: "继续确认活动资源偏好、节点和合作边界。", type: "CUSTOM", priority: "HIGH", defaultDueDays: 2, customerType: "PLATFORM_EVENT_RESOURCE_CLIENT" },
+  { name: "活动资源跟进", title: "活动资源跟进", description: "继续确认活动资源偏好、节点和合作边界。", type: "CUSTOM", priority: "HIGH", defaultDueDays: 2, customerType: "PLATFORM_EVENT_RESOURCE_CLIENT" },
   { name: "集采合作跟进", title: "集采合作跟进", description: "跟进品类、标准、质量保障和合作流程。", type: "DEAL_PUSH", priority: "HIGH", defaultDueDays: 2, customerType: "PLATFORM_SUPPLY_CHAIN_CLIENT" },
   { name: "一清一护项目沟通", title: "一清一护项目沟通", description: "判断门店基础、服务能力和项目合作方式。", type: "PHONE_CALL", priority: "HIGH", defaultDueDays: 2, customerType: "PLATFORM_AFTERMARKET_CLIENT" },
   { name: "续费提醒", title: "续费提醒", description: "用于会员、合作伙伴或年度服务续费前提醒。", type: "REACTIVATE", priority: "NORMAL", defaultDueDays: 3, customerType: "PLATFORM_MEMBERSHIP_CLIENT" },
@@ -1347,29 +1347,29 @@ const platformLeadSeries: PlatformSeriesSeed[] = [
     customerType: "PLATFORM_FACTORY_OWNER",
     needType: "GROWTH_SYSTEM",
     names: ["顾总", "林总", "盛总", "胡总"],
-    companies: ["盛木高定", "木境整木", "观木家居", "尚木工厂"],
+    companies: ["盛木高客单", "木境客户增长", "观木家居", "尚木重点客户"],
     cities: ["杭州", "佛山", "苏州", "成都"],
     messages: [
-      "朋友圈看到整木网内容，想先了解增长诊断和品牌增信怎么做。",
-      "视频号看到企微承接内容，想判断先发什么资料更适合内部团队。",
-      "公众号看完后，想继续聊老板看板、销售跟进和品牌内容协同。",
-      "抖音咨询整木工厂如何把 GEO、企微承接和销售推进串起来。"
+      "朋友圈看到MarketClaw内容，想先了解增长诊断和信任建设怎么做。",
+      "视频号看到内部提醒承接内容，想判断先发什么资料更适合内部团队。",
+      "公众号看完后，想继续聊管理看板、销售跟进和品牌内容协同。",
+      "抖音咨询重点客户如何把增长推广、内部提醒承接和销售推进串起来。"
     ],
     followUps: [
-      "客户想先看增长诊断表，再判断是先做品牌增信还是先做企微承接。",
-      "客户已经收资料，准备内部开会讨论企微承接和老板看板。",
-      "客户已沟通主要渠道，希望继续梳理品牌信任和 GEO 配合路径。",
+      "客户想先看增长诊断表，再判断是先做信任建设还是先做内部提醒承接。",
+      "客户已经收资料，准备内部开会讨论内部提醒承接和管理看板。",
+      "客户已沟通主要渠道，希望继续梳理品牌信任和增长推广配合路径。",
       "客户已完成一轮诊断，准备继续看合作建议和落地节奏。"
     ],
     nextActions: ["安排一次增长诊断", "发送增长诊断表", "判断当前卡点", "推进诊断复盘"],
-    taskTitles: ["工厂老板首次沟通", "发送增长诊断资料", "梳理品牌与承接问题", "诊断结果复盘"],
+    taskTitles: ["重点客户老板首次沟通", "发送增长诊断资料", "梳理品牌与承接问题", "诊断结果复盘"],
     taskDescriptions: [
       "先收客户来源、品牌现状和销售跟进方式。",
-      "发送增长诊断表、品牌增信方案和企微说明。",
-      "围绕品牌增信、GEO 和企微承接继续收口问题。",
+      "发送增长诊断表、信任建设方案和企微说明。",
+      "围绕信任建设、增长推广和内部提醒承接继续收口问题。",
       "对齐诊断结果，判断下一步合作方向。"
     ],
-    extraTags: [["品牌增信", "高意向"], ["GEO 推广"], ["联盟合作"], ["待激活"]]
+    extraTags: [["信任建设", "高意向"], ["增长推广"], ["联盟合作"], ["待激活"]]
   },
   {
     startIndex: 5,
@@ -1377,10 +1377,10 @@ const platformLeadSeries: PlatformSeriesSeed[] = [
     customerType: "PLATFORM_MEMBERSHIP_CLIENT",
     needType: "COOPERATION",
     names: ["罗总", "沈总", "邵总", "范总"],
-    companies: ["名木空间", "森语高定", "木作设计馆", "和木家居"],
+    companies: ["名木空间", "森语高客单", "木作设计馆", "和木家居"],
     cities: ["宁波", "南京", "无锡", "嘉兴"],
     messages: [
-      "小红书咨询加入整木网会员后具体能带来哪些价值。",
+      "小红书咨询加入MarketClaw会员后具体能带来哪些价值。",
       "官网留资，重点想看会员权益、增信服务和合作边界。",
       "线下活动后继续问会员合作和品牌露出是否适合当前阶段。",
       "老朋友转介绍，想再确认会员服务和续费机制。"
@@ -1399,7 +1399,7 @@ const platformLeadSeries: PlatformSeriesSeed[] = [
       "确认已成交客户的后续协同动作。",
       "对沉默会员客户做续费提醒和激活。"
     ],
-    extraTags: [["会员服务", "高意向"], ["品牌增信"], ["已成交"], ["待续费", "待激活"]]
+    extraTags: [["会员服务", "高意向"], ["信任建设"], ["已成交"], ["待续费", "待激活"]]
   },
   {
     startIndex: 9,
@@ -1407,29 +1407,29 @@ const platformLeadSeries: PlatformSeriesSeed[] = [
     customerType: "PLATFORM_GEO_AI_CLIENT",
     needType: "GROWTH_SYSTEM",
     names: ["姚总", "孟总", "倪总", "宋总"],
-    companies: ["观木高定", "木言家居", "朗木整家", "木奢空间"],
+    companies: ["观木高客单", "木言家居", "朗木整家", "木奢空间"],
     cities: ["上海", "佛山", "东莞", "郑州"],
     messages: [
-      "朋友圈问什么是 GEO，为什么 AI 搜索会影响品牌咨询。",
+      "朋友圈问什么是增长推广，为什么 AI 搜索会影响品牌咨询。",
       "视频号咨询能不能被 AI 推荐，想先看自查表。",
-      "公众号继续追问 GEO、SEO 和代运营到底有什么区别。",
+      "公众号继续追问增长推广、SEO 和代运营到底有什么区别。",
       "抖音咨询品牌关键词和内容底座该怎么先做。"
     ],
     followUps: [
-      "客户想先做一轮 AI 可见性诊断，再判断是否启动 GEO。",
+      "客户想先做一轮 AI 可见性诊断，再判断是否启动增长推广。",
       "客户已收到自查表，准备整理品牌关键词和内容现状。",
       "客户已沟通当前搜索场景，希望继续收口可见性问题。",
       "客户已做过基础诊断，准备继续对齐关键词与内容方向。"
     ],
-    nextActions: ["发送 GEO 方案", "发送自查表", "判断搜索卡点", "推进诊断复盘"],
-    taskTitles: ["GEO 首次沟通", "发送 GEO 资料", "沟通 AI 搜索问题", "整理关键词策略"],
+    nextActions: ["发送增长推广方案", "发送自查表", "判断搜索卡点", "推进诊断复盘"],
+    taskTitles: ["增长推广首次沟通", "发送增长推广资料", "沟通 AI 搜索问题", "整理关键词策略"],
     taskDescriptions: [
       "先问品牌关键词、现有内容和当前搜索场景。",
-      "发送 GEO 服务说明和 AI 搜索可见性自查表。",
+      "发送增长推广服务说明和 AI 搜索可见性自查表。",
       "继续判断是在内容、收录还是推荐入口卡住。",
       "对齐诊断结果并推进下一步建议。"
     ],
-    extraTags: [["GEO 推广", "高意向"], ["AI推广关注"], ["内容共创"], ["待激活"]]
+    extraTags: [["增长推广", "高意向"], ["AI推广关注"], ["内容共创"], ["待激活"]]
   },
   {
     startIndex: 13,
@@ -1437,7 +1437,7 @@ const platformLeadSeries: PlatformSeriesSeed[] = [
     customerType: "PLATFORM_TRAINING_CLIENT",
     needType: "BOOK_CONSULTATION",
     names: ["程总", "詹总", "黎总", "曹总"],
-    companies: ["木艺馆", "简木家居", "云木设计", "森构工厂"],
+    companies: ["木艺馆", "简木家居", "云木设计", "森构重点客户"],
     cities: ["武汉", "长沙", "重庆", "青岛"],
     messages: [
       "小红书咨询课程都讲什么，老板参加还是团队参加更合适。",
@@ -1467,29 +1467,29 @@ const platformLeadSeries: PlatformSeriesSeed[] = [
     customerType: "PLATFORM_EVENT_RESOURCE_CLIENT",
     needType: "GET_MATERIAL",
     names: ["覃总", "白总", "廖总", "段总"],
-    companies: ["华木高定", "木光设计", "木域家居", "品木生活"],
+    companies: ["华木高客单", "木光设计", "木域家居", "品木生活"],
     cities: ["嘉兴", "绍兴", "昆明", "泉州"],
     messages: [
-      "朋友圈看到乌镇设计周内容，想先了解参与后有什么价值。",
+      "朋友圈看到活动合作内容，想先了解参与后有什么价值。",
       "视频号咨询峰会、榜单和白皮书资源怎么配合使用。",
       "公众号咨询活动资源露出和行业链接方式。",
       "抖音问活动合作后是否还有后续资源承接。"
     ],
     followUps: [
-      "客户想先看乌镇和峰会资源说明，再判断更适合哪一类露出。",
+      "客户想先看活动和峰会资源说明，再判断更适合哪一类露出。",
       "客户已收到活动资源包，准备内部确认是否参与。",
       "客户已沟通资源诉求，希望继续收口榜单和趋势发布价值。",
       "客户已做过一轮资源沟通，准备继续看活动后的承接节奏。"
     ],
-    nextActions: ["邀请参加活动", "发送资源包", "乌镇资源跟进", "推进活动合作"],
-    taskTitles: ["活动资源首次沟通", "发送乌镇资源包", "继续确认活动偏好", "复盘活动合作方案"],
+    nextActions: ["邀请参加活动", "发送资源包", "活动资源跟进", "推进活动合作"],
+    taskTitles: ["活动资源首次沟通", "发送活动资源包", "继续确认活动偏好", "复盘活动合作方案"],
     taskDescriptions: [
       "先判断客户更看重露出、背书还是资源链接。",
-      "发送乌镇设计周、峰会和榜单资源资料。",
+      "发送活动合作、峰会和榜单资源资料。",
       "继续确认资源偏好和合作方式。",
       "对齐活动价值和合作节奏。"
     ],
-    extraTags: [["乌镇设计周", "品牌增信"], ["活动资源意向"], ["品牌露出关注"], ["待激活"]]
+    extraTags: [["活动合作", "信任建设"], ["活动资源意向"], ["品牌露出关注"], ["待激活"]]
   },
   {
     startIndex: 21,
@@ -1497,7 +1497,7 @@ const platformLeadSeries: PlatformSeriesSeed[] = [
     customerType: "PLATFORM_SUPPLY_CHAIN_CLIENT",
     needType: "ASK_PRICE",
     names: ["侯总", "蒋总", "许总", "杜总"],
-    companies: ["木仓供应链", "木和选品", "整木优采", "森配集采"],
+    companies: ["木仓供应链", "木和选品", "客户增长优采", "森配集采"],
     cities: ["合肥", "南通", "温州", "西安"],
     messages: [
       "小红书咨询集采合作价格和适合品类。",
@@ -1598,7 +1598,7 @@ function buildPlatformLeads() {
         phone: `13988${padLeadNumber(series.startIndex + index).slice(-3)}${(series.startIndex + index + 10).toString().padStart(3, "0")}`,
         wechat: `platform-${padLeadNumber(series.startIndex + index)}`,
         company: series.companies[index],
-        industry: "整木行业平台／产业服务",
+        industry: "通用销售平台／产业服务",
         city: series.cities[index],
         source: profile.source,
         customerType: series.customerType,
@@ -1889,8 +1889,8 @@ async function main() {
 
   await seedTenant({
     slug: "zhengmu-demo",
-    name: "整木样板企业",
-    industry: "整木高定",
+    name: "MarketClaw 样板企业",
+    industry: "高客单服务",
     users: {
       admin: "boss@zhengmu.local",
       operator: "operator@zhengmu.local",
@@ -1902,8 +1902,8 @@ async function main() {
 
   await seedTenant({
     slug: "zhengmu-platform",
-    name: "中华整木网",
-    industry: "整木行业平台／产业服务",
+    name: "MarketClaw",
+    industry: "通用销售平台／产业服务",
     plan: "flagship",
     users: {
       admin: "platform-boss@zhengmu.local",
@@ -1974,7 +1974,7 @@ async function main() {
         owner: "admin",
         message: "第二租户线索，不能出现在 zhengmu-demo 后台。",
         followUp: {
-          content: "第二租户工厂客户，继续用于隔离验证。",
+          content: "第二租户重点客户，继续用于隔离验证。",
           nextAction: "确认隔离租户数据不可见",
           stageBefore: "NEW",
           stageAfter: "CONTACTED",

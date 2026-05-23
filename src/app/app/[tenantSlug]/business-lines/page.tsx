@@ -1,13 +1,16 @@
 /*
- * 文件说明：该页面实现 V2.0.3 的业务配置总览。
- * 功能说明：把产品总览、资料包、策略库、任务模板和配置入口收口到同一页面，避免业务线页面继续铺成长表单。
+ * 文件说明：该页面实现业务配置总览。
+ * 功能说明：把试点前的业务基础配置与低频系统基础配置分开展示，弱化 AI、企微和合规入口。
  *
  * 结构概览：
- *   第一部分：概览卡片组件
- *   第二部分：产品总览卡片组件
- *   第三部分：业务配置总览页
+ *   第一部分：导入依赖与展示组件
+ *   第二部分：产品总览卡片
+ *   第三部分：业务配置页面
  */
 import Link from "next/link";
+import { BusinessLineForm, StatusActionButtons } from "@/components/BusinessLineEditor";
+import { PageShell } from "@/components/Shell";
+import { Callout, Card, ModuleMoreMenu, SectionTabs, StatCard } from "@/components/Ui";
 import { createBusinessLine, updateBusinessLineStatus } from "@/lib/actions";
 import { requireTenantAccess } from "@/lib/auth";
 import {
@@ -18,9 +21,6 @@ import {
 } from "@/lib/business-lines";
 import { businessLineCategoryOptions, businessLineStatusOptions, customerTypeOptions, formatDate, labelOf } from "@/lib/options";
 import { prisma } from "@/lib/prisma";
-import { PageShell } from "@/components/Shell";
-import { BusinessLineForm, StatusActionButtons } from "@/components/BusinessLineEditor";
-import { Callout, Card, SectionTabs, StatCard } from "@/components/Ui";
 
 export const dynamic = "force-dynamic";
 
@@ -28,15 +28,7 @@ type BusinessLineItem = Awaited<ReturnType<typeof prisma.businessLine.findMany>>
 type MaterialItem = Awaited<ReturnType<typeof prisma.material.findMany>>[number];
 type TaskTemplateItem = Awaited<ReturnType<typeof prisma.taskTemplate.findMany>>[number];
 
-function ConfigEntryCard({
-  title,
-  description,
-  href
-}: {
-  title: string;
-  description: string;
-  href: string;
-}) {
+function ConfigEntryCard({ title, description, href }: { title: string; description: string; href: string }) {
   return (
     <Card className="h-full">
       <h2 className="text-base font-semibold text-slate-950">{title}</h2>
@@ -71,7 +63,7 @@ function BusinessLineOverviewCard({
   const customerTypes = parseBusinessLineCustomerTypes(businessLine.targetCustomerTypes);
   const statusLabel = labelOf(businessLineStatusOptions, businessLine.status);
   const categoryLabel = labelOf(businessLineCategoryOptions, businessLine.category);
-  const maintenanceRole = canEdit ? (canArchive ? "企业管理员 / 运营维护" : "运营维护 / 可暂停") : "销售只读 / 仅看启用产品";
+  const maintenanceRole = canEdit ? (canArchive ? "管理员 / 运营维护" : "运营维护 / 可暂停") : "销售只读";
 
   return (
     <Card className="h-full">
@@ -86,11 +78,11 @@ function BusinessLineOverviewCard({
 
       <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
         <InfoLine label="适合客户类型" value={customerTypes.length ? `${customerTypes.length} 类` : "未限制"} />
-        <InfoLine label="推荐标签数量" value={`${countBusinessLineTags(businessLine)} 个`} />
-        <InfoLine label="关联资料数量" value={`${countBusinessLineMaterials(businessLine)} 份`} />
-        <InfoLine label="关联任务模板数量" value={`${countBusinessLineTaskTemplates(businessLine)} 个`} />
+        <InfoLine label="推荐标签" value={`${countBusinessLineTags(businessLine)} 个`} />
+        <InfoLine label="关联资料" value={`${countBusinessLineMaterials(businessLine)} 份`} />
+        <InfoLine label="任务模板" value={`${countBusinessLineTaskTemplates(businessLine)} 个`} />
         <InfoLine label="优先级" value={String(businessLine.priority)} />
-        <InfoLine label="最近更新时间" value={formatDate(businessLine.updatedAt)} />
+        <InfoLine label="最近更新" value={formatDate(businessLine.updatedAt)} />
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
@@ -111,14 +103,7 @@ function BusinessLineOverviewCard({
         <Link className="rounded-md bg-slate-950 px-3 py-2 text-sm font-medium text-white" href={`/app/${tenantSlug}/business-lines/${businessLine.id}`}>
           查看详情
         </Link>
-        {canEdit ? (
-          <StatusActionButtons
-            tenantSlug={tenantSlug}
-            businessLine={businessLine}
-            canArchive={canArchive}
-            action={updateBusinessLineStatus}
-          />
-        ) : null}
+        {canEdit ? <StatusActionButtons tenantSlug={tenantSlug} businessLine={businessLine} canArchive={canArchive} action={updateBusinessLineStatus} /> : null}
       </div>
     </Card>
   );
@@ -128,6 +113,7 @@ export default async function BusinessLinesPage({ params }: { params: { tenantSl
   const { user, tenant } = await requireTenantAccess(params.tenantSlug, ["TENANT_ADMIN", "OPERATOR", "SALES"]);
   const canEdit = user.role === "TENANT_ADMIN" || user.role === "OPERATOR";
   const canArchive = user.role === "TENANT_ADMIN";
+  const base = `/app/${tenant.slug}`;
 
   const [businessLines, materials, taskTemplates] = await Promise.all([
     prisma.businessLine.findMany({
@@ -157,13 +143,13 @@ export default async function BusinessLinesPage({ params }: { params: { tenantSl
       tenant={tenant}
       title="业务配置"
       breadcrumbs={[
-        { label: "业务配置", href: `/app/${tenant.slug}/business-lines` },
+        { label: "业务配置", href: `${base}/business-lines` },
         { label: "产品总览" }
       ]}
       description={
         canEdit
-          ? "把产品总览、资料包、策略库、任务模板、企微配置和合规配置收口到同一条维护路径，避免后台入口继续平铺。"
-          : "销售侧只查看启用产品总览，用于理解当前主推方向、推荐标签、推荐资料和下一步动作。"
+          ? "业务基础用于试点前配置产品和资料；系统基础配置属于低频设置，不建议试点演示时重点讲。"
+          : "销售侧只查看启用产品，用于理解当前主推方向、资料建议和下一步动作。"
       }
     >
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -176,77 +162,56 @@ export default async function BusinessLinesPage({ params }: { params: { tenantSl
       <SectionTabs
         current="overview"
         items={[
-          { key: "overview", label: "产品总览", href: `/app/${tenant.slug}/business-lines#product-overview` },
-          { key: "materials", label: "资料包", href: `/app/${tenant.slug}/materials` },
-          { key: "strategies", label: "策略库", href: `/app/${tenant.slug}/strategies` },
-          { key: "tasks", label: "任务模板", href: `/app/${tenant.slug}/task-templates` },
-          ...(canEdit ? [{ key: "ai", label: "AI 能力配置", href: `/app/${tenant.slug}/ai-settings` }] : []),
-          ...(user.role === "TENANT_ADMIN" ? [{ key: "wecom", label: "企业微信提醒配置", href: `/app/${tenant.slug}/wecom` }] : []),
-          ...(canEdit ? [{ key: "compliance", label: "合规配置", href: `/app/${tenant.slug}/communication-compliance` }] : [])
+          { key: "overview", label: "产品总览", href: `${base}/business-lines#product-overview` },
+          { key: "materials", label: "资料包", href: `${base}/materials` },
+          { key: "strategies", label: "策略库", href: `${base}/strategies` },
+          { key: "tasks", label: "任务模板", href: `${base}/task-templates` }
         ]}
         className="mt-4"
       />
 
-      <Callout className="mt-4" title={canEdit ? "维护路径" : "查看路径"} tone={canEdit ? "slate" : "emerald"}>
+      <Callout className="mt-4" title={canEdit ? "试点前配置顺序" : "销售查看路径"} tone={canEdit ? "slate" : "emerald"}>
         {canEdit
-          ? "先在产品总览判断当前主推方向，再进入详情页维护客户适配、推荐标签、资料和任务模板，不把所有字段堆在同一页。"
-          : "销售先看产品总览确认当前主推产品，再进入客户详情页结合标签、资料和 Market Claw 实际使用。"}
+          ? "先维护产品总览、资料包、策略库和任务模板。AI 能力、企业微信提醒和合规配置属于低频系统基础配置，试点演示时只做必要说明。"
+          : "先看产品总览确认主推产品，再回到客户详情页结合资料建议和 Market Claw 回复建议实际使用。"}
       </Callout>
 
       <section className="mt-6">
-        <h2 className="text-lg font-semibold text-slate-950">配置导航</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-600">
-          先从产品总览进入，再按模块跳转到资料、策略、任务模板和配置页，不再把所有配置项都堆在左侧导航里。
-        </p>
-        <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <ConfigEntryCard
-            title="产品总览"
-            description="查看当前启用、暂停和归档中的产品，并进入产品详情做更细的维护。"
-            href={`/app/${tenant.slug}/business-lines#product-overview`}
-          />
-          <ConfigEntryCard
-            title="资料包"
-            description="维护销售在客户详情页和 Market Claw 推荐中会用到的资料资产。"
-            href={`/app/${tenant.slug}/materials`}
-          />
-          <ConfigEntryCard
-            title="策略库"
-            description="统一维护不同客户类型的话术、资料和推荐动作，不让销售各说各话。"
-            href={`/app/${tenant.slug}/strategies`}
-          />
-          <ConfigEntryCard
-            title="任务模板"
-            description="维护跟进模板，保证今天该做什么、下一步做什么有一致节奏。"
-            href={`/app/${tenant.slug}/task-templates`}
-          />
-          {canEdit ? (
-            <ConfigEntryCard
-              title="AI 能力配置"
-              description="配置和测试租户级 AI Provider，供后续内部沙盒与业务预览安全调用。"
-              href={`/app/${tenant.slug}/ai-settings`}
-            />
-          ) : null}
-          {user.role === "TENANT_ADMIN" ? (
-            <ConfigEntryCard
-              title="企业微信提醒配置"
-              description="配置内部工作提醒、成员 ID 绑定和通知日志；当前不处理客户侧沟通内容，也不做自动对外动作。"
-              href={`/app/${tenant.slug}/wecom`}
-            />
-          ) : null}
-          {canEdit ? (
-            <ConfigEntryCard
-              title="合规配置"
-              description="围绕沟通素材采集边界做收口，继续保持不自动发送、不自动采集的原则。"
-              href={`/app/${tenant.slug}/communication-compliance`}
-            />
-          ) : null}
+        <h2 className="text-lg font-semibold text-slate-950">业务基础</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-600">用于试点前配置产品、资料、策略和跟进节奏，是客户导入和销售跟进的基础。</p>
+        <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <ConfigEntryCard title="产品总览" description="查看当前启用、暂停和归档中的产品，并进入详情维护适配客户、标签和 SOP。" href={`${base}/business-lines#product-overview`} />
+          <ConfigEntryCard title="资料包" description="维护销售在客户详情页和 Market Claw 推荐中会用到的资料资产。" href={`${base}/materials`} />
+          <ConfigEntryCard title="策略库" description="维护不同客户类型的资料、话术和推荐动作。" href={`${base}/strategies`} />
+          <ConfigEntryCard title="任务模板" description="维护标准跟进动作，让今日跟进和下一步任务有一致节奏。" href={`${base}/task-templates`} />
         </div>
       </section>
 
       {canEdit ? (
+        <section className="mt-6">
+          <details className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
+            <summary className="cursor-pointer text-base font-semibold text-slate-950">系统基础配置</summary>
+            <p className="mt-3 text-sm leading-6 text-slate-600">这些属于低频设置，不建议熟客试点第一次演示时重点展开。</p>
+            <div className="mt-4">
+              <ModuleMoreMenu
+                label="打开更多设置"
+                items={[
+                  { title: "AI 能力配置", href: `${base}/ai-settings`, description: "配置和测试内部回复能力。" },
+                  ...(user.role === "TENANT_ADMIN"
+                    ? [{ title: "企业微信提醒配置", href: `${base}/wecom`, description: "配置内部工作提醒和成员绑定。" }]
+                    : []),
+                  { title: "合规配置", href: `${base}/communication-compliance`, description: "维护沟通素材采集和使用边界。" }
+                ]}
+              />
+            </div>
+          </details>
+        </section>
+      ) : null}
+
+      {canEdit ? (
         <details className="mt-6 rounded-md border border-slate-200 bg-white p-5 shadow-sm">
           <summary className="cursor-pointer text-base font-semibold text-slate-950">新增产品</summary>
-          <p className="mt-3 text-sm leading-6 text-slate-600">新增入口保留在总览页，但默认折叠，避免产品总览一打开就是一长串字段。</p>
+          <p className="mt-3 text-sm leading-6 text-slate-600">新增入口默认折叠，避免产品总览一打开就变成维护表单。</p>
           <div className="mt-4">
             <BusinessLineForm
               action={createAction}
@@ -260,25 +225,12 @@ export default async function BusinessLinesPage({ params }: { params: { tenantSl
       ) : null}
 
       <section id="product-overview" className="mt-6">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-950">产品总览</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              每张产品卡片只展示核心信息，需要维护更多细节时再进入详情页，不再把全部字段铺成长页面。
-            </p>
-          </div>
-        </div>
-
+        <h2 className="text-lg font-semibold text-slate-950">产品总览</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-600">每张产品卡片只展示核心状态，更多字段进入产品详情页维护。</p>
         <div className="mt-4 grid gap-4 xl:grid-cols-2">
           {businessLines.length ? (
             businessLines.map((businessLine) => (
-              <BusinessLineOverviewCard
-                key={businessLine.id}
-                tenantSlug={tenant.slug}
-                businessLine={businessLine}
-                canEdit={canEdit}
-                canArchive={canArchive}
-              />
+              <BusinessLineOverviewCard key={businessLine.id} tenantSlug={tenant.slug} businessLine={businessLine} canEdit={canEdit} canArchive={canArchive} />
             ))
           ) : (
             <Card>

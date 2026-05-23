@@ -7,6 +7,8 @@ coverage
 !.env.example
 custom/experiments/postgres-data
 custom/experiments/*.log
+.local/
+tmp/postgres-data/
 *.log
 *.tmp
 .DS_Store

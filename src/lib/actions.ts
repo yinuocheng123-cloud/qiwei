@@ -3555,7 +3555,7 @@ export async function generateMarketClawReplyDraft(tenantSlug: string, leadId: s
   ]);
 
   if (!businessLineId) {
-    businessLineId = businessLines.find((item) => item.name.includes("GEO") && customerQuestion.includes("GEO"))?.id ?? businessLines[0]?.id;
+    businessLineId = businessLines.find((item) => item.name.includes("增长推广") && customerQuestion.includes("增长推广"))?.id ?? businessLines[0]?.id;
   }
 
   const businessLine = businessLines.find((item) => item.id === businessLineId) ?? null;

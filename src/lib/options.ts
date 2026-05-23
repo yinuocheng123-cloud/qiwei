@@ -26,17 +26,17 @@ export const sourceOptions: Option[] = [
 ];
 
 export const customerTypeOptions: Option[] = [
-  { value: "OWNER_CLIENT", label: "业主客户" },
-  { value: "DEALER_CLIENT", label: "经销商客户" },
-  { value: "DESIGNER_CLIENT", label: "设计师客户" },
-  { value: "FACTORY_CLIENT", label: "工厂客户" },
+  { value: "OWNER_CLIENT", label: "潜在客户" },
+  { value: "DEALER_CLIENT", label: "合作伙伴" },
+  { value: "DESIGNER_CLIENT", label: "意向客户" },
+  { value: "FACTORY_CLIENT", label: "重点客户" },
   { value: "CHANNEL_PARTNER", label: "渠道伙伴" },
   { value: "OLD_CLIENT", label: "老客户" },
-  { value: "PLATFORM_FACTORY_OWNER", label: "整木工厂老板" },
+  { value: "PLATFORM_FACTORY_OWNER", label: "重点客户" },
   { value: "PLATFORM_MEMBERSHIP_CLIENT", label: "会员意向客户" },
-  { value: "PLATFORM_GEO_AI_CLIENT", label: "GEO／AI 推广客户" },
+  { value: "PLATFORM_GEO_AI_CLIENT", label: "增长推广客户" },
   { value: "PLATFORM_TRAINING_CLIENT", label: "培训课程客户" },
-  { value: "PLATFORM_EVENT_RESOURCE_CLIENT", label: "活动／乌镇资源客户" },
+  { value: "PLATFORM_EVENT_RESOURCE_CLIENT", label: "活动／活动资源客户" },
   { value: "PLATFORM_SUPPLY_CHAIN_CLIENT", label: "供应链／集采客户" },
   { value: "PLATFORM_AFTERMARKET_CLIENT", label: "一清一护后市场客户" },
   { value: "PLATFORM_PARTNER_CLIENT", label: "合作伙伴客户" },
@@ -50,7 +50,7 @@ export const needTypeOptions: Option[] = [
   { value: "ASK_PRICE", label: "询价" },
   { value: "BOOK_CONSULTATION", label: "预约咨询" },
   { value: "AFTER_SALES", label: "售后" },
-  { value: "INVESTMENT_JOIN", label: "招商加盟" },
+  { value: "INVESTMENT_JOIN", label: "合作加盟" },
   { value: "GROWTH_SYSTEM", label: "增长系统" },
   { value: "OTHER", label: "其他" }
 ];

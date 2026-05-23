@@ -52,28 +52,22 @@ function buildTenantNavGroups(tenant: Tenant, role: UserRole): NavGroup[] {
     ];
   }
 
-  const homeGroup: NavGroup = {
-    label: "首页",
+  const workbenchGroup: NavGroup = {
+    label: "工作台",
     href: `${base}/dashboard`,
-    description: "集中查看今日重点、待办提醒、高意向客户、逾期任务和最近新增线索。",
-    visibleCount: role === "SALES" ? 2 : 3,
-    children:
-      role === "SALES"
-        ? [
-            { label: "总览看板", href: `${base}/dashboard` },
-            { label: "演示说明", href: `${base}/demo-guide` }
-          ]
-        : [
-            { label: "总览看板", href: `${base}/dashboard` },
-            { label: "初始化向导", href: `${base}/onboarding` },
-            { label: "演示说明", href: `${base}/demo-guide` }
-          ]
+    description: "销售每天先看今日待跟进、新线索、超期客户和 AI 推荐回复。",
+    visibleCount: 2,
+    children: [
+      { label: "今日工作台", href: `${base}/dashboard`, description: "进入当天销售跟进主线。" },
+      { label: "今日待办", href: `${base}/todos?view=today#today-tasks`, description: "先处理今天必须跟进的客户。" },
+      { label: "超期客户", href: `${base}/todos?view=overdue#overdue-tasks`, description: "优先清理已经超时的跟进事项。" }
+    ]
   };
 
   const customerGroup: NavGroup = {
-    label: "客户管理",
+    label: "客户",
     href: `${base}/leads`,
-    description: "把客户列表、导入、来源归因、标签视图和表单线索收口到同一入口。",
+    description: role === "SALES" ? "查看自己负责的客户，进入客户详情完成回复和记录。" : "承接客户列表、客户导入、来源归因、标签和表单线索。",
     visibleCount: role === "SALES" ? 1 : 2,
     children:
       role === "SALES"
@@ -88,9 +82,9 @@ function buildTenantNavGroups(tenant: Tenant, role: UserRole): NavGroup[] {
   };
 
   const todoGroup: NavGroup = {
-    label: "跟进工作台",
+    label: "跟进",
     href: `${base}/todos`,
-    description: "围绕今日待办、逾期任务、已完成记录和任务模板展开日常跟进。",
+    description: "只围绕今天该跟谁、哪些超期、哪些已完成展开。",
     visibleCount: 2,
     children:
       role === "SALES"
@@ -107,81 +101,55 @@ function buildTenantNavGroups(tenant: Tenant, role: UserRole): NavGroup[] {
           ]
   };
 
-  const marketClawGroup: NavGroup = {
-    label: "Market Claw",
-    href: `${base}/market-claw`,
-    description:
-      role === "SALES"
-        ? "销售从客户详情页使用 Market Claw，也可以做我的训练、保存个人话术并回看回复记录。"
-        : "统一承接 Market Claw 总览、知识库、资料投喂、回复训练场、训练审核和回复记录。",
-    visibleCount: role === "SALES" ? 2 : 2,
+  const materialGroup: NavGroup = {
+    label: "资料",
+    href: `${base}/materials`,
+    description: role === "SALES" ? "销售只查沟通资料，不进入 AI 训练和后台治理结构。" : "运营维护销售可用资料，AI 训练作为独立模块承接样本、审核和复盘。",
+    visibleCount: 1,
     children:
       role === "SALES"
-        ? [
-            { label: "Market Claw 总览", href: `${base}/market-claw`, description: "查看销售侧使用路径。" },
-            { label: "我的训练", href: `${base}/market-claw/training`, description: "沉淀个人常用话术。" },
-            { label: "我的回复记录", href: `${base}/market-claw/replies`, description: "回看自己生成过的回复。" },
-            { label: "训练复盘", href: `${base}/market-claw/insights`, description: "查看个人训练表现。" }
-          ]
+        ? [{ label: "资料包", href: `${base}/materials`, description: "查找客户沟通可用资料。" }]
         : [
-            { label: "Market Claw 总览", href: `${base}/market-claw`, description: "进入模块总览和角色路径。" },
-            { label: "AI 测试沙盒", href: `${base}/market-claw/sandbox`, description: "内部测试 Provider、专家视角和风险分级。" },
-            { label: "知识库", href: `${base}/market-claw/knowledge`, description: "维护产品、FAQ、案例和边界知识。" },
-            { label: "资料投喂", href: `${base}/market-claw/ingestion`, description: "把资料拆成候选知识并人工审核。" },
-            { label: "回复训练场", href: `${base}/market-claw/training`, description: "模拟客户问题并沉淀训练样本。" },
-            { label: "训练审核", href: `${base}/market-claw/training/review`, description: "审核销售提交的话术样本。" },
-            { label: "回复记录", href: `${base}/market-claw/replies`, description: "复盘实际生成和使用记录。" },
-            { label: "训练复盘", href: `${base}/market-claw/insights`, description: "查看知识治理与训练表现。" }
+            { label: "资料包", href: `${base}/materials`, description: "维护销售可用资料。" },
+            { label: "资料维护说明", href: `${base}/materials`, description: "先把销售常用资料整理清楚，训练样本和审核从 AI训练 进入。" }
           ]
   };
 
-  const businessConfigGroup: NavGroup = {
-    label: "业务配置",
-    href: `${base}/business-lines`,
-    description: "把产品总览、资料包、策略库、任务模板和配置入口收口到同一组。",
-    visibleCount: 2,
-    children:
-      role === "TENANT_ADMIN"
-        ? [
-            { label: "产品总览", href: `${base}/business-lines`, description: "查看业务线和产品配置状态。" },
-            { label: "AI 能力配置", href: `${base}/ai-settings`, description: "配置和测试租户 AI Provider。" },
-            { label: "资料包", href: `${base}/materials`, description: "维护销售可使用的资料资产。" },
-            { label: "策略库", href: `${base}/strategies`, description: "维护客户类型策略和推荐动作。" },
-            { label: "任务模板", href: `${base}/task-templates`, description: "维护标准跟进任务模板。" },
-            { label: "合规配置", href: `${base}/communication-compliance`, description: "维护沟通素材采集边界。" },
-            { label: "企业微信提醒配置", href: `${base}/wecom`, description: "配置内部提醒和成员绑定。" }
-          ]
-        : [
-            { label: "产品总览", href: `${base}/business-lines`, description: "查看和维护业务线配置。" },
-            { label: "AI 能力配置", href: `${base}/ai-settings`, description: "查看状态并执行测试连接。" },
-            { label: "资料包", href: `${base}/materials`, description: "维护销售资料资产。" },
-            { label: "策略库", href: `${base}/strategies`, description: "维护客户类型策略。" },
-            { label: "任务模板", href: `${base}/task-templates`, description: "维护标准任务模板。" },
-            { label: "合规配置", href: `${base}/communication-compliance`, description: "维护沟通素材边界。" }
-          ]
-  };
-
-  const systemGroup: NavGroup = {
-    label: "系统管理",
-    href: `${base}/permissions`,
-    description: "只给高权限角色展示权限说明、审计日志和演示说明等管理入口。",
+  const aiTrainingGroup: NavGroup = {
+    label: "AI训练",
+    href: `${base}/market-claw/training`,
+    description: "运营和管理员维护回复样本、训练审核和资料投喂；销售只看到客户详情里的 AI 推荐回复结果。",
     visibleCount: 2,
     children: [
-      { label: "权限说明", href: `${base}/permissions` },
-      { label: "审计日志", href: `${base}/audit-logs` },
-      { label: "演示说明", href: `${base}/demo-guide` }
+      { label: "回复训练", href: `${base}/market-claw/training`, description: "整理销售沉淀的话术样本和训练草稿。" },
+      { label: "训练审核", href: `${base}/market-claw/training/review`, description: "审核训练样本、风险边界和可沉淀内容。" },
+      { label: "资料投喂", href: `${base}/market-claw/ingestion`, description: "把试点资料整理成候选知识。" },
+      { label: "回复记录", href: `${base}/market-claw/replies`, description: "复盘推荐回复生成和使用情况。" },
+      { label: "训练复盘", href: `${base}/market-claw/insights`, description: "查看高频问题、知识缺口和训练效果。" }
+    ]
+  };
+
+  const settingsGroup: NavGroup = {
+    label: "设置",
+    href: `${base}/settings`,
+    description: "系统级低频配置统一收纳，不进入销售主路径；AI 训练已独立给运营承接。",
+    visibleCount: 2,
+    children: [
+      { label: "业务配置", href: `${base}/business-lines`, description: "产品、策略、任务模板等试点基础配置。" },
+      { label: "系统设置", href: `${base}/settings`, description: "AI Provider、企微、合规、审计和说明统一入口。" },
+      { label: "成员与权限", href: `${base}/permissions`, description: "查看角色边界。" }
     ]
   };
 
   if (role === "TENANT_ADMIN") {
-    return [homeGroup, customerGroup, todoGroup, marketClawGroup, businessConfigGroup, systemGroup];
+    return [workbenchGroup, customerGroup, todoGroup, materialGroup, aiTrainingGroup, settingsGroup];
   }
 
   if (role === "OPERATOR") {
-    return [homeGroup, customerGroup, todoGroup, marketClawGroup, businessConfigGroup];
+    return [workbenchGroup, customerGroup, todoGroup, materialGroup, aiTrainingGroup, settingsGroup];
   }
 
-  return [homeGroup, customerGroup, todoGroup, marketClawGroup];
+  return [workbenchGroup, customerGroup, todoGroup, materialGroup];
 }
 
 function PlatformNavBar({ items }: { items: NavItem[] }) {

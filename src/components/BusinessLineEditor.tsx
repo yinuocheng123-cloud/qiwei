@@ -139,7 +139,7 @@ export function BusinessLineForm({
       <CheckboxGroup title="适合客户类型" name="targetCustomerTypes" options={customerTypeOptions} selectedValues={selectedCustomerTypes} />
 
       <Textarea label="推荐标签" name="recommendedTags" defaultValue={recommendedTagText} rows={4} />
-      <p className="text-xs text-slate-500">每行使用“标签名称|标签分组”格式，例如：GEO意向|业务标签。</p>
+      <p className="text-xs text-slate-500">每行使用“标签名称|标签分组”格式，例如：增长推广意向|业务标签。</p>
 
       <RelatedRecordCheckboxes
         title="关联资料"

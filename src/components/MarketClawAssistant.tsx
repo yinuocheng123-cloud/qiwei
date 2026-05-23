@@ -94,7 +94,9 @@ export function MarketClawAssistant({
   drafts,
   materials,
   knowledgeItems,
-  existingTags
+  existingTags,
+  showGovernance = true,
+  unavailable = false
 }: {
   tenantSlug: string;
   leadId: string;
@@ -103,6 +105,8 @@ export function MarketClawAssistant({
   materials: MaterialRecord[];
   knowledgeItems: KnowledgeRecord[];
   existingTags: ExistingTagRecord[];
+  showGovernance?: boolean;
+  unavailable?: boolean;
 }) {
   const generateAction = generateMarketClawReplyDraft.bind(null, tenantSlug, leadId);
   const copyAction = markMarketClawReplyCopied.bind(null, tenantSlug, leadId);
@@ -118,9 +122,9 @@ export function MarketClawAssistant({
     <Card>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-slate-950">Market Claw 智能回复</h2>
+          <h2 className="text-base font-semibold text-slate-950">AI 推荐回复</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            客户提问后，系统会结合企业知识库、业务线、客户阶段和已有标签生成回复草稿，并给出风险等级和确认策略。本轮仍不做真实自动对外发送。
+            客户提问后，系统会生成回复建议，并给出风险提醒。销售需要人工确认和修改，本轮仍不做真实自动对外发送。
           </p>
         </div>
         <div className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
@@ -145,6 +149,12 @@ export function MarketClawAssistant({
         <SubmitButton>生成回复草稿</SubmitButton>
       </form>
 
+      {unavailable ? (
+        <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          当前 AI 推荐暂不可用，可先手工记录跟进。
+        </div>
+      ) : null}
+
       <div className="mt-6 space-y-5">
         {drafts.length ? (
           drafts.map((draft) => (
@@ -161,12 +171,13 @@ export function MarketClawAssistant({
               notifyAction={notifyAction}
               saveAction={saveAction}
               savePersonalAction={savePersonalAction}
+              showGovernance={showGovernance}
               submitTrainingAction={submitTrainingAction}
             />
           ))
         ) : (
           <div className="rounded-md border border-dashed border-slate-300 px-4 py-6 text-sm text-slate-500">
-            还没有生成 Market Claw 回复草稿。先输入客户问题，系统会生成三种回复，并标记风险等级和使用模式。
+            还没有生成 AI 推荐回复。先输入客户问题，系统会生成回复建议，并标记风险等级和使用方式。
           </div>
         )}
       </div>
@@ -186,7 +197,8 @@ function MarketClawDraftCard({
   confirmTagsAction,
   createTaskAction,
   feedbackAction
-  , notifyAction
+  , notifyAction,
+  showGovernance
 }: {
   draft: DraftRecord;
   materials: MaterialRecord[];
@@ -200,6 +212,7 @@ function MarketClawDraftCard({
   createTaskAction: (formData: FormData) => Promise<void>;
   feedbackAction: (formData: FormData) => Promise<void>;
   notifyAction: (formData: FormData) => Promise<void>;
+  showGovernance: boolean;
 }) {
   const matchedKnowledgeTitles = parseMarketClawTextArray(draft.matchedKnowledgeIds)
     .map((id) => knowledgeItems.find((item) => item.id === id)?.title)
@@ -270,12 +283,14 @@ function MarketClawDraftCard({
         <ReplyBlock action={copyAction} allowCopy={!isBlocked} draftId={draft.id} replyType="CLOSING" title="推进成交版" text={draft.closingReply ?? "-"} />
       </div>
 
+      {showGovernance ? (
       <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <InfoList title="命中知识依据" values={matchedKnowledgeTitles} emptyText="本次没有命中特定知识条目。" />
         <InfoList title="命中的高风险知识" values={highRiskKnowledgeTitles} emptyText="本次没有命中高风险知识。" />
         <InfoList title="命中的内部建议" values={internalAdviceTitles} emptyText="本次没有命中内部建议知识。" />
         <InfoList title="推荐资料" values={suggestedMaterialTitles} emptyText="本次没有强匹配资料。" />
       </div>
+      ) : null}
 
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <InfoList title="风险提醒" values={riskWarnings} emptyText="本次没有命中高风险提醒。" />
@@ -286,6 +301,7 @@ function MarketClawDraftCard({
         />
       </div>
 
+      {showGovernance ? (
       <div className="mt-5 rounded-md border border-slate-200 bg-white p-4">
         <h4 className="text-sm font-semibold text-slate-950">推荐标签</h4>
         {suggestedTags.length ? (
@@ -316,6 +332,7 @@ function MarketClawDraftCard({
           <p className="mt-2 text-sm text-slate-500">本次没有生成推荐标签。</p>
         )}
       </div>
+      ) : null}
 
       <div className="mt-5 grid gap-4 xl:grid-cols-2">
         {!isBlocked ? (
@@ -333,7 +350,7 @@ function MarketClawDraftCard({
           </div>
         )}
 
-        {!isBlocked ? (
+        {showGovernance && !isBlocked ? (
           <form action={savePersonalAction} className="rounded-md border border-slate-200 bg-white p-4 space-y-3">
             <h4 className="text-sm font-semibold text-slate-950">{draft.replyRiskLevel === "LOW" ? "设为低风险承接模板" : "保存为个人常用话术"}</h4>
             <input name="draftId" type="hidden" value={draft.id} />
@@ -342,7 +359,7 @@ function MarketClawDraftCard({
             <Textarea label="销售修改版本" name="salesEditedReply" rows={3} />
             <SubmitButton>{draft.replyRiskLevel === "LOW" ? "设为低风险承接模板" : "保存为个人常用话术"}</SubmitButton>
           </form>
-        ) : (
+        ) : showGovernance ? (
           <form action={feedbackAction} className="rounded-md border border-slate-200 bg-white p-4 space-y-3">
             <h4 className="text-sm font-semibold text-slate-950">保存内部备注</h4>
             <input name="draftId" type="hidden" value={draft.id} />
@@ -351,8 +368,9 @@ function MarketClawDraftCard({
             <Textarea label="销售备注" name="salesEditedReply" rows={3} />
             <SubmitButton>保存内部备注</SubmitButton>
           </form>
-        )}
+        ) : null}
 
+        {showGovernance ? (
         <form action={submitTrainingAction} className="rounded-md border border-slate-200 bg-slate-50 p-4 space-y-3">
           <h4 className="text-sm font-semibold text-slate-950">
             {isBlocked ? "仅内部建议" : isHighRisk ? "确认条件后使用 / 提交优化" : isMediumRisk ? "销售确认后使用 / 提交优化" : "提交为训练样本审核"}
@@ -363,7 +381,9 @@ function MarketClawDraftCard({
           <Textarea label={isBlocked ? "内部备注" : "销售备注"} name="salesNote" rows={3} />
           <SubmitButton>{isBlocked ? "保存内部建议" : isHighRisk ? "确认条件后使用 / 提交优化" : isMediumRisk ? "销售确认后使用 / 提交优化" : "提交为训练样本审核"}</SubmitButton>
         </form>
+        ) : null}
 
+        {showGovernance ? (
         <form action={feedbackAction} className="rounded-md border border-slate-200 bg-white p-4 space-y-3">
           <h4 className="text-sm font-semibold text-slate-950">使用反馈</h4>
           <input name="draftId" type="hidden" value={draft.id} />
@@ -376,14 +396,17 @@ function MarketClawDraftCard({
           </label>
           <SubmitButton>提交反馈</SubmitButton>
         </form>
+        ) : null}
       </div>
 
+      {showGovernance ? (
       <div className="mt-4 rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-700">
         <p className="font-medium text-slate-900">训练状态</p>
         <p className="mt-2">{draft.submittedForReviewAt ? "这条回复已经提交审核。" : "这条回复还没有提交审核。"}</p>
         {draft.trainingCase ? <p className="mt-1">当前训练状态：{draft.trainingCase.reviewStatus}</p> : null}
         {draft.trainingCase?.reviewComment ? <p className="mt-1">审核意见：{draft.trainingCase.reviewComment}</p> : null}
       </div>
+      ) : null}
 
       <div className="mt-4 flex flex-wrap gap-3">
         {suggestedTask ? (
@@ -399,7 +422,7 @@ function MarketClawDraftCard({
             <input name="relatedLeadId" type="hidden" value={draft.leadId} />
             <input name="relatedReplyDraftId" type="hidden" value={draft.id} />
             <input name="title" type="hidden" value="风险边界确认提醒" />
-            <input name="content" type="hidden" value="Market Claw 生成了高风险回复，请回到系统查看边界提醒并确认条件后再使用。" />
+            <input name="content" type="hidden" value="AI 推荐回复命中高风险提醒，请回到系统查看边界提醒并确认条件后再使用。" />
             <SubmitButton>发送风险边界确认提醒</SubmitButton>
           </form>
         ) : null}

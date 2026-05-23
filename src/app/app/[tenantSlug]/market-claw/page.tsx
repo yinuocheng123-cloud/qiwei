@@ -1,263 +1,151 @@
 /*
- * 文件说明：该页面实现 V2.0.3 的 Market Claw 总览页。
- * 功能说明：为不同角色提供 Market Claw 入口、统计和最近使用记录，不再让 `/market-claw` 成为空跳转。
+ * 文件说明：该页面实现 V2.2 的 AI 推荐回复收口页。
+ * 功能说明：销售侧只看到“AI 推荐回复”心智，后台知识、训练、沙盒和治理入口转入系统设置。
  *
  * 结构概览：
- *   第一部分：总览卡片组件
- *   第二部分：角色化快捷入口
- *   第三部分：Market Claw 总览页
+ *   第一部分：导入依赖与展示组件
+ *   第二部分：角色化数据查询
+ *   第三部分：AI 推荐回复页面渲染
  */
 import Link from "next/link";
 import { PageShell } from "@/components/Shell";
-import { Callout, Card, SectionTabs, StatCard } from "@/components/Ui";
-import {
-  canAccessMarketClawIngestion,
-  canAccessMarketClawKnowledge,
-  canAccessMarketClawReplies,
-  canAccessMarketClawSandbox,
-  canAccessMarketClawTraining,
-  requireTenantAccess
-} from "@/lib/auth";
+import { Card, Callout, ModuleMoreMenu, StatCard } from "@/components/Ui";
+import { requireTenantAccess } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-function EntryCard({
-  title,
-  description,
-  href
-}: {
-  title: string;
-  description: string;
-  href: string;
-}) {
+function StepCard({ title, description }: { title: string; description: string }) {
   return (
     <Card className="h-full">
       <h2 className="text-base font-semibold text-slate-950">{title}</h2>
       <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
-      <Link className="mt-4 inline-flex rounded-md bg-slate-950 px-3 py-2 text-sm font-medium text-white" href={href}>
-        进入
-      </Link>
     </Card>
   );
 }
 
+async function safeGovernanceRead<T>(read: () => Promise<T>, fallback: T): Promise<{ data: T; unavailable: boolean }> {
+  try {
+    return { data: await read(), unavailable: false };
+  } catch {
+    return { data: fallback, unavailable: true };
+  }
+}
+
 export default async function MarketClawPage({ params }: { params: { tenantSlug: string } }) {
-  const { user, tenant } = await requireTenantAccess(params.tenantSlug, ["TENANT_ADMIN", "OPERATOR", "SALES"]);
-  const overviewTabs =
-    user.role === "SALES"
-      ? [
-          { key: "overview", label: "总览", href: `/app/${tenant.slug}/market-claw` },
-          { key: "training", label: "我的训练", href: `/app/${tenant.slug}/market-claw/training` },
-          { key: "insights", label: "我的训练表现", href: `/app/${tenant.slug}/market-claw/insights` },
-          { key: "replies", label: "我的回复记录", href: `/app/${tenant.slug}/market-claw/replies` },
-          { key: "leads", label: "去客户列表", href: `/app/${tenant.slug}/leads` }
-        ]
-      : [
-          { key: "overview", label: "总览", href: `/app/${tenant.slug}/market-claw` },
-          { key: "knowledge", label: "知识库", href: `/app/${tenant.slug}/market-claw/knowledge` },
-          { key: "ingestion", label: "资料投喂", href: `/app/${tenant.slug}/market-claw/ingestion` },
-          { key: "training", label: "回复训练场", href: `/app/${tenant.slug}/market-claw/training` },
-          { key: "review", label: "训练审核", href: `/app/${tenant.slug}/market-claw/training/review` },
-          { key: "insights", label: "训练复盘", href: `/app/${tenant.slug}/market-claw/insights` },
-          { key: "replies", label: "回复记录", href: `/app/${tenant.slug}/market-claw/replies` },
-          { key: "sandbox", label: "AI 测试沙盒", href: `/app/${tenant.slug}/market-claw/sandbox` }
-        ];
+  const { user, tenant } = await requireTenantAccess(params.tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
+  const base = `/app/${tenant.slug}`;
+  const isSales = user.role === "SALES";
+  const ownerFilter = isSales ? { createdById: user.id } : {};
 
-  const [knowledgeCount, ingestionBatchCount, trainingCount, pendingReviewCount, replyDraftCount, feedbackCount, recentDrafts] = await Promise.all([
-    canAccessMarketClawKnowledge(user.role)
-      ? prisma.marketClawKnowledgeItem.count({ where: { tenantId: tenant.id } })
-      : Promise.resolve(0),
-    canAccessMarketClawIngestion(user.role)
-      ? prisma.marketClawIngestionBatch.count({ where: { tenantId: tenant.id } })
-      : Promise.resolve(0),
-    canAccessMarketClawTraining(user.role)
-      ? prisma.marketClawTrainingCase.count({
-          where: {
-            tenantId: tenant.id,
-            ...(user.role === "SALES" ? { ownerUserId: user.id } : {})
-          }
-        })
-      : Promise.resolve(0),
-    canAccessMarketClawKnowledge(user.role)
-      ? prisma.marketClawTrainingCase.count({
-          where: { tenantId: tenant.id, reviewStatus: "PENDING_REVIEW" }
-        })
-      : Promise.resolve(0),
-    prisma.marketClawReplyDraft.count({
-      where: {
-        tenantId: tenant.id,
-        ...(user.role === "SALES" ? { createdById: user.id } : {})
-      }
-    }),
-    canAccessMarketClawKnowledge(user.role)
-      ? prisma.marketClawReplyFeedback.count({ where: { tenantId: tenant.id } })
-      : Promise.resolve(0),
-    prisma.marketClawReplyDraft.findMany({
-      where: {
-        tenantId: tenant.id,
-        ...(user.role === "SALES" ? { createdById: user.id } : {})
-      },
-      select: {
-        id: true,
-        customerQuestion: true,
-        createdAt: true,
-        feedbackStatus: true,
-        lead: { select: { id: true, name: true } }
-      },
-      orderBy: { createdAt: "desc" },
-      take: 6
-    })
+  const [replyDraftCountResult, highRiskCountResult, recentDraftsResult] = await Promise.all([
+    safeGovernanceRead<number>(() => prisma.marketClawReplyDraft.count({ where: { tenantId: tenant.id, ...ownerFilter } }), 0),
+    safeGovernanceRead<number>(() => prisma.marketClawReplyDraft.count({ where: { tenantId: tenant.id, ...ownerFilter, replyRiskLevel: { in: ["HIGH", "BLOCKED"] } } }), 0),
+    safeGovernanceRead(
+      () =>
+        prisma.marketClawReplyDraft.findMany({
+          where: { tenantId: tenant.id, ...ownerFilter },
+          include: { lead: true },
+          orderBy: { createdAt: "desc" },
+          take: 6
+        }),
+      []
+    )
   ]);
-
-  const roleCards =
-    user.role === "SALES"
-      ? [
-          {
-            title: "我的训练",
-            description: "把一线真实客户问题拿来练，先沉淀成自己的常用话术，再决定是否提交审核。",
-            href: `/app/${tenant.slug}/market-claw/training`
-          },
-          {
-            title: "我的回复记录",
-            description: "回看自己已经生成、复制或保存为跟进的回复草稿，继续复盘常见问题。",
-            href: `/app/${tenant.slug}/market-claw/replies`
-          },
-          {
-            title: "我的训练表现",
-            description: "只看自己的训练数量、高频问题和审核进展，不把全租户治理数据暴露给销售。",
-            href: `/app/${tenant.slug}/market-claw/insights`
-          },
-          {
-            title: "去客户列表",
-            description: "销售继续从客户详情页使用 Market Claw 生成回复，不把知识库和训练场暴露成后台入口。",
-            href: `/app/${tenant.slug}/leads`
-          }
-        ]
-      : [
-          {
-            title: "去客户列表使用 Market Claw",
-            description: "管理角色也可以从客户详情页实际体验回复生成链路，再回到知识和训练侧继续优化。",
-            href: `/app/${tenant.slug}/leads`
-          },
-          {
-            title: "知识库",
-            description: "把产品、FAQ、案例、价格边界和不能承诺事项沉淀成可复用知识。",
-            href: `/app/${tenant.slug}/market-claw/knowledge`
-          },
-          {
-            title: "资料投喂",
-            description: "把百问百答、服务说明和案例资料先拆成候选知识，再由人工审核采纳入库。",
-            href: `/app/${tenant.slug}/market-claw/ingestion`
-          },
-          {
-            title: "回复训练场",
-            description: "模拟客户问题，验证回复是否准确、像人话且有边界，再沉淀为标准话术。",
-            href: `/app/${tenant.slug}/market-claw/training`
-          },
-          {
-            title: "训练审核",
-            description: "查看销售提交的训练样本，决定采纳为团队标准、企业标准，或驳回并纠偏。",
-            href: `/app/${tenant.slug}/market-claw/training/review`
-          },
-          {
-            title: "训练复盘",
-            description: "看清高频客户问题、风险问题、知识缺口和候选采纳合并趋势，决定下一步治理重点。",
-            href: `/app/${tenant.slug}/market-claw/insights`
-          },
-          {
-            title: "回复记录",
-            description: "回看销售实际使用情况，判断哪些回复、知识和边界仍需继续优化。",
-            href: `/app/${tenant.slug}/market-claw/replies`
-          },
-          ...(canAccessMarketClawSandbox(user.role)
-            ? [
-                {
-                  title: "AI 测试沙盒",
-                  description: "输入客户问题，选择业务线、Provider 和专家视角，测试 AI 生成建议、风险等级和下一步动作。仅用于内部训练和测试。",
-                  href: `/app/${tenant.slug}/market-claw/sandbox`
-                }
-              ]
-            : []),
-          {
-            title: "使用反馈",
-            description: "结合反馈数量和最近使用记录，持续优化知识投喂与训练质量。",
-            href: `/app/${tenant.slug}/market-claw/replies`
-          }
-        ];
+  const replyDraftCount = replyDraftCountResult.data;
+  const highRiskCount = highRiskCountResult.data;
+  const recentDrafts = recentDraftsResult.data;
+  const governanceDataUnavailable = replyDraftCountResult.unavailable || highRiskCountResult.unavailable || recentDraftsResult.unavailable;
 
   return (
     <PageShell
       tenant={tenant}
-      title="Market Claw"
+      title="AI 推荐回复"
       breadcrumbs={[
-        { label: "Market Claw", href: `/app/${tenant.slug}/market-claw` },
-        { label: "总览" }
+        { label: "工作台", href: `${base}/dashboard` },
+        { label: "AI 推荐回复" }
       ]}
-      description="把企业知识训练成销售会用的话。当前版本不接企业微信上下文，不自动发送客户消息，只做知识投喂、回复训练、回复草稿和跟进建议闭环。"
+      description="Market Claw 是后台 AI 治理能力，不是销售日常入口；销售只在客户详情页看到 AI 推荐回复结果。"
     >
-      <Card className="bg-slate-950 text-white">
-        <p className="text-sm font-medium uppercase tracking-[0.18em] text-slate-300">Market Claw</p>
-        <h2 className="mt-3 text-2xl font-semibold">Market Claw 不是 AI 客服，是懂业务的销售智能助手。</h2>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-200">
-          它不是自动客服，而是销售侧的回复辅助模块。运营和管理员维护知识与训练，销售在客户详情页里实际使用，所有输出仍由人工确认。
-        </p>
-      </Card>
-
-      <SectionTabs items={overviewTabs} current="overview" className="mt-4" />
-
-      <Callout className="mt-4" title={user.role === "SALES" ? "销售使用路径" : "管理与运营使用路径"} tone={user.role === "SALES" ? "emerald" : "slate"}>
-        {user.role === "SALES"
-          ? "先去客户列表找到今天要回复的客户，再在客户详情页中使用 Market Claw 生成回复，回复后回到这里复盘自己的使用记录。"
-          : "先维护知识和训练样本，再去客户详情页体验真实回复链路，最后通过回复记录和使用反馈继续修正知识边界。"}
+      <Callout title={isSales ? "销售使用方式" : "试点讲法"} tone={isSales ? "emerald" : "slate"}>
+        {isSales
+          ? "从今日待办进入客户详情，查看客户信息和最近沟通，再使用 AI 推荐回复。确认风险后，把最终沟通保存为跟进记录。"
+          : "演示时只讲销售如何使用 AI 推荐回复。知识、训练、资料投喂、沙盒和审核都属于后台治理，不在销售主路径展开。"}
       </Callout>
 
-      <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="知识库数量" value={knowledgeCount} />
-        <StatCard label="资料投喂批次" value={ingestionBatchCount} />
-        <StatCard label="训练样本数量" value={trainingCount} />
-        <StatCard label="待审核训练" value={pendingReviewCount} />
-        <StatCard label="回复草稿数量" value={replyDraftCount} />
-        <StatCard label="使用反馈数量" value={feedbackCount} />
-      </div>
-
-      <section className="mt-6">
-        <h2 className="text-lg font-semibold text-slate-950">快捷入口</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-600">不同角色看到的入口不同，销售看到的是工作入口，运营和管理员看到的是维护入口。</p>
-        <div className={`mt-4 grid gap-4 md:grid-cols-2 ${roleCards.length >= 4 ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
-          {roleCards.map((card) => (
-            <EntryCard key={card.title} title={card.title} description={card.description} href={card.href} />
-          ))}
+      {governanceDataUnavailable ? (
+        <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          当前复盘数据暂不可用，不影响销售主流程。
         </div>
+      ) : null}
+
+      <section className="mt-6 grid gap-4 md:grid-cols-3">
+        <StatCard label={isSales ? "我的推荐回复" : "推荐回复记录"} value={replyDraftCount} />
+        <StatCard label="高风险/仅内部建议" value={highRiskCount} />
+        <StatCard label="下一步入口" value="客户详情" />
       </section>
 
-      <section className="mt-6">
-        <h2 className="text-lg font-semibold text-slate-950">最近使用记录</h2>
-        <div className="mt-4 space-y-3">
-          {recentDrafts.length ? (
-            recentDrafts.map((draft) => (
-              <Card key={draft.id}>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="font-medium text-slate-950">{draft.lead.name}</p>
-                    <p className="mt-1 text-sm text-slate-600">{draft.customerQuestion}</p>
-                  </div>
-                  <div className="text-right text-xs text-slate-500">
-                    <p>{new Intl.DateTimeFormat("zh-CN", { dateStyle: "short", timeStyle: "short" }).format(new Date(draft.createdAt))}</p>
-                    <p className="mt-1">反馈状态：{draft.feedbackStatus}</p>
-                  </div>
-                </div>
-              </Card>
-            ))
-          ) : (
-            <Card>
-              <p className="text-sm text-slate-500">
-                {user.role === "SALES" ? "你还没有使用过 Market Claw，先去客户详情页生成一轮回复草稿。" : "当前还没有 Market Claw 使用记录。"}
-              </p>
-            </Card>
-          )}
-        </div>
+      <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StepCard title="1. 打开客户详情" description="先看客户当前阶段、最近沟通和下一步跟进任务。" />
+        <StepCard title="2. 查看 AI 推荐回复" description="系统给出建议回复和风险提醒，销售先判断是否适合发。" />
+        <StepCard title="3. 人工确认后使用" description="高风险和仅内部建议不能直接发给客户，必须人工调整。" />
+        <StepCard title="4. 保存沟通记录" description="把最终沟通和下一步动作保存到客户时间线，形成沉淀。" />
       </section>
+
+      <section className="mt-6 grid gap-4 lg:grid-cols-[1fr_0.8fr]">
+        <Card>
+          <h2 className="text-base font-semibold text-slate-950">最近推荐回复</h2>
+          <div className="mt-4 space-y-3">
+            {recentDrafts.length ? (
+              recentDrafts.map((draft) => (
+                <Link key={draft.id} className="block rounded-md border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50" href={`${base}/leads/${draft.leadId}`}>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <span className="font-medium text-slate-950">{draft.lead.name}</span>
+                    <span className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-700">{draft.replyRiskLevel}</span>
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-xs text-slate-500">{draft.customerQuestion}</p>
+                </Link>
+              ))
+            ) : (
+              <p className="text-sm text-slate-500">当前还没有推荐回复记录。请先从客户详情页生成一条建议。</p>
+            )}
+          </div>
+        </Card>
+
+        <Card>
+          <h2 className="text-base font-semibold text-slate-950">开始使用</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">AI 推荐回复不作为独立后台功能使用。它只服务客户详情页里的销售沟通。</p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Link className="rounded-md bg-slate-950 px-4 py-2 text-sm font-medium text-white" href={`${base}/leads`}>
+              进入客户列表
+            </Link>
+            <Link className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700" href={`${base}/todos?view=today#today-tasks`}>
+              查看今日待办
+            </Link>
+          </div>
+        </Card>
+      </section>
+
+      {!isSales ? (
+        <section className="mt-6">
+          <details className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
+            <summary className="cursor-pointer text-base font-semibold text-slate-950">后台治理入口</summary>
+            <p className="mt-3 text-sm leading-6 text-slate-600">这些入口只给管理员和运营维护，不进入销售学习路径。</p>
+            <div className="mt-4">
+              <ModuleMoreMenu
+                label="打开后台治理"
+                items={[
+                  { title: "系统设置", href: `${base}/settings`, description: "统一进入 AI、企微、合规和审计设置。" },
+                  { title: "知识维护", href: `${base}/market-claw/knowledge`, description: "维护 AI 推荐回复引用的知识。" },
+                  { title: "资料投喂", href: `${base}/market-claw/ingestion`, description: "把资料整理成候选知识。" },
+                  { title: "回复审核", href: `${base}/market-claw/training/review`, description: "审核销售沉淀的回复样本。" },
+                  { title: "回复测试", href: `${base}/market-claw/sandbox`, description: "内部测试，不给销售日常使用。" }
+                ]}
+              />
+            </div>
+          </details>
+        </section>
+      ) : null}
     </PageShell>
   );
 }

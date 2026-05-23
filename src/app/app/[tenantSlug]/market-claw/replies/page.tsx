@@ -18,6 +18,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { PageShell } from "@/components/Shell";
 import { Card, Input, SectionTabs, Select } from "@/components/Ui";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,14 @@ const feedbackStatusOptions = [
   { value: "UNRATED", label: "未评价" }
 ];
 
+async function safeRepliesRead<T>(read: () => Promise<T>, fallback: T): Promise<{ data: T; unavailable: boolean }> {
+  try {
+    return { data: await read(), unavailable: false };
+  } catch {
+    return { data: fallback, unavailable: true };
+  }
+}
+
 export default async function MarketClawRepliesPage({
   params,
   searchParams
@@ -46,8 +55,9 @@ export default async function MarketClawRepliesPage({
 }) {
   const { user, tenant } = await requireTenantAccess(params.tenantSlug, ["TENANT_ADMIN", "OPERATOR", "SALES"]);
   if (!canAccessMarketClawReplies(user.role)) {
-    return null;
+    redirect("/forbidden");
   }
+  const roleView = user.role as string;
 
   const useStatus = typeof searchParams?.useStatus === "string" ? searchParams.useStatus : "";
   const feedbackStatus = typeof searchParams?.feedbackStatus === "string" ? searchParams.feedbackStatus : "";
@@ -60,49 +70,49 @@ export default async function MarketClawRepliesPage({
   const replyRiskLevel = typeof searchParams?.replyRiskLevel === "string" ? searchParams.replyRiskLevel : "";
   const sendMode = typeof searchParams?.sendMode === "string" ? searchParams.sendMode : "";
 
-  const [users, businessLines, drafts] = await Promise.all([
-    prisma.user.findMany({
-      where: { tenantId: tenant.id },
-      orderBy: [{ role: "asc" }, { createdAt: "asc" }]
-    }),
-    prisma.businessLine.findMany({
-      where: { tenantId: tenant.id, status: "ACTIVE" },
-      orderBy: [{ priority: "asc" }, { updatedAt: "desc" }]
-    }),
-    prisma.marketClawReplyDraft.findMany({
-      where: {
-        tenantId: tenant.id,
-        ...(user.role === "SALES" ? { createdById: user.id } : {}),
-        ...(salesId && user.role !== "SALES" ? { createdById: salesId } : {}),
-        ...(businessLineId ? { businessLineId } : {}),
-        ...(departmentName ? { departmentName: { contains: departmentName } } : {}),
-        ...(sourceScope ? { sourceScope: sourceScope as never } : {}),
-        ...(replyRiskLevel ? { replyRiskLevel: replyRiskLevel as never } : {}),
-        ...(sendMode ? { sendMode: sendMode as never } : {}),
-        ...(useStatus ? { useStatus: useStatus as never } : {}),
-        ...(feedbackStatus ? { feedbackStatus: feedbackStatus as never } : {}),
-        ...(submitted === "yes" ? { submittedForReviewAt: { not: null } } : {}),
-        ...(submitted === "no" ? { submittedForReviewAt: null } : {}),
-        ...(adopted === "yes"
-          ? { trainingCase: { reviewStatus: { in: ["TEAM_APPROVED", "ENTERPRISE_APPROVED"] } } }
-          : {}),
-        ...(adopted === "no"
-          ? {
-              OR: [{ trainingCase: null }, { trainingCase: { reviewStatus: { notIn: ["TEAM_APPROVED", "ENTERPRISE_APPROVED"] } } }]
-            }
-          : {})
-      },
-      include: {
-        lead: true,
-        createdBy: true,
-        businessLine: true,
-        trainingCase: true,
-        feedbacks: { orderBy: { createdAt: "desc" }, take: 1 }
-      },
-      orderBy: { createdAt: "desc" },
-      take: 50
-    })
+  const [usersResult, businessLinesResult, draftsResult] = await Promise.all([
+    safeRepliesRead(() => prisma.user.findMany({ where: { tenantId: tenant.id }, orderBy: [{ role: "asc" }, { createdAt: "asc" }] }), []),
+    safeRepliesRead(() => prisma.businessLine.findMany({ where: { tenantId: tenant.id, status: "ACTIVE" }, orderBy: [{ priority: "asc" }, { updatedAt: "desc" }] }), []),
+    safeRepliesRead(
+      () =>
+        prisma.marketClawReplyDraft.findMany({
+          where: {
+            tenantId: tenant.id,
+            ...(roleView === "SALES" ? { createdById: user.id } : {}),
+            ...(salesId && roleView !== "SALES" ? { createdById: salesId } : {}),
+            ...(businessLineId ? { businessLineId } : {}),
+            ...(departmentName ? { departmentName: { contains: departmentName } } : {}),
+            ...(sourceScope ? { sourceScope: sourceScope as never } : {}),
+            ...(replyRiskLevel ? { replyRiskLevel: replyRiskLevel as never } : {}),
+            ...(sendMode ? { sendMode: sendMode as never } : {}),
+            ...(useStatus ? { useStatus: useStatus as never } : {}),
+            ...(feedbackStatus ? { feedbackStatus: feedbackStatus as never } : {}),
+            ...(submitted === "yes" ? { submittedForReviewAt: { not: null } } : {}),
+            ...(submitted === "no" ? { submittedForReviewAt: null } : {}),
+            ...(adopted === "yes" ? { trainingCase: { reviewStatus: { in: ["TEAM_APPROVED", "ENTERPRISE_APPROVED"] } } } : {}),
+            ...(adopted === "no"
+              ? {
+                  OR: [{ trainingCase: null }, { trainingCase: { reviewStatus: { notIn: ["TEAM_APPROVED", "ENTERPRISE_APPROVED"] } } }]
+                }
+              : {})
+          },
+          include: {
+            lead: true,
+            createdBy: true,
+            businessLine: true,
+            trainingCase: true,
+            feedbacks: { orderBy: { createdAt: "desc" }, take: 1 }
+          },
+          orderBy: { createdAt: "desc" },
+          take: 50
+        }),
+      []
+    )
   ]);
+  const users = usersResult.data;
+  const businessLines = businessLinesResult.data;
+  const drafts = draftsResult.data;
+  const repliesDataUnavailable = usersResult.unavailable || businessLinesResult.unavailable || draftsResult.unavailable;
 
   return (
     <PageShell
@@ -117,7 +127,7 @@ export default async function MarketClawRepliesPage({
       <SectionTabs
         current="replies"
         items={
-          user.role === "SALES"
+          roleView === "SALES"
             ? [
                 { key: "overview", label: "总览", href: `/app/${tenant.slug}/market-claw` },
                 { key: "training", label: "我的训练", href: `/app/${tenant.slug}/market-claw/training` },
@@ -138,6 +148,12 @@ export default async function MarketClawRepliesPage({
         className="mb-6"
       />
 
+      {repliesDataUnavailable ? (
+        <div className="mb-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          当前复盘数据暂不可用，不影响销售主流程。
+        </div>
+      ) : null}
+
       <Card>
         <form className="grid gap-4 md:grid-cols-3 xl:grid-cols-8">
           <Select label="使用状态" name="useStatus" options={useStatusOptions} defaultValue={useStatus} />
@@ -150,7 +166,7 @@ export default async function MarketClawRepliesPage({
           />
           <Select label="风险等级" name="replyRiskLevel" options={[{ value: "", label: "全部风险等级" }, ...marketClawReplyRiskLevelOptions]} defaultValue={replyRiskLevel} />
           <Select label="使用模式" name="sendMode" options={[{ value: "", label: "全部使用模式" }, ...marketClawSendModeOptions]} defaultValue={sendMode} />
-          {user.role !== "SALES" ? (
+          {roleView !== "SALES" ? (
             <Select
               label="销售人员"
               name="salesId"

@@ -1,10 +1,10 @@
 /*
- * 文件说明：该文件覆盖 V1.4 整木行业演示样板数据的浏览器端验证。
- * 功能说明：验证整木样板企业的看板、客户详情和销售工作台可以直接用于对外演示。
+ * 文件说明：该文件覆盖 V1.4 通用销售演示样板数据的浏览器端验证。
+ * 功能说明：验证MarketClaw 样板企业的看板、客户详情和销售工作台可以直接用于对外演示。
  *
  * 结构概览：
  *   第一部分：导入依赖与登录工具
- *   第二部分：整木样板企业演示路径验证
+ *   第二部分：MarketClaw 样板企业演示路径验证
  */
 import { expect, test, type Page } from "@playwright/test";
 
@@ -21,7 +21,7 @@ async function logout(page: Page) {
   await expect(page).toHaveURL(/\/login$/);
 }
 
-test.describe.serial("V1.4 整木行业演示样板数据", () => {
+test.describe.serial("V1.4 通用销售演示样板数据", () => {
   test("企业管理员可以在看板和客户详情看到完整演示信息", async ({ page }) => {
     await login(page, "boss@zhengmu.local");
     await page.goto("/app/zhengmu-demo/dashboard");
@@ -29,8 +29,8 @@ test.describe.serial("V1.4 整木行业演示样板数据", () => {
     await expect(page.getByText("客户类型分布")).toBeVisible();
     await expect(page.getByText("来源分布")).toBeVisible();
     await expect(page.getByText("阶段分布")).toBeVisible();
-    await expect(page.getByText("业主客户")).toBeVisible();
-    await expect(page.getByText("工厂客户")).toBeVisible();
+    await expect(page.getByText("潜在客户")).toBeVisible();
+    await expect(page.getByText("重点客户")).toBeVisible();
     await expect(page.getByText("销售跟进概览")).toBeVisible();
 
     await page.goto("/app/zhengmu-demo/leads/demo-lead-001");
@@ -40,8 +40,8 @@ test.describe.serial("V1.4 整木行业演示样板数据", () => {
     await expect(page.getByText("销售跟进记录")).toBeVisible();
     await expect(page.getByText("当前任务")).toBeVisible();
     await expect(page.getByRole("heading", { name: "创建任务" })).toBeVisible();
-    await expect(page.getByRole("link", { name: /整木定制避坑清单/ })).toBeVisible();
-    await expect(page.getByText("业主首次沟通：陈先生")).toBeVisible();
+    await expect(page.getByRole("link", { name: /产品服务避坑清单/ })).toBeVisible();
+    await expect(page.getByText("潜在客户首次沟通：陈先生")).toBeVisible();
     await expect(page.locator('select[name="templateId"]')).toContainText("首次沟通");
     await logout(page);
   });
@@ -56,14 +56,14 @@ test.describe.serial("V1.4 整木行业演示样板数据", () => {
     await expect(page.getByRole("heading", { name: "本周待跟进" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "已完成任务" })).toBeVisible();
 
-    await expect(page.getByText("业主首次沟通：陈先生").first()).toBeVisible();
-    await expect(page.getByText("发送招商资料：周总").first()).toBeVisible();
-    await expect(page.getByText("发送案例图册：许设计").first()).toBeVisible();
+    await expect(page.getByText("潜在客户首次沟通：陈先生").first()).toBeVisible();
+    await expect(page.getByText("发送合作资料：周总").first()).toBeVisible();
+    await expect(page.getByText("发送成功案例：许经理").first()).toBeVisible();
     await expect(page.getByText("发送增长诊断表：宋总").first()).toBeVisible();
 
-    await expect(page.getByText("客户类型：业主客户").first()).toBeVisible();
-    await expect(page.getByText("客户类型：经销商客户").first()).toBeVisible();
-    await expect(page.getByText("客户类型：设计师客户").first()).toBeVisible();
-    await expect(page.getByText("客户类型：工厂客户").first()).toBeVisible();
+    await expect(page.getByText("客户类型：潜在客户").first()).toBeVisible();
+    await expect(page.getByText("客户类型：合作伙伴").first()).toBeVisible();
+    await expect(page.getByText("客户类型：意向客户").first()).toBeVisible();
+    await expect(page.getByText("客户类型：重点客户").first()).toBeVisible();
   });
 });

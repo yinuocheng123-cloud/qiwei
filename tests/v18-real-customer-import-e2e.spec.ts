@@ -13,8 +13,8 @@ const importLeadPhone = `13977${Date.now().toString().slice(-6)}`;
 const duplicateLeadPhone = "13988009019";
 const csvContent = [
   "客户姓名,手机号,微信号,公司名称,客户类型,来源渠道,需求说明,意向等级,当前阶段,备注,业务线,标签,负责人邮箱,下次跟进时间",
-  `${importLeadName},${importLeadPhone},import-wechat-${Date.now().toString().slice(-4)},导入测试公司,GEO／AI 推广客户,会议活动,想了解 GEO 服务报价和诊断,HIGH,NEW,来自 V1.8 Playwright,GEO／AI 推广,"高意向，品牌增信关注",platform-sales@zhengmu.local,2026-05-16 10:00`,
-  `重复客户,${duplicateLeadPhone},,重复测试公司,整木工厂老板,朋友圈,用于验证重复跳过,MEDIUM,NEW,重复数据,GEO／AI 推广,重复标签,platform-sales@zhengmu.local,2026-05-16 11:00`
+  `${importLeadName},${importLeadPhone},import-wechat-${Date.now().toString().slice(-4)},导入测试公司,增长推广客户,会议活动,想了解 增长推广 服务报价和诊断,HIGH,NEW,来自 V1.8 Playwright,增长推广,"高意向，信任建设关注",platform-sales@zhengmu.local,2026-05-16 10:00`,
+  `重复客户,${duplicateLeadPhone},,重复测试公司,重点客户,朋友圈,用于验证重复跳过,MEDIUM,NEW,重复数据,增长推广,重复标签,platform-sales@zhengmu.local,2026-05-16 11:00`
 ].join("\n");
 
 async function login(page: Page, email: string, password = "123456") {
@@ -74,9 +74,9 @@ test.describe.serial("V1.8 真实客户导入", () => {
     await expect(page.getByText(`当前批次：manual-input.csv`)).toBeVisible();
     const previewRow = page.getByRole("row", { name: new RegExp(importLeadName) });
     await expect(previewRow).toContainText(importLeadName);
-    await expect(previewRow).toContainText("GEO／AI 推广");
+    await expect(previewRow).toContainText("增长推广");
     await expect(previewRow).toContainText("高意向");
-    await expect(previewRow).toContainText("品牌增信关注");
+    await expect(previewRow).toContainText("信任建设关注");
     await expect(page.getByText("疑似重复")).toBeVisible();
 
     await page.getByRole("checkbox", { name: "导入后自动生成首次跟进任务" }).check();
@@ -95,8 +95,8 @@ test.describe.serial("V1.8 真实客户导入", () => {
     await expect(page.getByRole("heading", { name: importLeadName })).toBeVisible();
     const tagSection = page.getByRole("heading", { name: "标签", exact: true, level: 2 }).locator("..");
     await expect(tagSection).toContainText("高意向");
-    await expect(tagSection).toContainText("品牌增信关注");
-    await expect(tagSection).toContainText("GEO／AI 推广");
+    await expect(tagSection).toContainText("信任建设关注");
+    await expect(tagSection).toContainText("增长推广");
     const taskSection = page.getByRole("heading", { name: "当前任务", exact: true, level: 2 }).locator("..");
     await expect(taskSection).toContainText("首次跟进导入客户");
 
@@ -120,6 +120,6 @@ test.describe.serial("V1.8 真实客户导入", () => {
     await page.goto("/logout");
     await login(page, "boss@zhengmu.local");
     await page.goto("/app/zhengmu-demo/demo-guide");
-    await expect(page.getByRole("heading", { name: "整木行业演示说明" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "平台销售工作台演示说明" })).toBeVisible();
   });
 });
