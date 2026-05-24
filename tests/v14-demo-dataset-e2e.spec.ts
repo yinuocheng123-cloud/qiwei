@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 文件说明：该文件覆盖 V1.4 通用销售演示样板数据的浏览器端验证。
  * 功能说明：验证MarketClaw 样板企业的看板、客户详情和销售工作台可以直接用于对外演示。
  *
@@ -67,3 +67,4 @@ test.describe.serial("V1.4 通用销售演示样板数据", () => {
     await expect(page.getByText("客户类型：重点客户").first()).toBeVisible();
   });
 });
+

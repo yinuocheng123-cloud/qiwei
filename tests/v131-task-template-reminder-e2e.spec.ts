@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 文件说明：该文件覆盖 V1.3.1 任务去重、手动任务、任务模板和提醒队列的浏览器端 E2E。
  * 功能说明：验证管理员/运营模板权限、销售权限、任务去重、提醒队列审计和取消提醒。
  *
@@ -147,3 +147,4 @@ test.describe.serial("V1.3.1 任务模板与提醒队列", () => {
     await expect(page.getByText("reminder_cancelled").first()).toBeVisible();
   });
 });
+

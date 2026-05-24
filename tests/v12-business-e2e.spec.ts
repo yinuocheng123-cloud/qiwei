@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 文件说明：该文件覆盖 V1.2 业务可用增强版的浏览器端 E2E 测试。
  * 功能说明：验证客户分配、销售待办、销售隔离、资料包权限、客户详情推荐和审计日志写入。
  *
@@ -108,3 +108,4 @@ test.describe.serial("V1.2 业务可用增强版", () => {
     await expect(page.getByText("material_updated").first()).toBeVisible();
   });
 });
+

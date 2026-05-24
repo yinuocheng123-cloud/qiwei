@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 文件说明：该文件覆盖 V1.8.1 权限矩阵说明页的浏览器端 E2E 验证。
  * 功能说明：验证企业管理员和运营可访问权限说明页，销售无入口且直接访问被拒绝，同时不破坏既有租户说明页链路。
  *
@@ -61,6 +61,7 @@ test.describe.serial("V1.8.1 权限矩阵说明页", () => {
     await page.goto("/logout");
     await login(page, "boss@zhengmu.local");
     await page.goto("/app/zhengmu-demo/demo-guide");
-    await expect(page.getByRole("heading", { name: "整木行业演示说明" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "MarketClaw 销售助手平台说明" })).toBeVisible();
   });
 });
+

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 文件说明：该文件覆盖 V2.0.5 Market Claw 销售自我训练与训练审核机制的浏览器端验证。
  * 功能说明：验证销售个人训练、个人话术保存、提交审核、管理员采纳与驳回、客户详情页新入口，以及旧链路不受影响。
  *
@@ -49,7 +49,7 @@ test.describe.serial("V2.0.5 Market Claw：销售自我训练与训练审核机�
     await expect(page.getByRole("link", { name: "我的训练", exact: true }).first()).toBeVisible();
 
     await page.getByLabel("客户真实问题").fill(trainingQuestion);
-    await page.getByLabel("业务线").selectOption({ label: "GEO／AI 推广" });
+    await page.getByLabel("业务线").selectOption({ label: "内容增长" });
     await page.getByRole("button", { name: "生成我的训练回复" }).click();
 
     const currentCard = trainingCard(page, trainingQuestion);
@@ -73,7 +73,7 @@ test.describe.serial("V2.0.5 Market Claw：销售自我训练与训练审核机�
   test("TENANT_ADMIN 可以看到待审核训练，采纳为团队标准、企业标准，并驳回另一个销售训练", async ({ page }) => {
     await login(page, "platform-sales@zhengmu.local", "123456", "/app/zhengmu-platform/market-claw/training");
     await page.getByLabel("客户真实问题").fill(rejectQuestion);
-    await page.getByLabel("业务线").selectOption({ label: "GEO／AI 推广" });
+    await page.getByLabel("业务线").selectOption({ label: "内容增长" });
     await page.getByRole("button", { name: "生成我的训练回复" }).click();
     const rejectTrainingCard = trainingCard(page, rejectQuestion);
     await rejectTrainingCard.getByRole("button", { name: "提交训练结果审核" }).click();
@@ -109,7 +109,7 @@ test.describe.serial("V2.0.5 Market Claw：销售自我训练与训练审核机�
 
     await expect(page.getByRole("heading", { name: "Market Claw 智能回复", exact: true })).toBeVisible();
     await page.getByLabel("客户问题").fill(leadDraftQuestion);
-    await page.getByLabel("业务线").selectOption({ label: "GEO／AI 推广" });
+    await page.getByLabel("业务线").selectOption({ label: "内容增长" });
     await page.getByRole("button", { name: "生成回复草稿" }).click();
 
     const card = draftCard(page, leadDraftQuestion);
@@ -139,6 +139,7 @@ test.describe.serial("V2.0.5 Market Claw：销售自我训练与训练审核机�
 
     await page.goto("/logout");
     await login(page, "boss@zhengmu.local", "123456", "/app/zhengmu-demo/demo-guide");
-    await expect(page.getByRole("heading", { name: "整木行业演示说明" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "MarketClaw 销售助手平台说明" })).toBeVisible();
   });
 });
+

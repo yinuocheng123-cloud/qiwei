@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 文件说明：该文件覆盖 CNAS 认可指南项目接入后的公开问卷与后台承接链路。
  * 功能说明：验证公开访问、A/B/C 诊断、线索落库、结构化标签、UTM 记录、租户内查看与审计记录。
  *
@@ -134,6 +134,7 @@ test.describe.serial("CNAS 项目接入", () => {
 
     await page.goto("/logout");
     await login(page, "boss@zhengmu.local", "123456", "/app/zhengmu-demo/demo-guide");
-    await expect(page.getByRole("heading", { name: "整木行业演示说明" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "MarketClaw 销售助手平台说明" })).toBeVisible();
   });
 });
+

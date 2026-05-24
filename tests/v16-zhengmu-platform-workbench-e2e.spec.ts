@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 文件说明：该文件覆盖 V1.6 中华整木网自用业务工作台的浏览器端 E2E 验证。
  * 功能说明：验证 zhengmu-platform 租户的登录、看板、客户详情、demo-guide 兼容，以及智能跟进助手和智能标签建议可用。
  *
@@ -60,7 +60,7 @@ test.describe.serial("V1.6 中华整木网自用业务工作台", () => {
     await expect(page.locator('a[href="/app/zhengmu-platform/leads/platform-lead-009"]')).toBeVisible();
 
     await page.goto("/app/zhengmu-platform/leads/platform-lead-001");
-    await expect(page.getByRole("link", { name: /整木企业增长诊断表/ }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: /企业增长诊断表/ }).first()).toBeVisible();
     await expect(page.getByText("当前任务")).toBeVisible();
   });
 
@@ -68,14 +68,14 @@ test.describe.serial("V1.6 中华整木网自用业务工作台", () => {
     await login(page, "platform-boss@zhengmu.local");
 
     await page.goto("/app/zhengmu-platform/demo-guide");
-    await expect(page.getByRole("heading", { name: "中华整木网自用说明" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "MarketClaw 平台工作台说明" })).toBeVisible();
     await expect(page.getByText("这是整木网自己的业务工作台，不是对外客户样板。")).toBeVisible();
-    await expect(page.getByText("会员、GEO／AI 推广、乌镇、培训、集采、一清一护、品牌增信和联盟合作")).toBeVisible();
+    await expect(page.getByText("会员、内容增长、乌镇、培训、集采、一清一护、品牌增长和联盟合作")).toBeVisible();
 
     await page.goto("/logout");
     await login(page, "boss@zhengmu.local");
     await page.goto("/app/zhengmu-demo/demo-guide");
-    await expect(page.getByRole("heading", { name: "整木行业演示说明" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "MarketClaw 销售助手平台说明" })).toBeVisible();
     await expect(page.getByText("客户从哪里来，系统知道；")).toBeVisible();
 
     await page.goto("/logout");
@@ -96,17 +96,18 @@ test.describe.serial("V1.6 中华整木网自用业务工作台", () => {
     await expect(suggestionCards(page).first().getByText("下一步动作")).toBeVisible();
 
     const panel = tagSuggestionPanel(page);
-    await expect(panel.getByText("GEO意向", { exact: true })).toBeVisible();
+    await expect(panel.getByText("内容增长意向", { exact: true })).toBeVisible();
     await expect(panel.getByText("AI推广关注", { exact: true })).toBeVisible();
 
-    const geoTag = tagItem(panel, "GEO意向");
+    const geoTag = tagItem(panel, "内容增长意向");
     await geoTag.locator('input[type="checkbox"]').check();
     await panel.getByRole("button", { name: "确认添加标签" }).click();
 
     const tagList = leadTagList(page);
-    await expect(leadTagChip(tagList, "GEO意向")).toHaveCount(1);
+    await expect(leadTagChip(tagList, "内容增长意向")).toHaveCount(1);
 
     await page.goto("/app/zhengmu-platform/audit-logs");
     await expect(page.getByText("reply_tag_confirmed").first()).toBeVisible();
   });
 });
+

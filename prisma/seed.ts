@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 文件说明：该文件为 V1.4 本地开发环境写入可演示的通用销售样板数据。
  * 功能说明：创建平台管理员、两个租户、企业角色账号、四类客户策略、资料包、任务模板、线索、跟进记录和任务。
  *
@@ -199,15 +199,15 @@ const strategyTemplates: StrategyTemplate[] = [
   {
     customerType: "FACTORY_CLIENT",
     name: "重点客户增长策略",
-    painPoints: ["获客", "合作", "品牌", "成交", "企业微信", "AI推广", "增长推广"],
-    firstMaterials: ["内部提醒承接自查表", "客户增长诊断表", "信任建设方案", "增长推广说明", "销售协作工作台合作建议"],
+    painPoints: ["获客", "合作", "品牌", "成交", "企业微信", "AI推广", "内容增长"],
+    firstMaterials: ["内部提醒承接自查表", "客户增长诊断表", "信任建设方案", "内容增长说明", "销售协作工作台合作建议"],
     welcomeScript: "您好，已收到您的增长咨询。先发您内部提醒承接自查表和增长诊断表，方便判断当前获客、承接和成交的主要断点。",
     day3Script: "您现在更卡在获客、合作、承接还是管理看板？我可以先按现状给您一个诊断方向。",
-    day7Script: "如果方便说一下企业规模和主要渠道，我们可以判断先做内部提醒承接、信任建设，还是先做增长推广更合适。",
+    day7Script: "如果方便说一下企业规模和主要渠道，我们可以判断先做内部提醒承接、信任建设，还是先做内容增长更合适。",
     day15Script: "近期如果准备系统化推进增长，建议安排一次深度诊断，把渠道、企微、销售跟进和看板串起来。",
     manualTriggerRules: ["询问合作费用", "介绍企业规模", "希望做推广", "想看企微方案", "安排老板沟通"],
     recommendedNextAction: "安排深度诊断",
-    recommendedPrivateContent: "销售协作工作台案例、内部提醒承接流程、信任建设方案、增长推广思路"
+    recommendedPrivateContent: "销售协作工作台案例、内部提醒承接流程、信任建设方案、内容增长思路"
   }
 ];
 
@@ -229,7 +229,7 @@ const materialTemplates: MaterialTemplate[] = [
   { customerType: "FACTORY_CLIENT", title: "内部提醒承接自查表", description: "帮助重点客户排查内部提醒承接和线索分配断点。", url: "https://example.com/factory-wecom-check" },
   { customerType: "FACTORY_CLIENT", title: "客户增长诊断表", description: "用于梳理获客、合作、内容和成交的系统问题。", url: "https://example.com/factory-growth-diagnosis" },
   { customerType: "FACTORY_CLIENT", title: "信任建设方案", description: "帮助重点客户理解老板 IP、品牌内容和增信路径。", url: "https://example.com/factory-brand-trust" },
-  { customerType: "FACTORY_CLIENT", title: "增长推广说明", description: "介绍本地搜索、地图和内容分发的增长方式。", url: "https://example.com/factory-geo" },
+  { customerType: "FACTORY_CLIENT", title: "内容增长说明", description: "介绍本地搜索、地图和内容分发的增长方式。", url: "https://example.com/factory-geo" },
   { customerType: "FACTORY_CLIENT", title: "销售协作工作台合作建议", description: "适合重点客户评估内部提醒承接和管理看板合作。", url: "https://example.com/factory-growth-hub" }
 ];
 
@@ -312,7 +312,7 @@ const demoBusinessLineSeeds: BusinessLineSeed[] = [
   {
     name: "重点客户增长服务",
     slug: "factory-growth-service",
-    description: "面向重点客户的增长服务业务线，重点沟通获客、承接、销售跟进、信任建设和增长推广。",
+    description: "面向重点客户的增长服务业务线，重点沟通获客、承接、销售跟进、信任建设和内容增长。",
     category: "SERVICE",
     priority: 40,
     targetCustomerTypes: ["FACTORY_CLIENT"],
@@ -321,7 +321,7 @@ const demoBusinessLineSeeds: BusinessLineSeed[] = [
       { tagName: "增长诊断意向", tagGroup: "业务标签" },
       { tagName: "重点客户增长服务", tagGroup: "业务标签" }
     ],
-    recommendedMaterialTitles: ["内部提醒承接自查表", "客户增长诊断表", "信任建设方案", "增长推广说明", "销售协作工作台合作建议"],
+    recommendedMaterialTitles: ["内部提醒承接自查表", "客户增长诊断表", "信任建设方案", "内容增长说明", "销售协作工作台合作建议"],
     recommendedTaskTemplateNames: ["发送增长诊断表", "了解企业获客方式", "判断承接问题", "安排深度诊断"],
     defaultNextAction: "判断当前卡在获客、承接、成交还是管理看板",
     notes: "适合对外讲客户销售协作工作台和重点客户诊断服务。"
@@ -347,22 +347,22 @@ const platformBusinessLineSeeds: BusinessLineSeed[] = [
     notes: "适合围绕MarketClaw会员、增信与行业背书推进。"
   },
   {
-    name: "增长推广",
+    name: "内容增长",
     slug: "geo-ai-promotion",
-    description: "面向增长推广、AI 搜索和品牌可见性客户的业务线，重点沟通 AI 搜索可见性、关键词、收录与诊断。",
+    description: "面向内容增长、AI 搜索和品牌可见性客户的业务线，重点沟通 AI 搜索可见性、关键词、收录与诊断。",
     category: "SERVICE",
     priority: 20,
     targetCustomerTypes: ["PLATFORM_GEO_AI_CLIENT", "PLATFORM_FACTORY_OWNER"],
     recommendedTags: [
-      { tagName: "增长推广意向", tagGroup: "业务标签" },
+      { tagName: "内容增长意向", tagGroup: "业务标签" },
       { tagName: "AI推广关注", tagGroup: "需求标签" },
       { tagName: "待诊断", tagGroup: "阶段标签" },
-      { tagName: "增长推广方案待发", tagGroup: "业务标签" }
+      { tagName: "内容增长方案待发", tagGroup: "业务标签" }
     ],
-    recommendedMaterialTitles: ["增长推广服务说明", "AI 时代信任建设方案", "客户增长可见性自查表", "关键词与内容底座建设说明"],
-    recommendedTaskTemplateNames: ["发送增长推广方案", "安排增长诊断", "发送报价"],
-    defaultNextAction: "先安排一次 AI 可见性诊断，再判断是否进入增长推广服务",
-    notes: "适合重点客户和增长推广意向客户。"
+    recommendedMaterialTitles: ["内容增长服务说明", "品牌增长方案", "内容可见性自查表", "内容底座说明"],
+    recommendedTaskTemplateNames: ["发送内容增长方案", "安排增长诊断", "发送报价"],
+    defaultNextAction: "先安排一次 AI 可见性诊断，再判断是否进入内容增长服务",
+    notes: "适合重点客户和内容增长意向客户。"
   },
   {
     name: "活动合作",
@@ -441,10 +441,10 @@ const platformBusinessLineSeeds: BusinessLineSeed[] = [
       { tagName: "信任建设关注", tagGroup: "需求标签" },
       { tagName: "待诊断", tagGroup: "阶段标签" }
     ],
-    recommendedMaterialTitles: ["客户信任建设方案", "AI 时代信任建设方案"],
+    recommendedMaterialTitles: ["客户信任建设方案", "品牌增长方案"],
     recommendedTaskTemplateNames: ["安排增长诊断", "发送报价"],
     defaultNextAction: "判断客户更需要背书、露出还是搜索可见性增信",
-    notes: "适合和会员、增长推广、重点客户老板路径做联动。"
+    notes: "适合和会员、内容增长、重点客户老板路径做联动。"
   },
   {
     name: "联盟合作",
@@ -656,7 +656,7 @@ const zhengmuLeads: LeadTemplate[] = [
     },
     task: {
       title: "安排深度诊断：赵厂长",
-      description: "围绕内部提醒承接、管理看板和增长推广推进深度诊断。",
+      description: "围绕内部提醒承接、管理看板和内容增长推进深度诊断。",
       type: "DEAL_PUSH",
       status: "PENDING",
       priority: "URGENT",
@@ -964,7 +964,7 @@ const zhengmuLeads: LeadTemplate[] = [
     intentionLevel: "MEDIUM",
     stage: "MATERIAL_SENT",
     owner: "sales",
-    message: "公众号咨询信任建设和增长推广，希望先看诊断表和承接自查表。",
+    message: "公众号咨询信任建设和内容增长，希望先看诊断表和承接自查表。",
     followUp: {
       content: "已经发送增长诊断表和内部提醒承接自查表，客户准备梳理现有渠道数据。",
       nextAction: "了解企业获客方式",
@@ -996,7 +996,7 @@ const zhengmuLeads: LeadTemplate[] = [
     intentionLevel: "LOW",
     stage: "TO_REACTIVATE",
     owner: "sales",
-    message: "视频号咨询过管理看板和增长推广，但近期沟通中断，需要重新激活。",
+    message: "视频号咨询过管理看板和内容增长，但近期沟通中断，需要重新激活。",
     followUp: {
       content: "客户暂时搁置项目，近期重新启动信任建设和渠道承接梳理。",
       nextAction: "判断承接问题",
@@ -1021,14 +1021,14 @@ const platformStrategyTemplates: StrategyTemplate[] = [
     customerType: "PLATFORM_FACTORY_OWNER",
     name: "重点客户跟进策略",
     painPoints: ["获客", "合作", "品牌", "成交", "行业背书", "AI 推广", "企业微信承接"],
-    firstMaterials: ["客户增长诊断表", "客户信任建设方案", "客户跟进与销售协作工作台说明", "增长推广服务说明", "销售协作伙伴计划说明"],
+    firstMaterials: ["客户增长诊断表", "客户信任建设方案", "客户跟进与销售协作工作台说明", "内容增长服务说明", "销售协作伙伴计划说明"],
     welcomeScript: "先发您增长诊断表和信任建设方案，方便先判断现在更卡在客户来源、品牌信任，还是内部提醒承接和销售跟进。",
     day3Script: "您现在更想先补获客、信任建设，还是销售跟进这条线？我可以按这个方向给您收一版建议。",
-    day7Script: "如果方便，您可以先说一下主要渠道和销售现状，我再判断先做增长推广、内部提醒承接，还是先做管理看板。",
+    day7Script: "如果方便，您可以先说一下主要渠道和销售现状，我再判断先做内容增长、内部提醒承接，还是先做管理看板。",
     day15Script: "如果近期准备系统化推进，建议先安排一次增长诊断，把获客、承接和成交链路看清楚。",
-    manualTriggerRules: ["问合作费用", "问增长推广", "问内部提醒承接", "问信任建设", "约老板沟通"],
+    manualTriggerRules: ["问合作费用", "问内容增长", "问内部提醒承接", "问信任建设", "约老板沟通"],
     recommendedNextAction: "安排一次增长诊断",
-    recommendedPrivateContent: "增长诊断表、信任建设方案、内部提醒承接说明、增长推广服务说明、联盟说明"
+    recommendedPrivateContent: "增长诊断表、信任建设方案、内部提醒承接说明、内容增长服务说明、联盟说明"
   },
   {
     customerType: "PLATFORM_MEMBERSHIP_CLIENT",
@@ -1045,16 +1045,16 @@ const platformStrategyTemplates: StrategyTemplate[] = [
   },
   {
     customerType: "PLATFORM_GEO_AI_CLIENT",
-    name: "增长推广客户跟进策略",
-    painPoints: ["什么是增长推广", "AI 搜索为什么重要", "能不能被 AI 推荐", "和 SEO、代运营有什么区别", "多久能看到变化"],
-    firstMaterials: ["增长推广服务说明", "AI 时代信任建设方案", "客户增长可见性自查表", "关键词与内容底座建设说明"],
-    welcomeScript: "先发您增长推广服务说明和 AI 搜索可见性自查表，方便先看品牌现在在哪些关键词和场景上不够可见。",
+    name: "内容增长客户跟进策略",
+    painPoints: ["什么是内容增长", "AI 搜索为什么重要", "能不能被 AI 推荐", "和 SEO、代运营有什么区别", "多久能看到变化"],
+    firstMaterials: ["内容增长服务说明", "品牌增长方案", "内容可见性自查表", "内容底座说明"],
+    welcomeScript: "先发您内容增长服务说明和 AI 搜索可见性自查表，方便先看品牌现在在哪些关键词和场景上不够可见。",
     day3Script: "您现在更关心 AI 推荐、品牌收录，还是关键词布局？我可以按这个方向帮您继续拆。",
-    day7Script: "如果方便，先把品牌关键词和现在做过的内容方向说一下，我判断是否适合先做增长推广诊断。",
-    day15Script: "如果近期准备推进，建议先做一次 AI 可见性诊断，再决定是先补内容底座还是直接开增长推广。",
-    manualTriggerRules: ["问增长推广", "问 AI 搜索", "问 SEO 区别", "问收录", "问关键词"],
+    day7Script: "如果方便，先把品牌关键词和现在做过的内容方向说一下，我判断是否适合先做内容增长诊断。",
+    day15Script: "如果近期准备推进，建议先做一次 AI 可见性诊断，再决定是先补内容底座还是直接开内容增长。",
+    manualTriggerRules: ["问内容增长", "问 AI 搜索", "问 SEO 区别", "问收录", "问关键词"],
     recommendedNextAction: "先做 AI 可见性诊断",
-    recommendedPrivateContent: "增长推广服务说明、AI 搜索自查表、关键词说明、信任建设方案"
+    recommendedPrivateContent: "内容增长服务说明、AI 搜索自查表、关键词说明、信任建设方案"
   },
   {
     customerType: "PLATFORM_TRAINING_CLIENT",
@@ -1133,10 +1133,10 @@ const platformMaterialTemplates: MaterialTemplate[] = [
   { customerType: "PLATFORM_FACTORY_OWNER", title: "客户跟进与销售协作工作台说明", description: "说明 MarketClaw如何用内部提醒承接、销售跟进和管理看板跑清业务过程。", url: "https://example.com/platform-growth-hub" },
   { customerType: "PLATFORM_FACTORY_OWNER", title: "客户增长诊断表", description: "用于判断重点客户当前是卡在线索、承接、品牌还是成交。", url: "https://example.com/platform-growth-diagnosis" },
   { customerType: "PLATFORM_FACTORY_OWNER", title: "销售协作伙伴计划说明", description: "说明联盟合作、资源链接和产业协同的基本框架。", url: "https://example.com/platform-growth-alliance" },
-  { customerType: "PLATFORM_GEO_AI_CLIENT", title: "增长推广服务说明", description: "说明 AI 搜索时代增长推广的基本思路、服务边界和适用对象。", url: "https://example.com/platform-geo-service" },
-  { customerType: "PLATFORM_GEO_AI_CLIENT", title: "AI 时代信任建设方案", description: "帮助客户理解品牌信任与 AI 推荐之间的关系。", url: "https://example.com/platform-ai-brand-trust" },
-  { customerType: "PLATFORM_GEO_AI_CLIENT", title: "客户增长可见性自查表", description: "用于判断品牌在 AI 搜索入口中的基础可见性。", url: "https://example.com/platform-ai-visibility-check" },
-  { customerType: "PLATFORM_GEO_AI_CLIENT", title: "关键词与内容底座建设说明", description: "说明增长推广前期关键词、内容底座和品牌资料整理方法。", url: "https://example.com/platform-keyword-content-base" },
+  { customerType: "PLATFORM_GEO_AI_CLIENT", title: "内容增长服务说明", description: "说明 AI 搜索时代内容增长的基本思路、服务边界和适用对象。", url: "https://example.com/platform-geo-service" },
+  { customerType: "PLATFORM_GEO_AI_CLIENT", title: "品牌增长方案", description: "帮助客户理解品牌信任与 AI 推荐之间的关系。", url: "https://example.com/platform-ai-brand-trust" },
+  { customerType: "PLATFORM_GEO_AI_CLIENT", title: "内容可见性自查表", description: "用于判断品牌在 AI 搜索入口中的基础可见性。", url: "https://example.com/platform-ai-visibility-check" },
+  { customerType: "PLATFORM_GEO_AI_CLIENT", title: "内容底座说明", description: "说明内容增长前期关键词、内容底座和品牌资料整理方法。", url: "https://example.com/platform-keyword-content-base" },
   { customerType: "PLATFORM_EVENT_RESOURCE_CLIENT", title: "活动合作说明", description: "说明活动合作合作路径、资源位和沟通边界。", url: "https://example.com/platform-wuzhen" },
   { customerType: "PLATFORM_EVENT_RESOURCE_CLIENT", title: "行业峰会资源说明", description: "梳理峰会资源、到场价值和可联动的行业资源。", url: "https://example.com/platform-summit" },
   { customerType: "PLATFORM_EVENT_RESOURCE_CLIENT", title: "榜单与趋势发布说明", description: "说明榜单、趋势发布和行业白皮书的使用场景。", url: "https://example.com/platform-ranking-trends" },
@@ -1172,7 +1172,7 @@ const platformMaterialTemplates: MaterialTemplate[] = [
 const platformTaskTemplateSeeds: TaskTemplateSeed[] = [
   { name: "首次沟通", title: "首次沟通MarketClaw业务客户", description: "先判断客户属于哪条业务线，再决定优先发什么资料。", type: "FIRST_FOLLOW", priority: "HIGH", defaultDueDays: 1, customerType: null },
   { name: "发送会员说明", title: "发送会员服务说明", description: "发送会员服务说明、权益和增信价值资料。", type: "SEND_MATERIAL", priority: "HIGH", defaultDueDays: 1, customerType: "PLATFORM_MEMBERSHIP_CLIENT" },
-  { name: "发送增长推广方案", title: "发送增长推广说明", description: "发送增长推广服务说明和 AI 搜索可见性自查表。", type: "SEND_MATERIAL", priority: "HIGH", defaultDueDays: 1, customerType: "PLATFORM_GEO_AI_CLIENT" },
+  { name: "发送内容增长方案", title: "发送内容增长说明", description: "发送内容增长服务说明和 AI 搜索可见性自查表。", type: "SEND_MATERIAL", priority: "HIGH", defaultDueDays: 1, customerType: "PLATFORM_GEO_AI_CLIENT" },
   { name: "安排增长诊断", title: "安排增长诊断沟通", description: "围绕重点客户的获客、增信和内部提醒承接做诊断。", type: "PHONE_CALL", priority: "URGENT", defaultDueDays: 2, customerType: "PLATFORM_FACTORY_OWNER" },
   { name: "发送报价", title: "发送业务合作报价", description: "针对已进入报价阶段的客户发送方案与报价说明。", type: "QUOTE_FOLLOW", priority: "HIGH", defaultDueDays: 1, customerType: null, stage: "QUOTED" },
   { name: "邀请参加活动", title: "邀请参加活动资源沟通", description: "邀请客户进入活动、峰会或活动相关沟通。", type: "VISIT_INVITE", priority: "HIGH", defaultDueDays: 2, customerType: "PLATFORM_EVENT_RESOURCE_CLIENT" },
@@ -1353,12 +1353,12 @@ const platformLeadSeries: PlatformSeriesSeed[] = [
       "朋友圈看到MarketClaw内容，想先了解增长诊断和信任建设怎么做。",
       "视频号看到内部提醒承接内容，想判断先发什么资料更适合内部团队。",
       "公众号看完后，想继续聊管理看板、销售跟进和品牌内容协同。",
-      "抖音咨询重点客户如何把增长推广、内部提醒承接和销售推进串起来。"
+      "抖音咨询重点客户如何把内容增长、内部提醒承接和销售推进串起来。"
     ],
     followUps: [
       "客户想先看增长诊断表，再判断是先做信任建设还是先做内部提醒承接。",
       "客户已经收资料，准备内部开会讨论内部提醒承接和管理看板。",
-      "客户已沟通主要渠道，希望继续梳理品牌信任和增长推广配合路径。",
+      "客户已沟通主要渠道，希望继续梳理品牌信任和内容增长配合路径。",
       "客户已完成一轮诊断，准备继续看合作建议和落地节奏。"
     ],
     nextActions: ["安排一次增长诊断", "发送增长诊断表", "判断当前卡点", "推进诊断复盘"],
@@ -1366,10 +1366,10 @@ const platformLeadSeries: PlatformSeriesSeed[] = [
     taskDescriptions: [
       "先收客户来源、品牌现状和销售跟进方式。",
       "发送增长诊断表、信任建设方案和企微说明。",
-      "围绕信任建设、增长推广和内部提醒承接继续收口问题。",
+      "围绕信任建设、内容增长和内部提醒承接继续收口问题。",
       "对齐诊断结果，判断下一步合作方向。"
     ],
-    extraTags: [["信任建设", "高意向"], ["增长推广"], ["联盟合作"], ["待激活"]]
+    extraTags: [["信任建设", "高意向"], ["内容增长"], ["联盟合作"], ["待激活"]]
   },
   {
     startIndex: 5,
@@ -1410,26 +1410,26 @@ const platformLeadSeries: PlatformSeriesSeed[] = [
     companies: ["观木高客单", "木言家居", "朗木整家", "木奢空间"],
     cities: ["上海", "佛山", "东莞", "郑州"],
     messages: [
-      "朋友圈问什么是增长推广，为什么 AI 搜索会影响品牌咨询。",
+      "朋友圈问什么是内容增长，为什么 AI 搜索会影响品牌咨询。",
       "视频号咨询能不能被 AI 推荐，想先看自查表。",
-      "公众号继续追问增长推广、SEO 和代运营到底有什么区别。",
+      "公众号继续追问内容增长、SEO 和代运营到底有什么区别。",
       "抖音咨询品牌关键词和内容底座该怎么先做。"
     ],
     followUps: [
-      "客户想先做一轮 AI 可见性诊断，再判断是否启动增长推广。",
+      "客户想先做一轮 AI 可见性诊断，再判断是否启动内容增长。",
       "客户已收到自查表，准备整理品牌关键词和内容现状。",
       "客户已沟通当前搜索场景，希望继续收口可见性问题。",
       "客户已做过基础诊断，准备继续对齐关键词与内容方向。"
     ],
-    nextActions: ["发送增长推广方案", "发送自查表", "判断搜索卡点", "推进诊断复盘"],
-    taskTitles: ["增长推广首次沟通", "发送增长推广资料", "沟通 AI 搜索问题", "整理关键词策略"],
+    nextActions: ["发送内容增长方案", "发送自查表", "判断搜索卡点", "推进诊断复盘"],
+    taskTitles: ["内容增长首次沟通", "发送内容增长资料", "沟通 AI 搜索问题", "整理关键词策略"],
     taskDescriptions: [
       "先问品牌关键词、现有内容和当前搜索场景。",
-      "发送增长推广服务说明和 AI 搜索可见性自查表。",
+      "发送内容增长服务说明和 AI 搜索可见性自查表。",
       "继续判断是在内容、收录还是推荐入口卡住。",
       "对齐诊断结果并推进下一步建议。"
     ],
-    extraTags: [["增长推广", "高意向"], ["AI推广关注"], ["内容共创"], ["待激活"]]
+    extraTags: [["内容增长", "高意向"], ["AI推广关注"], ["内容共创"], ["待激活"]]
   },
   {
     startIndex: 13,
@@ -1889,7 +1889,7 @@ async function main() {
 
   await seedTenant({
     slug: "zhengmu-demo",
-    name: "MarketClaw 样板企业",
+    name: "MarketClaw 平台样板企业",
     industry: "高客单服务",
     users: {
       admin: "boss@zhengmu.local",
@@ -1983,7 +1983,7 @@ async function main() {
         },
         task: {
           title: "隔离验证任务：隔离客户B",
-          description: "用于验证第二租户任务不会泄露到主样板企业。",
+          description: "用于验证第二租户任务不会泄露到主租户。",
           type: "PHONE_CALL",
           status: "PENDING",
           priority: "NORMAL",
@@ -2007,3 +2007,5 @@ main()
     await prisma.$disconnect();
     process.exit(1);
   });
+
+

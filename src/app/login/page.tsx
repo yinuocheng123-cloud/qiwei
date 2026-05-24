@@ -1,11 +1,3 @@
-/*
- * 文件说明：该文件实现真实登录页面。
- * 功能说明：接收邮箱和密码，调用 Server Action 创建 httpOnly session cookie。
- *
- * 结构概览：
- *   第一部分：导入依赖
- *   第二部分：登录页组件
- */
 import { loginAction } from "@/lib/auth-actions";
 import { Card, Input, SubmitButton } from "@/components/Ui";
 
@@ -19,9 +11,9 @@ export default function LoginPage({ searchParams }: { searchParams: { error?: st
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-12">
-      <p className="text-sm font-semibold text-emerald-700">企业微信业务增长中台</p>
+      <p className="text-sm font-semibold text-emerald-700">MarketClaw 销售助手</p>
       <h1 className="mt-2 text-3xl font-bold text-slate-950">登录</h1>
-      <p className="mt-2 text-sm text-slate-600">使用平台或企业账号进入对应后台。</p>
+      <p className="mt-2 text-sm text-slate-600">使用平台账号进入对应工作台。</p>
       <Card className="mt-6">
         <form action={loginAction} className="space-y-4">
           <input type="hidden" name="next" value={searchParams.next ?? ""} />

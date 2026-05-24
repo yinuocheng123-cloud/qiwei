@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 文件说明：该文件覆盖 V1.1.1 浏览器端 E2E 主流程。
  * 功能说明：验证平台登录、企业登录、公开表单、客户详情跟进、销售隔离和导出权限。
  *
@@ -22,7 +22,7 @@ test("流程 A：平台管理员登录并进入平台总后台", async ({ page }
   await login(page, "admin@growthhub.local");
   await expect(page).toHaveURL(/\/admin$/);
   await expect(page.getByRole("heading", { name: "平台总后台" })).toBeVisible();
-  await expect(page.getByText("整木样板企业")).toBeVisible();
+  await expect(page.getByText("MarketClaw 平台样板企业")).toBeVisible();
 });
 
 test("流程 B：企业管理员登录并访问看板和客户列表", async ({ page }) => {
@@ -93,3 +93,4 @@ test("流程 F：企业管理员可导出，销售不能导出全量客户", asy
   await page.goto("/app/zhengmu-demo/export");
   await expect(page).toHaveURL(/\/forbidden$/);
 });
+

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 文件说明：该文件覆盖 V1.9.2 客户来源归因细化的浏览器端验证。
  * 功能说明：验证 CNAS 表单、客户导入、客户详情、权限边界、审计日志与既有链路兼容。
  *
@@ -59,7 +59,7 @@ const importedLead = {
 };
 const importCsvContent = [
   "客户姓名,手机号,微信号,公司名称,客户类型,来源渠道,来源项目,来源活动,来源场景,来源触点,来源二维码,来源人员,来源页面,来源内容,utm_source,utm_medium,utm_campaign,utm_content,utm_term,需求说明,意向等级,当前阶段,备注,业务线,标签,负责人邮箱,下次跟进时间",
-  `${importedLead.name},${importedLead.phone},${importedLead.wechat},${importedLead.company},会员意向客户,${importedLead.source},${importedLead.sourceProject},${importedLead.sourceCampaign},${importedLead.sourceScene},${importedLead.sourceTouchpoint},${importedLead.sourceQrCode},${importedLead.sourceStaffName},${importedLead.sourcePage},${importedLead.sourceContent},${importedLead.utmSource},${importedLead.utmMedium},${importedLead.utmCampaign},${importedLead.utmContent},${importedLead.utmTerm},想了解会员服务和品牌增信支持,HIGH,NEW,来自来源归因导入测试,,"高意向,来源归因",platform-sales@zhengmu.local,2026-05-16 10:00`
+  `${importedLead.name},${importedLead.phone},${importedLead.wechat},${importedLead.company},会员意向客户,${importedLead.source},${importedLead.sourceProject},${importedLead.sourceCampaign},${importedLead.sourceScene},${importedLead.sourceTouchpoint},${importedLead.sourceQrCode},${importedLead.sourceStaffName},${importedLead.sourcePage},${importedLead.sourceContent},${importedLead.utmSource},${importedLead.utmMedium},${importedLead.utmCampaign},${importedLead.utmContent},${importedLead.utmTerm},想了解会员服务和品牌增长支持,HIGH,NEW,来自来源归因导入测试,,"高意向,来源归因",platform-sales@zhengmu.local,2026-05-16 10:00`
 ].join("\n");
 
 async function login(page: Page, email: string, password = "123456", nextPath?: string) {
@@ -250,6 +250,7 @@ test.describe.serial("V1.9.2 客户来源归因细化", () => {
 
     await page.goto("/logout");
     await login(page, "boss@zhengmu.local", "123456", "/app/zhengmu-demo/demo-guide");
-    await expect(page.getByRole("heading", { name: "整木行业演示说明" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "MarketClaw 销售助手平台说明" })).toBeVisible();
   });
 });
+

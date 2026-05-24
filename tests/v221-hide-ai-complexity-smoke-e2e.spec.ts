@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 文件说明：该文件提供 V2.2.1 隐藏复杂度与 AI 后台化的轻量 smoke 测试。
  * 功能说明：验证销售主路径不暴露 AI 后台能力，管理员设置页承接系统级治理分组，客户详情仍保留 AI 推荐回复。
  *
@@ -25,7 +25,7 @@ test.describe("V2.2.1 隐藏复杂度与 AI 后台化", () => {
     await login(page, "sales@zhengmu.local");
     await page.goto("/app/zhengmu-demo/dashboard");
 
-    await expect(page.getByRole("heading", { name: /试点.*工作台|销售.*工作台/, level: 1 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /客户增长工作台|MarketClaw 销售助手/, level: 1 })).toBeVisible();
     await expect(page.locator("[data-nav-group]")).toHaveCount(4);
     await expect(page.locator('[data-nav-group="工作台"]')).toBeVisible();
     await expect(page.locator('[data-nav-group="客户"]')).toBeVisible();
@@ -78,3 +78,4 @@ test.describe("V2.2.1 隐藏复杂度与 AI 后台化", () => {
     await expect(page.getByText("训练状态")).toHaveCount(0);
   });
 });
+

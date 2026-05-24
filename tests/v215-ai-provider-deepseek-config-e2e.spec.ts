@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 文件说明：该文件覆盖 V2.1.5 DeepSeek AI Provider 基础配置与安全调用框架。
  * 功能说明：通过读取 schema、迁移、页面、服务、权限和文档文件，验证配置、测试连接、调用日志、安全降级和边界说明已接入。
  *
@@ -98,3 +98,4 @@ test.describe("V2.1.5 DeepSeek AI Provider 基础配置", () => {
     expect(training).toContain("我的训练");
   });
 });
+

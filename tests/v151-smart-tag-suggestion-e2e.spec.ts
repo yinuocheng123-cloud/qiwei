@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 文件说明：该文件覆盖 V1.5.1 智能标签建议的浏览器端 E2E 验证。
  * 功能说明：验证标签建议生成、人工确认写入、重复写入去重、权限边界与审计日志。
  *
@@ -68,26 +68,26 @@ test.describe.serial("V1.5.1 智能标签建议", () => {
 
     await generateSuggestions(page, "你们这个 GEO 和 AI 搜索推荐具体怎么做，能先诊断吗？");
     const panel = tagSuggestionPanel(page);
-    await expect(panel.getByText("GEO意向", { exact: true })).toBeVisible();
+    await expect(panel.getByText("内容增长意向", { exact: true })).toBeVisible();
     await expect(panel.getByText("AI推广关注", { exact: true })).toBeVisible();
 
-    const geoTag = tagItem(panel, "GEO意向");
+    const geoTag = tagItem(panel, "内容增长意向");
     const aiTag = tagItem(panel, "AI推广关注");
     await geoTag.locator('input[type="checkbox"]').check();
     await aiTag.locator('input[type="checkbox"]').check();
 
     const tagList = leadTagList(page);
-    const geoCountBefore = await leadTagChip(tagList, "GEO意向").count();
+    const geoCountBefore = await leadTagChip(tagList, "内容增长意向").count();
 
     await panel.getByRole("button", { name: "确认添加标签" }).click();
-    await expect(leadTagChip(tagList, "GEO意向")).toHaveCount(1);
+    await expect(leadTagChip(tagList, "内容增长意向")).toHaveCount(1);
     await expect(leadTagChip(tagList, "AI推广关注")).toHaveCount(1);
 
-    const geoCountAfterFirstConfirm = await leadTagChip(tagList, "GEO意向").count();
+    const geoCountAfterFirstConfirm = await leadTagChip(tagList, "内容增长意向").count();
     expect(geoCountAfterFirstConfirm).toBeGreaterThan(geoCountBefore);
 
     await panel.getByRole("button", { name: "确认添加标签" }).click();
-    const geoCountAfterSecondConfirm = await leadTagChip(tagList, "GEO意向").count();
+    const geoCountAfterSecondConfirm = await leadTagChip(tagList, "内容增长意向").count();
     expect(geoCountAfterSecondConfirm).toBe(geoCountAfterFirstConfirm);
 
     await page.goto("/app/zhengmu-demo/audit-logs");
@@ -116,3 +116,4 @@ test.describe.serial("V1.5.1 智能标签建议", () => {
     await expect(page).toHaveURL(/\/forbidden$/);
   });
 });
+

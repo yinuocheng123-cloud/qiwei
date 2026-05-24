@@ -1,16 +1,7 @@
-/*
- * 文件说明：该文件承接销售资料清单页的轻量展示组件。
- * 功能说明：把资料从后台编辑器压成“清单 + 状态 + 展开详情”的销售视图，并复用现有表单保存逻辑。
- *
- * 结构概览：
- *   第一部分：资料类型与状态工具
- *   第二部分：新增资料链接面板
- *   第三部分：资料清单分组与清单项
- */
 import type { CustomerType } from "@prisma/client";
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { Card, Input, Select, SubmitButton, Textarea } from "@/components/Ui";
-import { customerTypeOptions, formatDate, labelOf } from "@/lib/options";
+import { customerTypeOptions, formatDate, labelOf, materialTypeOptions } from "@/lib/options";
 
 export type MaterialChecklistRecord = {
   id: string;
@@ -22,17 +13,11 @@ export type MaterialChecklistRecord = {
   createdAt: Date;
 };
 
-export const materialTypeChoices = [
-  { value: "link", label: "链接" },
-  { value: "pdf", label: "PDF" },
-  { value: "document", label: "文档" },
-  { value: "video", label: "视频" }
-];
+export const materialTypeChoices = materialTypeOptions;
 
 function materialTypeLabel(value?: string | null) {
-  if (!value || value === "link") return "链接";
-  if (value === "image") return "文档";
-  return materialTypeChoices.find((option) => option.value === value)?.label ?? "链接";
+  if (!value) return "链接";
+  return labelOf(materialTypeOptions, value);
 }
 
 export function materialStatusLabel(material: Pick<MaterialChecklistRecord, "title" | "url">) {
@@ -61,7 +46,7 @@ export function MaterialCreatePanel({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-semibold text-slate-950">新增资料链接</h2>
-              <p className="mt-1 text-sm text-slate-500">建议使用腾讯文档、飞书文档或 PDF 链接作为销售资料。这里不做真实上传，只保存可发给客户的链接。</p>
+              <p className="mt-1 text-sm text-slate-500">建议直接保存腾讯文档、飞书文档、PDF 或视频链接，先把销售能发的资料清单整理出来。</p>
             </div>
             <span className="text-sm font-medium text-emerald-700">展开 / 编辑</span>
           </div>
@@ -103,7 +88,9 @@ export function MaterialChecklistGroup({
         <div>
           <h2 className="text-lg font-semibold text-slate-950">
             {title}
-            <span className="ml-2 text-sm font-normal text-slate-500">({completeCount} 条已完善，{pendingCount} 条待补充)</span>
+            <span className="ml-2 text-sm font-normal text-slate-500">
+              ({completeCount} 已完善，{pendingCount} 待补充)
+            </span>
           </h2>
           <p className="mt-1 text-sm text-slate-500">{description}</p>
         </div>

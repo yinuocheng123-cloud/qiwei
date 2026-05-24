@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 文件说明：该文件覆盖 V1.4.1 演示说明页的浏览器端验证。
  * 功能说明：验证 demo-guide 页面的访问权限、核心内容和跨租户隔离行为。
  *
@@ -52,3 +52,4 @@ test.describe.serial("V1.4.1 演示说明页", () => {
     await expect(page).toHaveURL(/\/forbidden$/);
   });
 });
+

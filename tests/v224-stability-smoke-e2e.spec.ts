@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 文件说明：该文件提供 V2.2.4 稳定性收口的轻量 smoke 测试。
  * 功能说明：验证工作台、销售主路径、客户详情 AI 推荐区域和管理员设置页仍可访问。
  *
@@ -24,13 +24,13 @@ test.describe("V2.2.4 稳定性收口 smoke", () => {
   test("TENANT_ADMIN 和 SALES 都可以打开工作台", async ({ page }) => {
     await login(page, "boss@zhengmu.local");
     await page.goto("/app/zhengmu-demo/dashboard");
-    await expect(page.getByRole("heading", { name: /试点.*工作台/, level: 1 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /客户增长工作台|MarketClaw 销售助手/, level: 1 })).toBeVisible();
     await expect(page.getByRole("heading", { name: "今日待跟进客户" })).toBeVisible();
 
     await page.goto("/logout");
     await login(page, "sales@zhengmu.local");
     await page.goto("/app/zhengmu-demo/dashboard");
-    await expect(page.getByRole("heading", { name: /试点.*工作台/, level: 1 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /客户增长工作台|MarketClaw 销售助手/, level: 1 })).toBeVisible();
     await expect(page.locator('[data-nav-group="设置"]')).toHaveCount(0);
   });
 
@@ -61,3 +61,4 @@ test.describe("V2.2.4 稳定性收口 smoke", () => {
     await expect(page.getByRole("heading", { name: "AI 治理" })).toBeVisible();
   });
 });
+

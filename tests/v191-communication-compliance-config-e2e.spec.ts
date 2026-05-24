@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 文件说明：该文件覆盖 V1.9.1 沟通素材合规采集配置中心的浏览器端验证。
  * 功能说明：验证企业管理员可配置、运营只读、销售拒绝、收费申请与合规确认前置、自动发送强制关闭和审计链路。
  *
@@ -118,6 +118,7 @@ test.describe.serial("V1.9.1 沟通素材合规采集配置中心", () => {
     await page.goto("/logout");
     await login(page, "boss@zhengmu.local");
     await page.goto("/app/zhengmu-demo/demo-guide");
-    await expect(page.getByRole("heading", { name: "整木行业演示说明" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "MarketClaw 销售助手平台说明" })).toBeVisible();
   });
 });
+

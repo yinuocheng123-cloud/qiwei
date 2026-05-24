@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 文件说明：该文件覆盖 V2.0.7 Market Claw 候选知识去重与合并体验优化的浏览器端验证。
  * 功能说明：验证相似提示、采纳新知识、合并到已有知识、重复驳回、知识来源展示、权限边界和审计日志。
  *
@@ -187,3 +187,4 @@ test.describe.serial("V2.0.7 Market Claw：候选知识去重与合并体验优�
     await expect(page.getByRole("heading", { name: "Market Claw 我的训练" })).toBeVisible();
   });
 });
+

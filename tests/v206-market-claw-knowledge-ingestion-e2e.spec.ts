@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 文件说明：该文件覆盖 V2.0.6 Market Claw 资料投喂与候选知识生成的浏览器端验证。
  * 功能说明：验证管理员资料投喂、候选知识生成与采纳、运营可访问、销售被拒绝，以及既有 Market Claw 链路不受影响。
  *
@@ -19,7 +19,7 @@ const ingestionText = `
 答：GEO 方案会先看品牌在 AI 搜索里的可见性，再决定是先补内容底座还是先做分发策略。
 
 ${priceMarker}：
-GEO／AI 推广不会先空口报死价，需要结合品牌现状、内容体量和目标范围先判断，再给出报价边界。
+内容增长不会先空口报死价，需要结合品牌现状、内容体量和目标范围先判断，再给出报价边界。
 
 ${riskMarker}：
 不能保证一定被 AI 推荐，也不能承诺固定排名、固定名额或绝对效果。
@@ -90,3 +90,4 @@ test.describe.serial("V2.0.6 Market Claw：资料投喂与候选知识生成", (
     await expect(page.getByRole("heading", { name: "Market Claw 我的训练" })).toBeVisible();
   });
 });
+

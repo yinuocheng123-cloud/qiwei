@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 文件说明：该文件覆盖 V2.0.3 导航与信息架构收口的浏览器端 E2E 验证。
  * 功能说明：验证一级导航收口、角色化导航、客户管理归类、业务配置入口、Market Claw 入口和高权限页面拒绝是否符合预期。
  *
@@ -69,7 +69,7 @@ test.describe.serial("V2.0.3 导航与信息架构收口", () => {
 
     await page.goto("/logout");
     await login(page, "boss@zhengmu.local", "123456", "/app/zhengmu-demo/demo-guide");
-    await expect(page.getByRole("heading", { name: "整木行业演示说明", exact: true, level: 1 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "MarketClaw 销售助手平台说明", exact: true, level: 1 })).toBeVisible();
   });
 
   test("OPERATOR 看到 5 个一级分组，保留业务配置和 Market Claw，但不显示系统管理", async ({ page }) => {
@@ -130,3 +130,4 @@ test.describe.serial("V2.0.3 导航与信息架构收口", () => {
     await expect(page).toHaveURL(/\/forbidden$/);
   });
 });
+

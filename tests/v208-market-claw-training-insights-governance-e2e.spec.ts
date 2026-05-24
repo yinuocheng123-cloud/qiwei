@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 文件说明：该文件覆盖 V2.0.8 Market Claw 训练复盘与知识治理的浏览器端验证。
  * 功能说明：验证训练复盘入口、管理侧治理视图、销售个人视图，以及既有训练/投喂/审核链路未被破坏。
  *
@@ -39,7 +39,7 @@ test.describe("V2.0.8 Market Claw：训练复盘与知识治理", () => {
     await expect(page.getByRole("heading", { name: "企业阶段适配建议" })).toBeVisible();
     await expect(page.getByText("当前知识成熟度阶段")).toBeVisible();
 
-    await expect(page.getByText("整木工厂")).toHaveCount(0);
+    await expect(page.getByText("重点客户")).toHaveCount(0);
     await expect(page.getByText("乌镇资源")).toHaveCount(0);
     await expect(page.getByText("会员服务")).toHaveCount(0);
   });
@@ -82,3 +82,4 @@ test.describe("V2.0.8 Market Claw：训练复盘与知识治理", () => {
     await expect(page.getByRole("heading", { name: "Market Claw 训练审核", level: 1 })).toBeVisible();
   });
 });
+

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 文件说明：该文件覆盖 V2.1 稳定测试环境与演示交付包的轻量回归验证。
  * 功能说明：验证高权限入口与低权限边界仍然正确，同时检查关键演示文档文件和 README 中的 V2.1 说明存在。
  *
@@ -71,3 +71,4 @@ test.describe("V2.1 稳定测试环境与演示交付包", () => {
     expect(readme).toContain("custom/docs/local-demo-runbook.md");
   });
 });
+

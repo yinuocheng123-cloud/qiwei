@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 文件说明：该文件覆盖 V2.1.6 豆包 / 火山方舟 AI Provider 增量支持。
  * 功能说明：验证 schema、迁移、服务层、配置页、登录权限、保存配置、测试连接、调用日志和原 Market Claw 页面边界。
  *
@@ -228,3 +228,4 @@ test.describe("V2.1.6 豆包 / 火山方舟 AI Provider 支持", () => {
     await expect(page).toHaveURL(/\/forbidden$/);
   });
 });
+

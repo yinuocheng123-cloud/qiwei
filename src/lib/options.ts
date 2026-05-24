@@ -1,12 +1,3 @@
-/*
- * 文件说明：该文件集中维护 V1.0 页面表单使用的枚举选项。
- * 功能说明：保证页面展示、筛选与 Prisma 枚举值保持一致，避免散落硬编码。
- *
- * 结构概览：
- *   第一部分：通用选项类型
- *   第二部分：业务枚举选项
- *   第三部分：标签与格式化工具
- */
 export type Option = {
   value: string;
   label: string;
@@ -30,16 +21,16 @@ export const customerTypeOptions: Option[] = [
   { value: "DEALER_CLIENT", label: "合作伙伴" },
   { value: "DESIGNER_CLIENT", label: "意向客户" },
   { value: "FACTORY_CLIENT", label: "重点客户" },
-  { value: "CHANNEL_PARTNER", label: "渠道伙伴" },
-  { value: "OLD_CLIENT", label: "老客户" },
+  { value: "CHANNEL_PARTNER", label: "合作伙伴" },
+  { value: "OLD_CLIENT", label: "重点客户" },
   { value: "PLATFORM_FACTORY_OWNER", label: "重点客户" },
-  { value: "PLATFORM_MEMBERSHIP_CLIENT", label: "会员意向客户" },
-  { value: "PLATFORM_GEO_AI_CLIENT", label: "增长推广客户" },
-  { value: "PLATFORM_TRAINING_CLIENT", label: "培训课程客户" },
-  { value: "PLATFORM_EVENT_RESOURCE_CLIENT", label: "活动／活动资源客户" },
-  { value: "PLATFORM_SUPPLY_CHAIN_CLIENT", label: "供应链／集采客户" },
-  { value: "PLATFORM_AFTERMARKET_CLIENT", label: "一清一护后市场客户" },
-  { value: "PLATFORM_PARTNER_CLIENT", label: "合作伙伴客户" },
+  { value: "PLATFORM_MEMBERSHIP_CLIENT", label: "合作伙伴" },
+  { value: "PLATFORM_GEO_AI_CLIENT", label: "意向客户" },
+  { value: "PLATFORM_TRAINING_CLIENT", label: "意向客户" },
+  { value: "PLATFORM_EVENT_RESOURCE_CLIENT", label: "合作伙伴" },
+  { value: "PLATFORM_SUPPLY_CHAIN_CLIENT", label: "合作伙伴" },
+  { value: "PLATFORM_AFTERMARKET_CLIENT", label: "重点客户" },
+  { value: "PLATFORM_PARTNER_CLIENT", label: "合作伙伴" },
   { value: "OTHER", label: "其他" }
 ];
 
@@ -113,7 +104,7 @@ export const taskTypeOptions: Option[] = [
   { value: "WECHAT_FOLLOW", label: "企微跟进" },
   { value: "QUOTE_FOLLOW", label: "报价跟进" },
   { value: "REACTIVATE", label: "客户激活" },
-  { value: "VISIT_INVITE", label: "邀约到店" },
+  { value: "VISIT_INVITE", label: "邀约到场" },
   { value: "DEAL_PUSH", label: "成交推进" },
   { value: "CUSTOM", label: "自定义" }
 ];
@@ -127,7 +118,7 @@ export const taskStatusOptions: Option[] = [
 
 export const taskPriorityOptions: Option[] = [
   { value: "LOW", label: "低" },
-  { value: "NORMAL", label: "普通" },
+  { value: "NORMAL", label: "常规" },
   { value: "HIGH", label: "高" },
   { value: "URGENT", label: "紧急" }
 ];

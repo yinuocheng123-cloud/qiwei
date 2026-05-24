@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 文件说明：该文件提供 V2.2 试点工作台收口的轻量 smoke 回归测试。
  * 功能说明：验证首页可打开、管理员/运营可见独立 AI 训练入口、销售主路径可见，并确认设置类入口不直接暴露给销售。
  *
@@ -26,7 +26,7 @@ test.describe("V2.2 试点工作台收口 smoke", () => {
     await page.goto("/app/zhengmu-demo/dashboard");
 
     await expect(page.locator("main")).toBeVisible();
-    await expect(page.getByRole("heading", { name: /试点.*工作台|销售.*工作台/, level: 1 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /客户增长工作台|MarketClaw 销售助手/, level: 1 })).toBeVisible();
 
     const navGroups = page.locator("[data-nav-group]");
     await expect(navGroups).toHaveCount(6);
@@ -42,7 +42,7 @@ test.describe("V2.2 试点工作台收口 smoke", () => {
     await login(page, "sales@zhengmu.local");
     await page.goto("/app/zhengmu-demo/dashboard");
 
-    await expect(page.getByRole("heading", { name: /试点.*工作台|销售.*工作台/, level: 1 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /客户增长工作台|MarketClaw 销售助手/, level: 1 })).toBeVisible();
     await expect(page.locator('[data-nav-group="工作台"]')).toBeVisible();
     await expect(page.locator('[data-nav-group="客户"]')).toBeVisible();
     await expect(page.locator('[data-nav-group="跟进"]')).toBeVisible();
@@ -57,3 +57,4 @@ test.describe("V2.2 试点工作台收口 smoke", () => {
     await expect(page.locator('a[href$="/market-claw/sandbox"]')).toHaveCount(0);
   });
 });
+

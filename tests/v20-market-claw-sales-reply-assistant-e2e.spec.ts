@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 文件说明：该文件覆盖 V2.0 麻虾 Market Claw 的浏览器端 E2E 验证。
  * 功能说明：验证知识投喂、回复训练、客户详情页回复草稿、标签确认、跟进保存、任务创建、权限边界与现有链路兼容。
  *
@@ -50,7 +50,7 @@ test.describe.serial("V2.0 麻虾 Market Claw：销售智能回复助手", () =>
     const createCard = page.locator("div.rounded-md.border.border-slate-200.bg-white").filter({
       has: page.getByRole("heading", { name: "新增知识" })
     }).first();
-    await createCard.getByLabel("业务线").selectOption({ label: "GEO／AI 推广" });
+    await createCard.getByLabel("业务线").selectOption({ label: "内容增长" });
     await createCard.getByLabel("知识类型").selectOption({ label: "价格边界" });
     await createCard.getByRole("textbox", { name: "标题" }).fill(geoKnowledgeTitle);
     await createCard.getByRole("textbox", { name: "正文" }).fill("GEO 方案需要先做 AI 可见性诊断，不承诺保证 AI 推荐结果，也不空口承诺绝对效果。");
@@ -64,7 +64,7 @@ test.describe.serial("V2.0 麻虾 Market Claw：销售智能回复助手", () =>
     await page.goto("/app/zhengmu-platform/market-claw/training");
     await expect(page.getByRole("heading", { name: "回复训练场" })).toBeVisible();
     await page.getByLabel("客户问题").fill(geoQuestion);
-    await page.getByLabel("业务线").selectOption({ label: "GEO／AI 推广" });
+    await page.getByLabel("业务线").selectOption({ label: "内容增长" });
     await page.getByRole("button", { name: "生成训练结果" }).click();
 
     const currentCard = page.locator("div.rounded-md.border.border-slate-200").filter({
@@ -94,7 +94,7 @@ test.describe.serial("V2.0 麻虾 Market Claw：销售智能回复助手", () =>
     await expect(page.getByText("当前版本不自动发送客户消息")).toBeVisible();
 
     await page.getByLabel("客户问题").fill(geoQuestion);
-    await page.getByLabel("业务线").selectOption({ label: "GEO／AI 推广" });
+    await page.getByLabel("业务线").selectOption({ label: "内容增长" });
     await page.getByRole("button", { name: "生成回复草稿" }).click();
 
     const card = draftCard(page);
@@ -103,11 +103,11 @@ test.describe.serial("V2.0 麻虾 Market Claw：销售智能回复助手", () =>
     await expect(card.getByRole("heading", { name: "推进成交版", exact: true })).toBeVisible();
     await expect(card.getByRole("heading", { name: "风险提醒", exact: true })).toBeVisible();
     await expect(card).toContainText("不要承诺绝对结果");
-    await expect(card).toContainText("GEO意向");
+    await expect(card).toContainText("内容增长意向");
     await expect(card).toContainText("AI推广关注");
 
     await card.getByRole("button", { name: "确认添加推荐标签" }).click();
-    await expect(section(page, "标签")).toContainText("GEO意向");
+    await expect(section(page, "标签")).toContainText("内容增长意向");
 
     const followUpCountBefore = await followUpCards(page).count();
     await card.getByLabel("选用回复版本").selectOption({ label: "简短微信版" });
@@ -116,7 +116,7 @@ test.describe.serial("V2.0 麻虾 Market Claw：销售智能回复助手", () =>
 
     await card.getByRole("button", { name: "创建下一步任务" }).click();
     await page.goto("/app/zhengmu-platform/todos");
-    await expect(page.getByText("安排诊断沟通：GEO／AI 推广").first()).toBeVisible();
+    await expect(page.getByText("安排诊断沟通：内容增长").first()).toBeVisible();
 
     await page.goto("/app/zhengmu-platform/market-claw/replies");
     await expect(page.getByRole("heading", { name: "回复记录" })).toBeVisible();
@@ -144,6 +144,7 @@ test.describe.serial("V2.0 麻虾 Market Claw：销售智能回复助手", () =>
 
     await page.goto("/logout");
     await login(page, "boss@zhengmu.local", "123456", "/app/zhengmu-demo/demo-guide");
-    await expect(page.getByRole("heading", { name: "整木行业演示说明" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "MarketClaw 销售助手平台说明" })).toBeVisible();
   });
 });
+

@@ -1,17 +1,7 @@
-/*
- * 文件说明：该文件实现企业项目后台的销售资料清单页面。
- * 功能说明：把资料页收口成“客户类型 + 状态 + 展开详情”的销售发送清单，避免默认呈现成 CMS 后台。
- *
- * 结构概览：
- *   第一部分：导入依赖
- *   第二部分：资料分组与展示辅助
- *   第三部分：销售资料清单页面
- */
-import type { CustomerType, UserRole } from "@prisma/client";
+import type { UserRole } from "@prisma/client";
 import { createMaterial, updateMaterial } from "@/lib/actions";
 import { requireTenantAccess } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { customerTypeOptions } from "@/lib/options";
 import { PageShell } from "@/components/Shell";
 import { Card } from "@/components/Ui";
 import {
@@ -23,37 +13,58 @@ import {
 
 export const dynamic = "force-dynamic";
 
+type MaterialBucketKey = "POTENTIAL" | "INTENTION" | "PARTNER" | "FOCUS" | "GENERAL";
+
+function materialBucket(material: MaterialChecklistRecord): { key: MaterialBucketKey; label: string } {
+  const type = material.customerType;
+  switch (type) {
+    case "OWNER_CLIENT":
+      return { key: "POTENTIAL", label: "潜在客户" };
+    case "DESIGNER_CLIENT":
+    case "PLATFORM_GEO_AI_CLIENT":
+    case "PLATFORM_TRAINING_CLIENT":
+      return { key: "INTENTION", label: "意向客户" };
+    case "DEALER_CLIENT":
+    case "CHANNEL_PARTNER":
+    case "PLATFORM_MEMBERSHIP_CLIENT":
+    case "PLATFORM_EVENT_RESOURCE_CLIENT":
+    case "PLATFORM_SUPPLY_CHAIN_CLIENT":
+    case "PLATFORM_PARTNER_CLIENT":
+      return { key: "PARTNER", label: "合作伙伴" };
+    case "FACTORY_CLIENT":
+    case "OLD_CLIENT":
+    case "PLATFORM_FACTORY_OWNER":
+    case "PLATFORM_AFTERMARKET_CLIENT":
+      return { key: "FOCUS", label: "重点客户" };
+    default:
+      return { key: "GENERAL", label: "通用资料" };
+  }
+}
+
 function buildMaterialGroups(materials: MaterialChecklistRecord[]) {
-  const materialsByCustomerType = new Map<CustomerType | "GENERAL", MaterialChecklistRecord[]>();
+  const buckets = new Map<MaterialBucketKey, MaterialChecklistRecord[]>();
 
   for (const material of materials) {
-    const key = (material.customerType ?? "GENERAL") as CustomerType | "GENERAL";
-    materialsByCustomerType.set(key, [...(materialsByCustomerType.get(key) ?? []), material]);
+    const bucket = materialBucket(material);
+    buckets.set(bucket.key, [...(buckets.get(bucket.key) ?? []), material]);
   }
 
-  const customerTypeGroups = customerTypeOptions
-    .filter((option) => materialsByCustomerType.has(option.value as CustomerType))
-    .map((option) => ({
-      key: option.value as CustomerType,
-      title: `${option.label}资料清单`,
-      description: `适合${option.label}场景的销售资料，销售先看清单，展开后再看链接和说明。`,
-      materials: materialsByCustomerType.get(option.value as CustomerType) ?? []
+  const orderedBuckets: { key: MaterialBucketKey; label: string }[] = [
+    { key: "POTENTIAL", label: "潜在客户" },
+    { key: "INTENTION", label: "意向客户" },
+    { key: "PARTNER", label: "合作伙伴" },
+    { key: "FOCUS", label: "重点客户" },
+    { key: "GENERAL", label: "通用资料" }
+  ];
+
+  return orderedBuckets
+    .filter((bucket) => (buckets.get(bucket.key) ?? []).length > 0)
+    .map((bucket) => ({
+      key: bucket.key,
+      title: `${bucket.label}资料清单`,
+      description: `整理给${bucket.label}使用的销售资料，先看清单和状态，展开后再看链接与说明。`,
+      materials: buckets.get(bucket.key) ?? []
     }));
-
-  const generalMaterials = materialsByCustomerType.get("GENERAL") ?? [];
-  const generalGroup =
-    generalMaterials.length > 0
-      ? [
-          {
-            key: "GENERAL" as const,
-            title: "通用资料清单",
-            description: "不绑定客户类型的通用销售资料，适合先发给客户快速确认。",
-            materials: generalMaterials
-          }
-        ]
-      : [];
-
-  return [...customerTypeGroups, ...generalGroup];
 }
 
 export default async function MaterialsPage({ params }: { params: { tenantSlug: string } }) {
@@ -67,11 +78,7 @@ export default async function MaterialsPage({ params }: { params: { tenantSlug: 
   const createAction = createMaterial.bind(null, tenant.slug);
 
   return (
-    <PageShell
-      tenant={tenant}
-      title="销售资料清单"
-      description="按客户类型整理销售可发送的资料。销售先看清单和状态，需要时再展开查看链接、描述和编辑项。"
-    >
+    <PageShell tenant={tenant} title="销售资料清单" description="按客户类型整理可发送给客户的资料，先看清单和状态，必要时再展开编辑链接、描述和客户类型。">
       <div className="space-y-6">
         {canManage ? <MaterialCreatePanel action={createAction} /> : null}
 
@@ -93,9 +100,7 @@ export default async function MaterialsPage({ params }: { params: { tenantSlug: 
         ) : (
           <Card>
             <h2 className="text-base font-semibold text-slate-950">销售资料清单</h2>
-            <p className="mt-2 text-sm text-slate-500">
-              当前还没有可发给客户的资料。建议先准备产品介绍、成功案例、服务流程、报价说明和常见问题链接。
-            </p>
+            <p className="mt-2 text-sm text-slate-500">当前还没有可发送给客户的资料。建议先准备产品介绍、成功案例、服务流程、报价说明和常见问题链接。</p>
           </Card>
         )}
       </div>

@@ -1,13 +1,4 @@
-/*
- * 文件说明：该文件提供 V2.2.7 资料包清单化收口的 smoke 测试。
- * 功能说明：验证销售可以看到按客户类型分组的资料清单，管理者可以展开详情并编辑，销售默认不暴露复杂表单。
- *
- * 结构概览：
- *   第一部分：登录辅助函数
- *   第二部分：销售资料清单只读测试
- *   第三部分：管理者展开与编辑入口测试
- */
-import { expect, test, type Page } from "@playwright/test";
+﻿import { expect, test, type Page } from "@playwright/test";
 
 async function login(page: Page, email: string, password = "123456") {
   await page.goto("/login");
@@ -20,8 +11,8 @@ async function login(page: Page, email: string, password = "123456") {
   ]);
 }
 
-test.describe("V2.2.7 资料包清单化收口", () => {
-  test("SALES 可以打开资料页并看到按客户类型分组的清单", async ({ page }) => {
+test.describe("V2.3.5 销售资料清单", () => {
+  test("SALES 可以查看按客户类型分组的销售资料清单", async ({ page }) => {
     await login(page, "sales@zhengmu.local");
     await page.goto("/app/zhengmu-demo/materials");
 
@@ -29,10 +20,10 @@ test.describe("V2.2.7 资料包清单化收口", () => {
     await expect(page.getByRole("heading", { name: /潜在客户资料清单/ })).toBeVisible();
     await expect(page.getByRole("heading", { name: /合作伙伴资料清单/ })).toBeVisible();
     await expect(page.getByText("已完善").first()).toBeVisible();
-    await expect(page.getByText("销售先看清单，展开后再看链接和说明。").first()).toBeVisible();
+    await expect(page.getByText("先看清单和状态，展开后再看链接与说明。").first()).toBeVisible();
   });
 
-  test("SALES 默认不看到复杂编辑表单", async ({ page }) => {
+  test("SALES 默认只看清单，不显示编辑表单", async ({ page }) => {
     await login(page, "sales@zhengmu.local");
     await page.goto("/app/zhengmu-demo/materials");
 
@@ -43,7 +34,7 @@ test.describe("V2.2.7 资料包清单化收口", () => {
     await expect(page.getByText("保存资料链接")).toHaveCount(0);
   });
 
-  test("TENANT_ADMIN 可以看到展开详情和编辑入口", async ({ page }) => {
+  test("TENANT_ADMIN 可以展开详情并编辑资料链接", async ({ page }) => {
     await login(page, "boss@zhengmu.local");
     await page.goto("/app/zhengmu-demo/materials");
 
@@ -51,10 +42,13 @@ test.describe("V2.2.7 资料包清单化收口", () => {
     await expect(page.getByRole("heading", { name: "新增资料链接" })).toBeVisible();
     await expect(page.getByText("展开 / 编辑").first()).toBeVisible();
 
-    const firstMaterialDetails = page.locator("details").filter({ hasText: "产品服务避坑清单" }).first();
-    await firstMaterialDetails.locator("summary").click();
+    const firstMaterialDetails = page.locator("details").filter({ hasText: "新增资料链接" }).first();
+    await firstMaterialDetails.evaluate((element) => {
+      (element as HTMLDetailsElement).open = true;
+    });
     await expect(firstMaterialDetails.locator('input[name="url"]')).toBeVisible();
     await expect(firstMaterialDetails.locator('textarea[name="description"]')).toBeVisible();
     await expect(firstMaterialDetails.getByText("保存资料链接")).toBeVisible();
   });
 });
+

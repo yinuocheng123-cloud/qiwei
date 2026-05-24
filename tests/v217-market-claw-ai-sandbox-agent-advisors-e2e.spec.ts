@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 文件说明：该文件覆盖 V2.1.7 Market Claw AI 测试沙盒与专家视角调用的浏览器端回归验证。
  * 功能说明：验证管理员访问、沙盒入口、MOCK 结构化建议、风险分级展示、训练草稿保存和销售权限拒绝。
  *
@@ -92,3 +92,4 @@ test.describe("V2.1.7 Market Claw AI 测试沙盒", () => {
     await expect(page).toHaveURL(/\/forbidden$/);
   });
 });
+
