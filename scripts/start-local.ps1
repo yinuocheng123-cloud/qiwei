@@ -111,6 +111,33 @@ function Test-PortListening {
   return [bool]($rows | Select-String "LISTENING")
 }
 
+function Get-ListeningPids {
+  param([int]$Port)
+
+  $rows = netstat -ano | findstr ":$Port"
+  if (-not $rows) {
+    return @()
+  }
+
+  $pids = @()
+  foreach ($row in $rows) {
+    if ($row -notmatch "LISTENING") {
+      continue
+    }
+
+    $parts = ($row -split "\s+") | Where-Object { $_ }
+    if ($parts.Count -gt 0) {
+      $pidText = $parts[-1]
+      $pidValue = 0
+      if ([int]::TryParse($pidText, [ref]$pidValue)) {
+        $pids += $pidValue
+      }
+    }
+  }
+
+  return $pids | Sort-Object -Unique
+}
+
 function Wait-ForPortListening {
   param(
     [int]$Port,
@@ -263,36 +290,36 @@ function Start-PostgresFallback {
   Write-Host "Using local PGDATA: $dataDir"
   Write-Host "stdout log: $stdoutLogPath"
   Write-Host "stderr log: $stderrLogPath"
-  Write-Host "Launch command: Start-Process postgres.exe -ArgumentList '-D `"$dataDir`" -p $Port'"
+  Write-Host "Launch command: postgres.exe -D `"$dataDir`" -p $Port"
 
   try {
-    $job = Start-Job -ArgumentList $postgresExe, $dataDir, $Port, $stdoutLogPath, $stderrLogPath -ScriptBlock {
-      param($exe, $dataDirArg, $portArg, $stdoutArg, $stderrArg)
-      & $exe -D $dataDirArg -p $portArg 1>> $stdoutArg 2>> $stderrArg
+    $psi = [System.Diagnostics.ProcessStartInfo]::new()
+    $psi.FileName = $postgresExe
+    $psi.Arguments = "-D `"$dataDir`" -p $Port"
+    $psi.WorkingDirectory = $repoRoot
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+
+    $process = [System.Diagnostics.Process]::Start($psi)
+    if (-not $process) {
+      throw "Failed to start postgres.exe."
     }
+
+    $null = $process.StandardOutput.BaseStream.CopyToAsync([System.IO.File]::Create($stdoutLogPath))
+    $null = $process.StandardError.BaseStream.CopyToAsync([System.IO.File]::Create($stderrLogPath))
+    Write-Host "postgres.exe process id: $($process.Id)"
   } catch {
-    Write-Host "Failed to launch postgres.exe background job: $($_.Exception.Message)"
+    Write-Host "Failed to launch PostgreSQL fallback with postgres.exe: $($_.Exception.Message)"
     return $false
   }
-
-  Write-Host "postgres.exe background job started, job id: $($job.Id)"
 
   if (-not (Wait-ForPortListening -Port $Port -Seconds 30)) {
     Write-Host "Port $Port was still not LISTENING after 30 seconds."
     Write-Host "netstat output:"
     netstat -ano | findstr ":$Port" | Out-Host
-    $jobInfo = Get-Job -Id $job.Id -ErrorAction SilentlyContinue
-    if ($jobInfo) {
-      $jobOutput = Receive-Job -Id $job.Id -Keep -ErrorAction SilentlyContinue
-      if ($jobOutput) {
-        Write-Host "Recent job output:"
-        $jobOutput | Out-Host
-      }
-      Stop-Job -Id $job.Id -ErrorAction SilentlyContinue
-      Remove-Job -Id $job.Id -Force -ErrorAction SilentlyContinue
-    }
     if (Test-Path -LiteralPath $stderrLogPath) {
-      Write-Host "Recent error log:"
+      Write-Host "Recent PostgreSQL error log:"
       Get-Content -LiteralPath $stderrLogPath -Tail 30 -ErrorAction SilentlyContinue | Out-Host
     }
     return $false
@@ -303,13 +330,8 @@ function Start-PostgresFallback {
 
   if (-not (Wait-ForPostgresReady -Port $Port -Seconds 30)) {
     Write-Host "Port $Port is listening, but pg_isready still did not return accepting connections."
-    $jobInfo = Get-Job -Id $job.Id -ErrorAction SilentlyContinue
-    if ($jobInfo) {
-      Stop-Job -Id $job.Id -ErrorAction SilentlyContinue
-      Remove-Job -Id $job.Id -Force -ErrorAction SilentlyContinue
-    }
     if (Test-Path -LiteralPath $stderrLogPath) {
-      Write-Host "Recent error log:"
+      Write-Host "Recent PostgreSQL error log:"
       Get-Content -LiteralPath $stderrLogPath -Tail 30 -ErrorAction SilentlyContinue | Out-Host
     }
     return $false
@@ -325,13 +347,21 @@ Run-Step "Check project root" {
   Write-Host "Current directory: $(Get-Location)"
 }
 
-Run-Step "Stop old node / Next dev processes" {
-  $nodeProcesses = Get-Process node -ErrorAction SilentlyContinue
-  if ($nodeProcesses) {
-    $nodeProcesses | Stop-Process -Force
-    Write-Host "Stopped node process count: $($nodeProcesses.Count)"
+Run-Step "Stop old Next dev process on port 3000" {
+  $listeningPids = @(Get-ListeningPids -Port 3000)
+  if ($listeningPids.Count -gt 0) {
+    foreach ($pidValue in $listeningPids) {
+      $process = Get-Process -Id $pidValue -ErrorAction SilentlyContinue
+      if ($process -and $process.ProcessName -eq "node") {
+        Stop-Process -Id $pidValue -Force
+        Write-Host "Stopped node process listening on 3000: $pidValue"
+      } elseif ($process) {
+        Write-Host "Port 3000 is used by $($process.ProcessName) ($pidValue), not stopping it automatically."
+      }
+    }
   } else {
-    Write-Host "No old node processes found."
+    Write-Host "No old Next dev process found on port 3000."
+    $global:LASTEXITCODE = 0
   }
 }
 
