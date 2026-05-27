@@ -421,6 +421,8 @@ model Tenant {
   name        String
   slug        String                 @unique
   industry    String?
+  templateKey String?
+  templateName String?
   status      TenantStatus           @default(active)
   plan        TenantPlan             @default(flagship)
   startedAt   DateTime               @default(now())

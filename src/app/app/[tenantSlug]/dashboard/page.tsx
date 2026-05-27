@@ -207,7 +207,7 @@ export default async function DashboardPage({ params }: { params: { tenantSlug: 
     <PageShell
       tenant={tenant}
       title="客户增长工作台"
-      description="今天该跟谁、客户说了什么、建议怎么回复、下一步做什么，都从这里开始。"
+      description={`平台底座统一承接客户、跟进、资料和任务；${tenant.templateName ?? "通用销售样板"}只决定当前样板数据和业务语境。`}
     >
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <StatCard label="今日待跟进客户" value={todayFollowCount} />

@@ -1,8 +1,8 @@
 ﻿# 编程代理指导文件
 
-最新一期路径：`custom/notes/v2.3.6-local-postgres-fallback-hardening.md`
+最新一期路径：`custom/notes/v2.5-marketclaw-platform-boundary.md`
 
-当前 V2.3.6 原则：不改业务功能、不改销售路径，只修复本地 PostgreSQL fallback、启动检查和本地 smoke 流程稳定性；AI、企业微信和 SALES 权限边界不变。
+当前 V2.5 原则：MarketClaw 是平台底座，CNAS 是可复用模板与试点样板；只允许用 `Tenant.templateKey/templateName` 做轻量标注，不新增复杂模板系统，不接真实企业微信，不接真实 AI，不做 Agent，不改销售主路径，不扩大 SALES 权限。
 
 本仓库遵循用户提供的项目规则：每次任务前先尝试拉取最新 GitHub 仓库，先读历史记录，再读代码；坚持最小改动；所有重要修改必须留下 `custom/notes/` 正式记录或 `custom/notes/experiments/` 实验记录。
 

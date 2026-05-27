@@ -2038,3 +2038,42 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\repair-local-pos
 ```
 
 ���޸��ű�ֻ�������ֿ� `.local\postgres-data`�����ᴥ���������ҵ����롣
+
+## V2.5 MarketClaw 平台化与 CNAS 试点并行阶段
+
+V2.5 将边界固定为：MarketClaw 是客户跟进与销售协作平台底座，CNAS 是运行在平台底座上的试点模板，不是独立新系统。
+
+平台底座（Platform）继续负责：
+
+- 多租户、登录、RBAC 和租户隔离。
+- 客户、线索、标签、跟进记录、任务和资料清单。
+- 业务线、客户类型策略、任务模板和销售资料组织。
+- MarketClaw 推荐回复、训练样本、知识维护、风险提示和内部治理边界。
+- 企业微信和 AI 的配置预留与内部提醒占位。
+
+模板（Template）只负责：
+
+- seed 中的样板租户标注。
+- 业务线、资料包、任务模板、客户语境和问卷入口。
+- CNAS 认可指南的 A/B/C 初步判断、来源归因和跟进话术。
+
+本轮新增 `Tenant.templateKey` 和 `Tenant.templateName` 两个可选字段，仅用于标注当前租户使用的样板：
+
+- `zhengmu-demo`：`general-sales` / `通用销售样板`
+- `isolation-demo`：`general-sales` / `通用销售样板`
+- `zhengmu-platform`：`cnas-pilot` / `CNAS 认可试点模板`
+
+继续保持的边界：
+
+- 不新增复杂模板系统。
+- 不新增模板管理后台。
+- 不接真实企业微信。
+- 不接真实 AI。
+- 不做 Agent。
+- 不改销售主路径。
+- 不扩大 SALES 权限。
+
+本轮正式记录：
+
+- `custom/notes/v2.5-marketclaw-platform-boundary.md`
+- `custom/demo/cnas-template-overview.md`

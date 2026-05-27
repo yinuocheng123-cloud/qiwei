@@ -78,7 +78,7 @@ export default async function MaterialsPage({ params }: { params: { tenantSlug: 
   const createAction = createMaterial.bind(null, tenant.slug);
 
   return (
-    <PageShell tenant={tenant} title="销售资料清单" description="按客户类型整理可发送给客户的资料，先看清单和状态，必要时再展开编辑链接、描述和客户类型。">
+    <PageShell tenant={tenant} title="销售资料清单" description={`平台统一管理可发送资料；${tenant.templateName ?? "通用销售样板"}只提供默认资料结构和试点内容。`}>
       <div className="space-y-6">
         {canManage ? <MaterialCreatePanel action={createAction} /> : null}
 

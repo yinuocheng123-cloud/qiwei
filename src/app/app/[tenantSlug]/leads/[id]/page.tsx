@@ -198,7 +198,7 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
         { label: "客户详情", href: `/app/${tenant.slug}/leads/${lead.id}` },
         { label: lead.name }
       ]}
-      description="客户详情页基于客户类型策略库驱动资料、话术、下一步动作、任务和智能跟进助手。"
+      description={`客户详情页复用平台的跟进、资料、任务和智能建议能力；${tenant.templateName ?? "当前样板"}只提供行业语境。`}
     >
       <div className="grid gap-6 lg:grid-cols-[1fr_440px]">
         <div className="space-y-6">

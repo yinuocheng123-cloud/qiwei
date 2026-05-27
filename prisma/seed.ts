@@ -121,6 +121,8 @@ type SeedTenantInput = {
   slug: string;
   name: string;
   industry: string;
+  templateKey?: string | null;
+  templateName?: string | null;
   plan?: "flagship";
   users: { admin: string; operator: string; sales: string };
   userNames?: { admin: string; operator: string; sales: string };
@@ -1636,6 +1638,8 @@ async function seedTenant({
   slug,
   name,
   industry,
+  templateKey = null,
+  templateName = null,
   plan = "flagship",
   users,
   userNames,
@@ -1648,11 +1652,13 @@ async function seedTenant({
   const passwordHash = await bcrypt.hash("123456", 10);
   const tenant = await prisma.tenant.upsert({
     where: { slug },
-    update: { name, industry, plan, status: "active" },
+    update: { name, industry, templateKey, templateName, plan, status: "active" },
     create: {
       name,
       slug,
       industry,
+      templateKey,
+      templateName,
       plan,
       expiredAt: new Date("2027-12-31T23:59:59.000Z")
     }
@@ -1891,6 +1897,8 @@ async function main() {
     slug: "zhengmu-demo",
     name: "MarketClaw 平台样板企业",
     industry: "高客单服务",
+    templateKey: "general-sales",
+    templateName: "通用销售样板",
     users: {
       admin: "boss@zhengmu.local",
       operator: "operator@zhengmu.local",
@@ -1904,6 +1912,8 @@ async function main() {
     slug: "zhengmu-platform",
     name: "MarketClaw",
     industry: "通用销售平台／产业服务",
+    templateKey: "cnas-pilot",
+    templateName: "CNAS 认可试点模板",
     plan: "flagship",
     users: {
       admin: "platform-boss@zhengmu.local",
@@ -1926,6 +1936,8 @@ async function main() {
     slug: "isolation-demo",
     name: "隔离验证企业",
     industry: "门窗定制",
+    templateKey: "general-sales",
+    templateName: "通用销售样板",
     users: {
       admin: "boss@isolation.local",
       operator: "operator@isolation.local",
