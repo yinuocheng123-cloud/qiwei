@@ -54,5 +54,6 @@ Write-Host "Closing this window will stop the database."
 Write-Host "PGDATA: $DataDir"
 Write-Host "Port: $Port"
 Write-Host "postgres.exe: $PostgresExe"
+Write-Host "listen_addresses: 127.0.0.1"
 
-& $PostgresExe -D $DataDir -p $Port
+& $PostgresExe -D $DataDir -p $Port -c listen_addresses=127.0.0.1 -c log_destination=stderr

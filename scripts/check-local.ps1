@@ -57,6 +57,34 @@ function Show-PortRows {
   }
 }
 
+function Resolve-PgTool {
+  param([string]$Name)
+
+  $command = Get-Command $Name -ErrorAction SilentlyContinue
+  if ($command -and $command.Source) {
+    return $command.Source
+  }
+
+  $fallback = "D:\tools\pgsql17\pgsql\bin\$Name.exe"
+  if (Test-Path -LiteralPath $fallback) {
+    return $fallback
+  }
+
+  return $null
+}
+
+function Test-PostgresReady {
+  param([int]$Port)
+
+  $pgReadyExe = Resolve-PgTool "pg_isready"
+  if (-not $pgReadyExe) {
+    return (Test-TcpPort -HostName "127.0.0.1" -Port $Port)
+  }
+
+  & $pgReadyExe -h 127.0.0.1 -p $Port -U postgres | Out-Null
+  return ($LASTEXITCODE -eq 0)
+}
+
 function Test-LoginPageReady {
   try {
     $response = Invoke-WebRequest -Uri "http://127.0.0.1:3000/login" -UseBasicParsing -TimeoutSec 5
@@ -94,11 +122,17 @@ if ($postgresProcesses) {
 
 Write-Step "Check database port 55432"
 $dbListening = Test-PortListening -Port 55432
+$dbReady = Test-PostgresReady -Port 55432
 Show-PortRows -Port 55432
 if ($dbListening) {
   Write-Host "55432: LISTENING"
 } else {
   Write-Host "55432: NOT LISTENING"
+}
+if ($dbReady) {
+  Write-Host "PostgreSQL: ACCEPTING CONNECTIONS"
+} else {
+  Write-Host "PostgreSQL: NOT READY"
 }
 
 Write-Step "Check web port 3000"
@@ -113,7 +147,13 @@ if ($webListening) {
 Write-Step "Check /login page"
 $loginReady = $false
 if (Test-TcpPort -HostName "127.0.0.1" -Port 3000) {
-  $loginReady = Test-LoginPageReady
+  for ($i = 1; $i -le 60; $i++) {
+    if (Test-LoginPageReady) {
+      $loginReady = $true
+      break
+    }
+    Start-Sleep -Seconds 1
+  }
 }
 
 if ($loginReady) {
@@ -123,7 +163,7 @@ if ($loginReady) {
 }
 
 Write-Step "Local environment result"
-if ($dbListening -and $webListening -and $loginReady) {
+if ($dbListening -and $dbReady -and $webListening -and $loginReady) {
   Write-Host "Result: OPENABLE"
   Write-Host "URL: http://127.0.0.1:3000/login"
 } else {
@@ -131,8 +171,8 @@ if ($dbListening -and $webListening -and $loginReady) {
   if (-not $webListening) {
     Write-Host "Keep the start-local.ps1 window open until Next dev is ready."
   }
-  if (-not $dbListening) {
-    Write-Host "55432 is not listening. Run scripts\start-local.ps1 first."
+  if (-not $dbListening -or -not $dbReady) {
+    Write-Host "55432 is not ready. Run scripts\start-local.ps1 first."
   }
   Write-Host "Suggestion: run scripts\stop-local.ps1, then scripts\start-local.ps1. Test only after both 55432 and 3000 are LISTENING."
 }

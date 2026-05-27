@@ -2006,3 +2006,35 @@ AI æ¨èå›å¤ä»åªæ˜¯è¾…åŠ©å»ºè®®ï¼Œä¼ä¸šå¾®ä¿¡ä»åªä½œä¸ºåç»­è¿æ¥å™¨æˆ
 æœ¬è½®æ­£å¼è®°å½•ï¼š
 
 - `custom/notes/v2.3.5-platform-content-generalization.md`
+
+## V2.3.6 ±¾µØ PostgreSQL fallback ÎÈ¶¨ĞÔĞŞ¸´
+
+±¾ÂÖ²»ĞŞ¸ÄÒµÎñ¹¦ÄÜºÍÏúÊÛÂ·¾¶£¬Ö»ĞŞ¸´±¾µØ¿ª·¢Æô¶¯Á´Â·¡£`scripts/start-local.ps1` ÏÖÔÚ»áÔÚ PostgreSQL fallback Æô¶¯Ê±ÏÔÊ½°ó¶¨ `listen_addresses=127.0.0.1`£¬²¢°ÑµÈ´ıÊ±¼ä´Ó¶Ì¶Ë¿ÚÌ½²â¸ÄÎª¸üÎÈµÄ `pg_isready` µÈ´ı¡£Èô PostgreSQL Æô¶¯Âı¡¢´æÔÚ stale `postmaster.pid` »ò±¾µØ PGDATA ĞèÒª»Ö¸´£¬½Å±¾»áÊä³ö PGDATA¡¢postmaster ÎÄ¼ş¡¢netstat ºÍ¶à´¦ÈÕÖ¾Â·¾¶£¬±ÜÃâÔÙ³öÏÖ¡°½ø³Ì´æÔÚµ«ÈÕÖ¾Îª¿Õ¡¢½Å±¾ÎóÅĞÊı¾İ¿â²»¿ÉÓÃ¡±µÄÇé¿ö¡£
+
+ÍÆ¼öÆô¶¯Á÷³ÌÈÔÈ»ÊÇ£º
+
+```powershell
+Set-Location D:\ceshi\qiwei
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\start-local.ps1
+```
+
+Áí¿ª´°¿Ú¼ì²é£º
+
+```powershell
+Set-Location D:\ceshi\qiwei
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\check-local.ps1
+```
+
+`check-local.ps1` ÏÖÔÚ»áÍ¬Ê±¼ì²é `55432 LISTENING`¡¢PostgreSQL ÊÇ·ñ½ÓÊÜÁ¬½Ó¡¢`3000 LISTENING` ºÍ `/login` ÊÇ·ñ¿É´ò¿ª¡£Ö»ÓĞÊä³ö `Result: OPENABLE` ºóÔÙÔËĞĞ£º
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\test-smoke.ps1
+```
+
+Èç¹ûÈ·ÈÏ `.local\postgres-data` ÒÑËğ»µ£¬¿ÉÏÈ±¸·İ²¢ÖØ½¨±¾µØ¿ª·¢¿â£º
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\repair-local-postgres.ps1 -Force
+```
+
+¸ÃĞŞ¸´½Å±¾Ö»´¦Àí±¾²Ö¿â `.local\postgres-data`£¬²»»á´¥ÅöÉú²ú¿â»òÒµÎñ´úÂë¡£

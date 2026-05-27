@@ -91,6 +91,16 @@ function Resolve-LocalPostgresDataDir {
   return [System.IO.Path]::GetFullPath((Join-Path $repoRoot ".local\postgres-data"))
 }
 
+function Clear-StalePostgresPid {
+  param([string]$DataDir)
+
+  $pidFile = Join-Path $DataDir "postmaster.pid"
+  if ((Test-Path -LiteralPath $pidFile) -and -not (Test-PortListening -Port 55432)) {
+    Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
+    Write-Host "Removed stale postmaster.pid."
+  }
+}
+
 function Get-ProjectPostgresProcesses {
   $listeningPids = @(Get-ListeningPids -Port 55432)
 
@@ -151,6 +161,8 @@ if (Test-PortListening -Port 55432) {
   Write-Host "55432 is not listening; no PostgreSQL fallback stop needed."
 }
 
+Clear-StalePostgresPid -DataDir $dataDir
+
 Write-Step "Clean .next"
 Remove-Item -Recurse -Force ".next" -ErrorAction SilentlyContinue
 Write-Host ".next cleaned."
@@ -175,6 +187,7 @@ if ($dbListening) {
   Write-Host "55432: LISTENING"
 } else {
   Write-Host "55432: NOT LISTENING"
+  Clear-StalePostgresPid -DataDir $dataDir
 }
 
 Write-Host ""

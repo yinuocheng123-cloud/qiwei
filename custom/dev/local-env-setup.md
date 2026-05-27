@@ -104,3 +104,37 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\run-postgres-fal
 4. `check-local.ps1` è¾“å‡º `Result: OPENABLE`
 
 å¦‚æœä»»ä¸€æ¡ä»¶ä¸æ»¡è¶³ï¼Œä¸è¦ç›´æ¥ç»§ç»­ smoke æµ‹è¯•ï¼Œå…ˆå›åˆ°çª—å£ä¸€é‡æ–°å¯åŠ¨ã€‚
+
+## V2.3.6£ºPostgreSQL fallback Æô¶¯ÅÅÕÏ
+
+±¾µØÆô¶¯Ê§°ÜÊ±£¬ÏÈÇø·ÖÈıÀà×´Ì¬£º
+
+1. `postgres.exe` ½ø³Ì´æÔÚ£¬µ« `55432` ÉĞÎ´ `LISTENING`£ºÍ¨³£ÊÇ±¾µØ PGDATA ÕıÔÚ»Ö¸´¡¢Í¬²½½ÏÂı£¬¾É½Å±¾ 30 ÃëµÈ´ı¿ÉÄÜ¹ı¶Ì¡£
+2. `55432 LISTENING`£¬µ« `pg_isready` Î´½ÓÊÜÁ¬½Ó£ºËµÃ÷¶Ë¿ÚÒÑ´ò¿ª£¬µ«Êı¾İ¿âÈÔÎ´Íê³É»Ö¸´£¬²»Ó¦¼ÌĞøÆô¶¯µÇÂ¼Ò³ÑéÖ¤¡£
+3. `postmaster.pid` ´æÔÚ£¬µ«¶Ë¿ÚÎ´¼àÌı£ºÕâÊÇ stale pid£¬`start-local.ps1` ºÍ `stop-local.ps1` »áÔÚÈ·ÈÏ 55432 Î´¼àÌıºóÇåÀí¡£
+
+µ±Ç°ÍÆ¼öÁ÷³Ì£º
+
+```powershell
+Set-Location D:\ceshi\qiwei
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\stop-local.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\start-local.ps1
+```
+
+`start-local.ps1` ÒÑÏÔÊ½Ê¹ÓÃ `listen_addresses=127.0.0.1`£¬²¢µÈ´ı PostgreSQL ×î¶à 180 Ãë¡£Ê§°ÜÊ±»áÊä³ö£º
+
+- PGDATA Â·¾¶
+- `postmaster.pid`
+- `postmaster.opts`
+- `netstat` ¶Ë¿Ú×´Ì¬
+- `.local\logs\postgres-start-local.stderr.log`
+- `.local\logs\postgres-start-local.stdout.log`
+- `.local\postgres-data\postgres-start-local.log`
+
+Èç¹ûÈ·ÈÏ `.local\postgres-data` ÊÇ±¾µØ¿ª·¢¿âÇÒÒÑ¾­Ëğ»µ£¬¿ÉÖ´ĞĞ£º
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\repair-local-postgres.ps1 -Force
+```
+
+¸Ã½Å±¾»áÏÈµ÷ÓÃ `stop-local.ps1`£¬ÔÙ°Ñ¾É PGDATA ÒÆ¶¯µ½ `.local\postgres-data.backup-Ê±¼ä´Á`£¬×îºóÖØĞÂ `initdb`¡£ËüÖ»ÓÃÓÚ±¾µØ¿ª·¢»·¾³£¬²»ÓÃÓÚÉú²ú¡£

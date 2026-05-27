@@ -168,12 +168,17 @@ function Test-PostgresReady {
 function Wait-ForPostgresReady {
   param(
     [int]$Port,
-    [int]$Seconds
+    [int]$Seconds,
+    [System.Diagnostics.Process]$Process = $null
   )
 
   for ($i = 1; $i -le $Seconds; $i++) {
     if (Test-PostgresReady -Port $Port) {
       return $true
+    }
+    if ($Process -and $Process.HasExited) {
+      Write-Host "postgres.exe exited before accepting connections. ExitCode=$($Process.ExitCode)"
+      return $false
     }
     Start-Sleep -Seconds 1
   }
@@ -232,6 +237,39 @@ function Clear-StalePostgresPid {
   }
 }
 
+function Show-PostgresDiagnostics {
+  param(
+    [string]$DataDir,
+    [string[]]$LogPaths,
+    [int]$Port
+  )
+
+  Write-Host "PostgreSQL diagnostics:"
+  Write-Host "PGDATA: $DataDir"
+  Write-Host "Port: $Port"
+  Write-Host "netstat output:"
+  netstat -ano | findstr ":$Port" | Out-Host
+
+  $pidFile = Join-Path $DataDir "postmaster.pid"
+  if (Test-Path -LiteralPath $pidFile) {
+    Write-Host "postmaster.pid:"
+    Get-Content -LiteralPath $pidFile -ErrorAction SilentlyContinue | Out-Host
+  }
+
+  $optsFile = Join-Path $DataDir "postmaster.opts"
+  if (Test-Path -LiteralPath $optsFile) {
+    Write-Host "postmaster.opts:"
+    Get-Content -LiteralPath $optsFile -ErrorAction SilentlyContinue | Out-Host
+  }
+
+  foreach ($logPath in $LogPaths) {
+    if (Test-Path -LiteralPath $logPath) {
+      Write-Host "Recent log: $logPath"
+      Get-Content -LiteralPath $logPath -Tail 60 -ErrorAction SilentlyContinue | Out-Host
+    }
+  }
+}
+
 function Ensure-LocalDatabase {
   param(
     [int]$Port,
@@ -270,6 +308,8 @@ function Start-PostgresFallback {
   $repoLogs = Join-Path $repoRoot ".local\logs"
   $stdoutLogPath = Join-Path $repoLogs "postgres-start-local.stdout.log"
   $stderrLogPath = Join-Path $repoLogs "postgres-start-local.stderr.log"
+  $dataDirLogPath = Join-Path $dataDir "postgres-start-local.log"
+  $startupTimeoutSeconds = 180
 
   if (-not $postgresExe -or -not $initDbExe) {
     Write-Host "Missing PostgreSQL toolchain (postgres / initdb)."
@@ -290,12 +330,13 @@ function Start-PostgresFallback {
   Write-Host "Using local PGDATA: $dataDir"
   Write-Host "stdout log: $stdoutLogPath"
   Write-Host "stderr log: $stderrLogPath"
-  Write-Host "Launch command: postgres.exe -D `"$dataDir`" -p $Port"
+  Write-Host "data dir log: $dataDirLogPath"
+  Write-Host "Launch command: postgres.exe -D `"$dataDir`" -p $Port -c listen_addresses=127.0.0.1"
 
   try {
     $psi = [System.Diagnostics.ProcessStartInfo]::new()
     $psi.FileName = $postgresExe
-    $psi.Arguments = "-D `"$dataDir`" -p $Port"
+    $psi.Arguments = "-D `"$dataDir`" -p $Port -c listen_addresses=127.0.0.1 -c log_destination=stderr"
     $psi.WorkingDirectory = $repoRoot
     $psi.UseShellExecute = $false
     $psi.RedirectStandardOutput = $true
@@ -314,26 +355,18 @@ function Start-PostgresFallback {
     return $false
   }
 
-  if (-not (Wait-ForPortListening -Port $Port -Seconds 30)) {
-    Write-Host "Port $Port was still not LISTENING after 30 seconds."
-    Write-Host "netstat output:"
-    netstat -ano | findstr ":$Port" | Out-Host
-    if (Test-Path -LiteralPath $stderrLogPath) {
-      Write-Host "Recent PostgreSQL error log:"
-      Get-Content -LiteralPath $stderrLogPath -Tail 30 -ErrorAction SilentlyContinue | Out-Host
-    }
+  if (-not (Wait-ForPortListening -Port $Port -Seconds $startupTimeoutSeconds)) {
+    Write-Host "Port $Port was still not LISTENING after $startupTimeoutSeconds seconds."
+    Show-PostgresDiagnostics -DataDir $dataDir -LogPaths @($stderrLogPath, $stdoutLogPath, $dataDirLogPath) -Port $Port
     return $false
   }
 
   Write-Host "$Port is LISTENING:"
   netstat -ano | findstr ":$Port" | Out-Host
 
-  if (-not (Wait-ForPostgresReady -Port $Port -Seconds 30)) {
-    Write-Host "Port $Port is listening, but pg_isready still did not return accepting connections."
-    if (Test-Path -LiteralPath $stderrLogPath) {
-      Write-Host "Recent PostgreSQL error log:"
-      Get-Content -LiteralPath $stderrLogPath -Tail 30 -ErrorAction SilentlyContinue | Out-Host
-    }
+  if (-not (Wait-ForPostgresReady -Port $Port -Seconds $startupTimeoutSeconds -Process $process)) {
+    Write-Host "Port $Port is listening, but pg_isready still did not return accepting connections after $startupTimeoutSeconds seconds."
+    Show-PostgresDiagnostics -DataDir $dataDir -LogPaths @($stderrLogPath, $stdoutLogPath, $dataDirLogPath) -Port $Port
     return $false
   }
 
