@@ -41,6 +41,21 @@ async function safeLeadDetailRead<T>(read: () => Promise<T>, fallback: T): Promi
   }
 }
 
+function readWecomRealIntake(extraData: unknown) {
+  if (!extraData || typeof extraData !== "object" || Array.isArray(extraData)) return null;
+  const value = (extraData as Record<string, unknown>).wecomRealIntake;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const data = value as Record<string, unknown>;
+  return {
+    sourceChannel: typeof data.sourceChannel === "string" ? data.sourceChannel : "企业微信",
+    externalUserId: typeof data.externalUserId === "string" ? data.externalUserId : undefined,
+    addedAt: typeof data.addedAt === "string" ? data.addedAt : undefined,
+    ownerName: typeof data.ownerName === "string" ? data.ownerName : undefined,
+    wecomUserId: typeof data.wecomUserId === "string" ? data.wecomUserId : undefined,
+    intakeStatus: typeof data.intakeStatus === "string" ? data.intakeStatus : undefined
+  };
+}
+
 export default async function LeadDetailPage({ params }: { params: { tenantSlug: string; id: string } }) {
   const { user, tenant } = await requireLeadAccess(params.tenantSlug, params.id);
   const lead = await prisma.lead.findFirst({
@@ -55,6 +70,7 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
 
   if (!lead) notFound();
   const cnasData = readCnasExtraData(lead.extraData);
+  const wecomRealIntake = readWecomRealIntake(lead.extraData);
 
   const [
     strategyResult,
@@ -220,6 +236,23 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
             </div>
             {lead.message ? <p className="mt-4 rounded-md bg-slate-50 p-3 text-sm text-slate-700">{lead.message}</p> : null}
           </Card>
+
+          {wecomRealIntake ? (
+            <Card>
+              <h2 className="mb-2 text-base font-semibold">企业微信承接信息</h2>
+              <p className="mb-4 text-sm leading-6 text-slate-600">
+                该区域只展示客户从企业微信进入 MarketClaw 的承接信息；当前版本不展示聊天内容，也不会自动回复客户。
+              </p>
+              <div className="grid gap-3 text-sm md:grid-cols-2">
+                <Info label="企业微信来源" value={wecomRealIntake.sourceChannel} />
+                <Info label="external_userid" value={wecomRealIntake.externalUserId} />
+                <Info label="添加时间" value={formatDate(wecomRealIntake.addedAt)} />
+                <Info label="负责人" value={wecomRealIntake.ownerName ?? lead.owner?.name} />
+                <Info label="企微成员ID" value={wecomRealIntake.wecomUserId} />
+                <Info label="承接状态" value={wecomRealIntake.intakeStatus} />
+              </div>
+            </Card>
+          ) : null}
 
           {showAdvancedOperations && lead.sourceAttribution ? (
             <Card>

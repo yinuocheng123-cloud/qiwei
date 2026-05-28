@@ -2111,3 +2111,33 @@ V2.6-V2.8 è§„åˆ’è§ï¼š
 æœ¬è½®æ­£å¼è®°å½•ï¼š
 
 - `custom/notes/v2.6-wecom-light-intake-mvp.md`
+
+## V2.7 CNAS ÆóÒµÎ¢ĞÅÕæÊµÇá½ÓÈë
+
+V2.7 ÔÚ V2.6 ÊÖ¹¤/Ä£ÄâÇá³Ğ½Ó»ù´¡ÉÏ£¬Ôö¼ÓÆóÒµÎ¢ĞÅÕæÊµ»Øµ÷Èë¿Ú£¬ÈÃ CNAS ¿Í»§É¨ÂëÌí¼ÓÆóÒµÎ¢ĞÅºó¿ÉÒÔ½øÈë MarketClaw ¿Í»§³Ø£¬²¢¼ÌĞøÑØÓÃ¿Í»§¡¢À´Ô´¹éÒò¡¢¸ºÔğÈËºÍ¸ú½øÈÎÎñÖ÷Á÷³Ì¡£
+
+V2.7 ·¶Î§£º
+
+- ÆóÒµÎ¢ĞÅÅäÖÃÒ³²¹Æë CorpID¡¢Secret¡¢AgentID¡¢Token¡¢EncodingAESKey¡¢»Øµ÷ URL ºÍÕæÊµ½ÓÈë×´Ì¬¼ì²â¡£
+- ĞÂÔö `/api/wecom/[tenantSlug]/callback` »Øµ÷½Ó¿Ú£¬Ö§³Ö URL ÑéÖ¤¡¢Ç©ÃûĞ£Ñé¡¢ÏûÏ¢½âÃÜºÍÔ­Ê¼ÊÂ¼şÈÕÖ¾¡£
+- ³Ğ½Ó `change_external_contact / add_external_contact` Íâ²¿ÁªÏµÈËĞÂÔöÊÂ¼ş¡£
+- ¸ù¾İ `external_userid` À­È¡»ù´¡¿Í»§ĞÅÏ¢£¬Éú³É»ò¸üĞÂ MarketClaw ¿Í»§¡£
+- À´Ô´±ê¼ÇÎª¡°ÆóÒµÎ¢ĞÅ¡±£¬Ğ´Èë `LeadSourceAttribution`¡£
+- CNAS Ä£°å×â»§×Ô¶¯½øÈë CNAS ¸ú½øÁ÷³Ì¡£
+- ¿Í»§ÏêÇéÏÔÊ¾ÆóÒµÎ¢ĞÅÀ´Ô´¡¢external_userid¡¢Ìí¼ÓÊ±¼ä¡¢¸ºÔğÈËºÍ³Ğ½Ó×´Ì¬¡£
+
+¼ÌĞø½ûÖ¹£º
+
+- ²»×öÁÄÌìÍ¬²½¡£
+- ²»×ö×Ô¶¯»Ø¸´¡£
+- ²»×ö AI Agent¡£
+- ²»½Ó»á»°´æµµ¡£
+- ²»À©´ó SALES È¨ÏŞ¡£
+
+²âÊÔÓëÁªµ÷ËµÃ÷£º
+
+- `custom/demo/cnas-wecom-real-test-guide.md`
+
+±¾ÂÖÕıÊ½¼ÇÂ¼£º
+
+- `custom/notes/v2.7-cnas-wecom-real-intake.md`

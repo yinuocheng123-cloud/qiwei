@@ -45,7 +45,7 @@ export default async function WeComPage({ params }: { params: { tenantSlug: stri
   const canManage = canManageTenantWeCom(user.role);
   const canViewLogs = canViewTenantWeComLogs(user.role);
 
-  const [config, users, logs, auditLog] = await Promise.all([
+  const [config, users, logs, callbackEvents, auditLog] = await Promise.all([
     prisma.weComConfig.findUnique({ where: { tenantId: tenant.id } }),
     prisma.user.findMany({
       where: {
@@ -62,6 +62,13 @@ export default async function WeComPage({ params }: { params: { tenantSlug: stri
           include: { recipientUser: true },
           orderBy: { createdAt: "desc" },
           take: 20
+        })
+      : Promise.resolve([]),
+    canViewLogs
+      ? prisma.wecomCallbackEvent.findMany({
+          where: { tenantId: tenant.id },
+          orderBy: { createdAt: "desc" },
+          take: 10
         })
       : Promise.resolve([]),
     prisma.auditLog.findFirst({
@@ -100,6 +107,10 @@ export default async function WeComPage({ params }: { params: { tenantSlug: stri
               <p>CorpId：{summary.hasCorpId ? "已配置" : "未配置"}</p>
               <p>AgentId：{summary.hasAgentId ? "已配置" : "未配置"}</p>
               <p>Secret：{summary.secretMasked}</p>
+              <p>Token：{summary.hasToken ? "已配置" : "未配置"}</p>
+              <p>EncodingAESKey：{summary.hasEncodingAESKey ? "已配置" : "未配置"}</p>
+              <p>回调 URL：{config?.callbackUrl ?? "未配置"}</p>
+              <p>真实接入状态：{summary.realCallbackStatusText}</p>
               <p>最近测试：{formatDateTime(config?.lastTestAt)}</p>
               <p className="flex items-center gap-2">最近测试状态：<StatusBadge status={config?.lastTestStatus} /></p>
               <p>最近测试说明：{config?.lastTestMessage ?? "-"}</p>
@@ -218,6 +229,39 @@ export default async function WeComPage({ params }: { params: { tenantSlug: stri
               )}
             </div>
             {auditLog ? <p className="mt-4 text-xs text-slate-500">最近企业微信审计动作：{auditLog.action}</p> : null}
+          </Card>
+
+          <Card>
+            <h2 className="text-base font-semibold text-slate-950">真实回调事件日志</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              这里只记录企业微信回调的外部联系人新增事件和处理状态，用于排查客户是否成功进入 MarketClaw；不会记录聊天内容，也不会触发自动回复。
+            </p>
+            <div className="mt-4 space-y-3">
+              {callbackEvents.length ? (
+                callbackEvents.map((event) => (
+                  <div key={event.id} className="rounded-md border border-slate-200 p-4 text-sm">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-slate-950">{event.changeType ?? event.eventType ?? "未知事件"}</p>
+                        <p className="mt-1 text-slate-500">external_userid：{event.externalUserId ?? "-"}</p>
+                      </div>
+                      <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">{event.processedStatus}</span>
+                    </div>
+                    <div className="mt-3 grid gap-2 text-xs text-slate-500 md:grid-cols-3">
+                      <p>签名：{event.signatureValid ? "通过" : "失败"}</p>
+                      <p>解密：{event.decrypted ? "通过" : "未解密"}</p>
+                      <p>负责人ID：{event.wecomUserId ?? "-"}</p>
+                      <p>State：{event.state ?? "-"}</p>
+                      <p>客户ID：{event.relatedLeadId ?? "-"}</p>
+                      <p>时间：{formatDateTime(event.createdAt)}</p>
+                    </div>
+                    {event.errorMessage ? <p className="mt-2 text-rose-700">说明：{event.errorMessage}</p> : null}
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-slate-500">暂无真实回调事件。配置企业微信回调 URL 后，可以先用 V2.7 smoke 或企业微信后台 URL 验证测试。</p>
+              )}
+            </div>
           </Card>
         </div>
       </div>

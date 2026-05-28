@@ -1,8 +1,8 @@
 ﻿# 编程代理指导文件
 
-最新一期路径：`custom/notes/v2.6-wecom-light-intake-mvp.md`
+最新一期路径：`custom/notes/v2.7-cnas-wecom-real-intake.md`
 
-当前 V2.6 原则：企业微信只做轻承接 MVP，用于配置承接、成员绑定、来源记录、手工/模拟客户导入和 CNAS 模板跟进流转；不做聊天同步、不做自动回复、不做 AI Agent、不做会话存档、不做深度企微 API，不破坏 MarketClaw 平台化边界。
+当前 V2.7 原则：企业微信只做 CNAS 真实轻接入，用于 URL 验证、签名校验、消息解密、外部联系人新增事件承接、来源记录和 CNAS 模板跟进流转；不做聊天同步、不做自动回复、不做 AI Agent、不做会话存档，不扩大 SALES 权限。
 
 本仓库遵循用户提供的项目规则：每次任务前先尝试拉取最新 GitHub 仓库，先读历史记录，再读代码；坚持最小改动；所有重要修改必须留下 `custom/notes/` 正式记录或 `custom/notes/experiments/` 实验记录。
 

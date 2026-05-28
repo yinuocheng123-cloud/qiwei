@@ -43,14 +43,31 @@ export function buildWecomConfigSummary(config?: {
   corpId?: string | null;
   agentId?: string | null;
   secretEncrypted?: string | null;
+  token?: string | null;
+  encodingAESKey?: string | null;
+  callbackUrl?: string | null;
   status?: string | null;
 }) {
+  const realCallbackReady = Boolean(
+    config?.corpId &&
+      config.agentId &&
+      config.secretEncrypted &&
+      config.token &&
+      config.encodingAESKey &&
+      config.callbackUrl &&
+      config.status === "enabled"
+  );
   return {
     hasCorpId: Boolean(config?.corpId),
     hasAgentId: Boolean(config?.agentId),
+    hasToken: Boolean(config?.token),
+    hasEncodingAESKey: Boolean(config?.encodingAESKey),
+    hasCallbackUrl: Boolean(config?.callbackUrl),
     hasSecret: Boolean(config?.secretEncrypted),
     status: config?.status ?? "draft",
-    secretMasked: maskWecomSecret(config?.secretEncrypted)
+    secretMasked: maskWecomSecret(config?.secretEncrypted),
+    realCallbackReady,
+    realCallbackStatusText: realCallbackReady ? "真实回调可测试" : "真实回调未就绪"
   };
 }
 

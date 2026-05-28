@@ -1700,6 +1700,7 @@ async function seedTenant({
   // V2.0 引入了 BusinessLine -> MarketClaw* 的新外键链，若仍按旧顺序直接删 BusinessLine，
   // 在租户已经使用过麻虾知识库 / 训练场 / 回复草稿后会触发外键约束失败。
   await prisma.auditLog.deleteMany({ where: { tenantId: tenant.id } });
+  await prisma.wecomCallbackEvent.deleteMany({ where: { tenantId: tenant.id } });
   await prisma.communicationComplianceConfig.deleteMany({ where: { tenantId: tenant.id } });
   await prisma.reminderQueue.deleteMany({ where: { tenantId: tenant.id } });
   await prisma.marketClawReplyFeedback.deleteMany({ where: { tenantId: tenant.id } });

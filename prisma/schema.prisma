@@ -439,6 +439,7 @@ model Tenant {
   weComConfig WeComConfig?
   userWecomBindings UserWecomBinding[]
   wecomNotificationLogs WecomNotificationLog[]
+  wecomCallbackEvents WecomCallbackEvent[]
   aiProviderConfig AiProviderConfig?
   aiCallLogs AiCallLog[]
   auditLogs   AuditLog[]
@@ -800,6 +801,33 @@ model WecomNotificationLog {
   @@index([tenantId, eventType, createdAt])
   @@index([tenantId, status, createdAt])
   @@index([tenantId, recipientUserId, createdAt])
+}
+
+model WecomCallbackEvent {
+  id               String   @id @default(cuid())
+  tenantId         String
+  tenant           Tenant   @relation(fields: [tenantId], references: [id])
+  msgSignature     String?
+  timestamp        String?
+  nonce            String?
+  rawPayload       String?
+  decryptedPayload String?
+  eventType        String?
+  changeType       String?
+  externalUserId   String?
+  wecomUserId      String?
+  state            String?
+  relatedLeadId    String?
+  signatureValid   Boolean  @default(false)
+  decrypted        Boolean  @default(false)
+  processedStatus  String   @default("PENDING")
+  errorMessage     String?
+  createdAt        DateTime @default(now())
+  processedAt      DateTime?
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, externalUserId, createdAt])
+  @@index([tenantId, processedStatus, createdAt])
 }
 
 model AiProviderConfig {
