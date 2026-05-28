@@ -2077,3 +2077,37 @@ V2.5 将边界固定为：MarketClaw 是客户跟进与销售协作平台底座�
 
 - `custom/notes/v2.5-marketclaw-platform-boundary.md`
 - `custom/demo/cnas-template-overview.md`
+
+## V2.6 企业微信轻承接 MVP
+
+V2.6 不做企业微信全量集成，只做轻承接：让企业微信客户可以手工/模拟进入 MarketClaw，并继续沿用客户、来源归因、任务、资料和跟进主流程。
+
+V2.6 范围：
+
+- 企业微信客户承接配置。
+- 成员绑定。
+- 客户来源记录。
+- 手工/模拟企微客户导入。
+- CNAS 模板客户进入后自动进入跟进流程。
+- 测试页面和 smoke 测试。
+
+测试入口：
+
+- `/app/zhengmu-platform/wecom/light-intake`
+
+继续禁止：
+
+- 不做聊天同步。
+- 不做自动回复。
+- 不做 AI Agent。
+- 不做会话存档。
+- 不做深度企微 API。
+- 不破坏平台化边界。
+
+V2.6-V2.8 规划见：
+
+- `custom/demo/wecom-light-intake-roadmap.md`
+
+本轮正式记录：
+
+- `custom/notes/v2.6-wecom-light-intake-mvp.md`

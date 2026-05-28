@@ -137,6 +137,7 @@ function buildTenantNavGroups(tenant: Tenant, role: UserRole): NavGroup[] {
     children: [
       { label: "业务配置", href: `${base}/business-lines`, description: "产品、策略、任务模板等试点基础配置。" },
       { label: "系统设置", href: `${base}/settings`, description: "AI Provider、企微、合规、审计和说明统一入口。" },
+      { label: "企微轻承接", href: `${base}/wecom/light-intake`, description: "手工/模拟承接企业微信客户，写入来源并进入跟进流程。" },
       { label: "成员与权限", href: `${base}/permissions`, description: "查看角色边界。" }
     ]
   };

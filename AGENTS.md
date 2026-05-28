@@ -1,8 +1,8 @@
 ﻿# 编程代理指导文件
 
-最新一期路径：`custom/notes/v2.5-marketclaw-platform-boundary.md`
+最新一期路径：`custom/notes/v2.6-wecom-light-intake-mvp.md`
 
-当前 V2.5 原则：MarketClaw 是平台底座，CNAS 是可复用模板与试点样板；只允许用 `Tenant.templateKey/templateName` 做轻量标注，不新增复杂模板系统，不接真实企业微信，不接真实 AI，不做 Agent，不改销售主路径，不扩大 SALES 权限。
+当前 V2.6 原则：企业微信只做轻承接 MVP，用于配置承接、成员绑定、来源记录、手工/模拟客户导入和 CNAS 模板跟进流转；不做聊天同步、不做自动回复、不做 AI Agent、不做会话存档、不做深度企微 API，不破坏 MarketClaw 平台化边界。
 
 本仓库遵循用户提供的项目规则：每次任务前先尝试拉取最新 GitHub 仓库，先读历史记录，再读代码；坚持最小改动；所有重要修改必须留下 `custom/notes/` 正式记录或 `custom/notes/experiments/` 实验记录。
 
