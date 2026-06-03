@@ -178,6 +178,7 @@ test.describe.serial("V2.7 CNAS 企业微信真实轻接入", () => {
     await page.goto("/app/zhengmu-platform/wecom");
     await expect(page.getByRole("heading", { name: "真实回调事件日志" })).toBeVisible();
     await expect(page.getByText(externalUserId)).toBeVisible();
-    await expect(page.getByText("PROCESSED")).toBeVisible();
+    const processedEventCard = page.getByTestId("wecom-callback-event").filter({ hasText: externalUserId });
+    await expect(processedEventCard.getByText("PROCESSED", { exact: true })).toBeVisible();
   });
 });

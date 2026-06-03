@@ -40,6 +40,29 @@ function StatusBadge({ status }: { status?: string | null }) {
   return <span className={`rounded-md px-2.5 py-1 text-xs font-medium ${tone}`}>{status ? wecomNotificationStatusLabels[status as keyof typeof wecomNotificationStatusLabels] ?? status : "-"}</span>;
 }
 
+function CheckItem({ label, ok, value }: { label: string; ok: boolean; value?: string | null }) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-white px-3 py-2">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-medium text-slate-900">{label}</p>
+        <span className={`rounded-md px-2 py-1 text-xs font-medium ${ok ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+          {ok ? "已填" : "未填"}
+        </span>
+      </div>
+      {value ? <p className="mt-1 break-all text-xs text-slate-500">{value}</p> : null}
+    </div>
+  );
+}
+
+function buildRealIntakeStatus(input: {
+  hasRequiredConfig: boolean;
+  callbackEvents: { signatureValid: boolean; decrypted: boolean; processedStatus: string }[];
+}) {
+  if (!input.hasRequiredConfig) return "未配置";
+  if (input.callbackEvents.some((event) => event.signatureValid && event.decrypted)) return "已收到回调";
+  return "待验证";
+}
+
 export default async function WeComPage({ params }: { params: { tenantSlug: string } }) {
   const { user, tenant } = await requireTenantAccess(params.tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
   const canManage = canManageTenantWeCom(user.role);
@@ -81,6 +104,14 @@ export default async function WeComPage({ params }: { params: { tenantSlug: stri
   ]);
 
   const summary = buildWecomConfigSummary(config ?? undefined);
+  const latestCallbackEvent = callbackEvents[0];
+  const latestCallbackError = callbackEvents.find((event) => event.errorMessage)?.errorMessage;
+  const requiredConfigReady =
+    summary.hasCorpId && summary.hasAgentId && summary.hasSecret && summary.hasToken && summary.hasEncodingAESKey && summary.hasCallbackUrl && config?.status === "enabled";
+  const realIntakeStatus = buildRealIntakeStatus({
+    hasRequiredConfig: requiredConfigReady,
+    callbackEvents
+  });
   const configAction = upsertWeComConfig.bind(null, tenant.slug);
   const testAction = sendWecomTestNotification.bind(null, tenant.slug);
 
@@ -114,6 +145,35 @@ export default async function WeComPage({ params }: { params: { tenantSlug: stri
               <p>最近测试：{formatDateTime(config?.lastTestAt)}</p>
               <p className="flex items-center gap-2">最近测试状态：<StatusBadge status={config?.lastTestStatus} /></p>
               <p>最近测试说明：{config?.lastTestMessage ?? "-"}</p>
+            </div>
+          </Card>
+
+          <Card>
+            <h2 className="text-base font-semibold text-slate-950">真实接入检查清单</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              这组检查只判断企业微信真实轻接入是否具备可验证条件，不会主动调用企业微信 API。当前版本只承接客户进入系统，不同步聊天、不自动回复、不采集会话。
+            </p>
+            <div className="mt-4 grid gap-3">
+              <CheckItem label="CorpID" ok={summary.hasCorpId} />
+              <CheckItem label="Secret" ok={summary.hasSecret} value={summary.secretMasked} />
+              <CheckItem label="Token" ok={summary.hasToken} />
+              <CheckItem label="EncodingAESKey" ok={summary.hasEncodingAESKey} />
+              <CheckItem label="回调 URL" ok={summary.hasCallbackUrl} value={config?.callbackUrl ?? `/api/wecom/${tenant.slug}/callback`} />
+            </div>
+            <div className="mt-4 rounded-md bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+              <p>当前接入状态：<span className="font-semibold text-slate-950">{realIntakeStatus}</span></p>
+              <p>最近回调事件：{latestCallbackEvent ? `${latestCallbackEvent.processedStatus} / ${latestCallbackEvent.changeType ?? latestCallbackEvent.eventType ?? "未知事件"} / ${formatDateTime(latestCallbackEvent.createdAt)}` : "暂无"}</p>
+              <p>最近错误信息：{latestCallbackError ?? "暂无"}</p>
+            </div>
+          </Card>
+
+          <Card>
+            <h2 className="text-base font-semibold text-slate-950">回调自检说明</h2>
+            <div className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
+              <p>第一步：在企业微信后台保存回调 URL。如果 URL 验证成功，企业微信会允许保存配置；如果失败，通常是公网地址不可访问、Token 不一致、EncodingAESKey 不一致或 CorpID 不匹配。</p>
+              <p>第二步：让测试客户扫码添加已绑定的企业微信成员。系统收到 `add_external_contact` 后，会在下方“真实回调事件日志”出现记录。</p>
+              <p>第三步：查看事件状态。`PROCESSED` 表示已生成或更新客户；`FAILED` 表示签名、解密、外部联系人资料拉取或负责人绑定链路中有错误。</p>
+              <p>第四步：到客户详情查看“企业微信承接信息”和“来源归因”。这里不会展示聊天内容，也不会替销售自动回复。</p>
             </div>
           </Card>
 
@@ -239,7 +299,7 @@ export default async function WeComPage({ params }: { params: { tenantSlug: stri
             <div className="mt-4 space-y-3">
               {callbackEvents.length ? (
                 callbackEvents.map((event) => (
-                  <div key={event.id} className="rounded-md border border-slate-200 p-4 text-sm">
+                  <div key={event.id} data-testid="wecom-callback-event" className="rounded-md border border-slate-200 p-4 text-sm">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="font-medium text-slate-950">{event.changeType ?? event.eventType ?? "未知事件"}</p>
