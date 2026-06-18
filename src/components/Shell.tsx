@@ -10,7 +10,9 @@
 import Link from "next/link";
 import type { Tenant, UserRole } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth";
+import { EnterpriseBusinessSwitcher } from "@/components/EnterpriseBusinessSwitcher";
 import { Breadcrumbs, ModuleMoreMenu } from "@/components/Ui";
+import { appendScopeToHref } from "@/lib/scope";
 
 type NavItem = {
   label: string;
@@ -170,22 +172,33 @@ function PlatformNavBar({ items }: { items: NavItem[] }) {
   );
 }
 
-function TenantNavBar({ groups }: { groups: NavGroup[] }) {
+function TenantNavBar({
+  groups,
+  enterpriseKey,
+  businessLineKey
+}: {
+  groups: NavGroup[];
+  enterpriseKey?: string | null;
+  businessLineKey?: string | null;
+}) {
+  const withScope = (href: string) => appendScopeToHref(href, { enterpriseKey, businessLineKey });
+
   return (
     <nav className="border-b border-slate-200 bg-slate-50/80 px-6 py-4">
       <div className="mx-auto max-w-7xl">
+        <EnterpriseBusinessSwitcher enterpriseKey={enterpriseKey} businessLineKey={businessLineKey} />
         <div className={`grid gap-3 ${groups.length >= 6 ? "xl:grid-cols-3" : groups.length >= 4 ? "lg:grid-cols-2 xl:grid-cols-4" : "md:grid-cols-2"}`}>
           {groups.map((group) => {
             const visibleItems = group.children.slice(0, group.visibleCount);
             const moreItems = group.children.slice(group.visibleCount).map((item) => ({
               title: item.label,
-              href: item.href,
+              href: withScope(item.href),
               description: item.description
             }));
 
             return (
             <div key={group.label} data-nav-group={group.label} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-              <Link data-nav-primary="true" className="text-base font-semibold text-slate-950 hover:text-emerald-700" href={group.href}>
+              <Link data-nav-primary="true" className="text-base font-semibold text-slate-950 hover:text-emerald-700" href={withScope(group.href)}>
                 {group.label}
               </Link>
               <p className="mt-2 text-sm leading-6 text-slate-600">{group.description}</p>
@@ -195,7 +208,7 @@ function TenantNavBar({ groups }: { groups: NavGroup[] }) {
                     key={`${group.label}-${item.href}`}
                     data-nav-shortcut="visible"
                     className="rounded-md bg-slate-100 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200"
-                    href={item.href}
+                    href={withScope(item.href)}
                   >
                     {item.label}
                   </Link>
@@ -219,12 +232,20 @@ function TenantNavBar({ groups }: { groups: NavGroup[] }) {
   );
 }
 
-async function ShellNav({ tenant }: { tenant?: Tenant }) {
+async function ShellNav({
+  tenant,
+  enterpriseKey,
+  businessLineKey
+}: {
+  tenant?: Tenant;
+  enterpriseKey?: string | null;
+  businessLineKey?: string | null;
+}) {
   const user = await getCurrentUser();
   if (!user) return null;
 
   if (tenant) {
-    return <TenantNavBar groups={buildTenantNavGroups(tenant, user.role)} />;
+    return <TenantNavBar groups={buildTenantNavGroups(tenant, user.role)} enterpriseKey={enterpriseKey} businessLineKey={businessLineKey} />;
   }
 
   if (user.role === "PLATFORM_ADMIN") {
@@ -239,17 +260,21 @@ export async function PageShell({
   title,
   description,
   breadcrumbs,
+  enterpriseKey,
+  businessLineKey,
   children
 }: {
   tenant?: Tenant;
   title: string;
   description?: string;
   breadcrumbs?: { label: string; href?: string }[];
+  enterpriseKey?: string | null;
+  businessLineKey?: string | null;
   children: React.ReactNode;
 }) {
   return (
     <main className="min-h-screen">
-      <ShellNav tenant={tenant} />
+      <ShellNav tenant={tenant} enterpriseKey={enterpriseKey} businessLineKey={businessLineKey} />
       <section className="mx-auto max-w-7xl px-6 py-8">
         <div className="mb-6">
           {breadcrumbs?.length ? <Breadcrumbs items={breadcrumbs} className="mb-3" /> : null}

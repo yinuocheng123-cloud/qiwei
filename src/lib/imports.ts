@@ -23,6 +23,8 @@ import {
   type ImportBatch,
   type ImportRow
 } from "@prisma/client";
+import { mapLegacyCustomerTypeToBusinessLineCustomerType } from "@/lib/marketclaw-context";
+import { upsertScopedContact } from "@/lib/scope";
 import { upsertLeadSourceAttribution, type LeadSourceAttributionInput } from "@/lib/source-attribution";
 import { createTaskWithAudit } from "@/lib/tasks";
 
@@ -82,7 +84,7 @@ export const importTemplateSampleRow = [
   "来自活动现场收集",
   "增长推广",
   "高意向，信任建设关注",
-  "platform-sales@zhengmu.local",
+  "sale@marketclaw.local",
   "2026-05-16 10:00"
 ] as const;
 
@@ -145,6 +147,7 @@ export type NormalizedImportRowData = {
   wechat: string;
   company: string;
   customerType: CustomerType;
+  enterpriseId: string | null;
   source: LeadSource;
   sourceAttribution: LeadSourceAttributionInput;
   needDescription: string;
@@ -341,9 +344,9 @@ type ImportReferenceData = {
   ownerMap: Map<string, { id: string; role: UserRole }>;
   sourceStaffByEmail: Map<string, { id: string; name: string }>;
   sourceStaffByName: Map<string, { id: string; name: string }>;
-  activeBusinessLineByName: Map<string, { id: string; name: string }>;
-  activeBusinessLineBySlug: Map<string, { id: string; name: string }>;
-  defaultBusinessLinesById: Map<string, { id: string; name: string }>;
+  activeBusinessLineByName: Map<string, { id: string; name: string; key: string; enterpriseId: string }>;
+  activeBusinessLineBySlug: Map<string, { id: string; name: string; key: string; enterpriseId: string }>;
+  defaultBusinessLinesById: Map<string, { id: string; name: string; key: string; enterpriseId: string }>;
 };
 
 function normalizeHeaderToken(value: string) {
@@ -538,7 +541,7 @@ export async function loadImportReferenceData(prisma: {
   lead: { findMany: (args: Prisma.LeadFindManyArgs) => Promise<ImportReferenceData["existingLeads"]> };
   user: { findMany: (args: Prisma.UserFindManyArgs) => Promise<{ id: string; email: string; name: string; role: UserRole }[]> };
   businessLine: {
-    findMany: (args: Prisma.BusinessLineFindManyArgs) => Promise<{ id: string; name: string; slug: string; status: string }[]>;
+    findMany: (args: Prisma.BusinessLineFindManyArgs) => Promise<{ id: string; name: string; slug: string; key: string; status: string; enterpriseId: string }[]>;
   };
 }, tenantId: string): Promise<ImportReferenceData> {
   const [existingLeads, owners, activeBusinessLines] = await Promise.all([
@@ -556,16 +559,22 @@ export async function loadImportReferenceData(prisma: {
     }),
     prisma.businessLine.findMany({
       where: { tenantId, status: "ACTIVE" },
-      select: { id: true, name: true, slug: true, status: true }
+      select: { id: true, name: true, slug: true, key: true, status: true, enterpriseId: true }
     })
   ]);
 
   const ownerMap = new Map(owners.map((owner) => [owner.email.trim().toLowerCase(), { id: owner.id, role: owner.role }]));
   const sourceStaffByEmail = new Map(owners.map((owner) => [owner.email.trim().toLowerCase(), { id: owner.id, name: owner.name }]));
   const sourceStaffByName = new Map(owners.map((owner) => [normalizeLooseText(owner.name), { id: owner.id, name: owner.name }]));
-  const activeBusinessLineByName = new Map(activeBusinessLines.map((line) => [normalizeLooseText(line.name), { id: line.id, name: line.name }]));
-  const activeBusinessLineBySlug = new Map(activeBusinessLines.map((line) => [normalizeLooseText(line.slug), { id: line.id, name: line.name }]));
-  const defaultBusinessLinesById = new Map(activeBusinessLines.map((line) => [line.id, { id: line.id, name: line.name }]));
+  const activeBusinessLineByName = new Map(
+    activeBusinessLines.map((line) => [normalizeLooseText(line.name), { id: line.id, name: line.name, key: line.key, enterpriseId: line.enterpriseId }])
+  );
+  const activeBusinessLineBySlug = new Map(
+    activeBusinessLines.map((line) => [normalizeLooseText(line.slug), { id: line.id, name: line.name, key: line.key, enterpriseId: line.enterpriseId }])
+  );
+  const defaultBusinessLinesById = new Map(
+    activeBusinessLines.map((line) => [line.id, { id: line.id, name: line.name, key: line.key, enterpriseId: line.enterpriseId }])
+  );
 
   return {
     existingLeads,
@@ -811,7 +820,10 @@ function buildPreviewRows(
       phone,
       wechat,
       company,
-      customerType,
+      customerType: businessLines[0]?.key
+        ? mapLegacyCustomerTypeToBusinessLineCustomerType(businessLines[0].key as "cnas" | "zhengmu" | "youxi", customerType)
+        : customerType,
+      enterpriseId: businessLines[0]?.enterpriseId ?? null,
       source,
       sourceAttribution: {
         sourceChannel: sourceChannelValue,
@@ -930,7 +942,7 @@ export async function buildImportBatchPreview(input: {
     lead: { findMany: (args: Prisma.LeadFindManyArgs) => Promise<ImportReferenceData["existingLeads"]> };
     user: { findMany: (args: Prisma.UserFindManyArgs) => Promise<{ id: string; email: string; name: string; role: UserRole }[]> };
     businessLine: {
-      findMany: (args: Prisma.BusinessLineFindManyArgs) => Promise<{ id: string; name: string; slug: string; status: string }[]>;
+      findMany: (args: Prisma.BusinessLineFindManyArgs) => Promise<{ id: string; name: string; slug: string; key: string; status: string; enterpriseId: string }[]>;
     };
   };
   tenantId: string;
@@ -1031,7 +1043,7 @@ export async function rebuildImportBatchPreview(input: {
     lead: { findMany: (args: Prisma.LeadFindManyArgs) => Promise<ImportReferenceData["existingLeads"]> };
     user: { findMany: (args: Prisma.UserFindManyArgs) => Promise<{ id: string; email: string; name: string; role: UserRole }[]> };
     businessLine: {
-      findMany: (args: Prisma.BusinessLineFindManyArgs) => Promise<{ id: string; name: string; slug: string; status: string }[]>;
+      findMany: (args: Prisma.BusinessLineFindManyArgs) => Promise<{ id: string; name: string; slug: string; key: string; status: string; enterpriseId: string }[]>;
     };
   };
   tenantId: string;
@@ -1088,6 +1100,7 @@ function parseNormalizedRowData(value: Prisma.JsonValue | null): NormalizedImpor
       typeof record.customerType === "string" && Object.values(CustomerType).includes(record.customerType as CustomerType)
         ? (record.customerType as CustomerType)
         : CustomerType.OTHER,
+    enterpriseId: typeof record.enterpriseId === "string" && record.enterpriseId ? record.enterpriseId : null,
     source:
       typeof record.source === "string" && Object.values(LeadSource).includes(record.source as LeadSource)
         ? (record.source as LeadSource)
@@ -1181,7 +1194,7 @@ export async function completeImportBatch(input: {
       update: (args: Prisma.ImportRowUpdateArgs) => Promise<ImportRow>;
     };
     lead: {
-      create: (args: Prisma.LeadCreateArgs) => Promise<{ id: string }>;
+      create: (args: Prisma.LeadCreateArgs) => Promise<{ id: string; enterpriseId: string | null; businessLineId: string | null; ownerId: string | null }>;
       findMany: (args: Prisma.LeadFindManyArgs) => Promise<ImportReferenceData["existingLeads"]>;
     };
     leadTag: {
@@ -1198,7 +1211,7 @@ export async function completeImportBatch(input: {
       update: (args: Prisma.LeadSourceAttributionUpdateArgs) => Promise<LeadSourceAttribution>;
     };
     businessLine: {
-      findMany: (args: Prisma.BusinessLineFindManyArgs) => Promise<{ id: string; name: string; slug: string; status: string }[]>;
+      findMany: (args: Prisma.BusinessLineFindManyArgs) => Promise<{ id: string; name: string; slug: string; key: string; status: string; enterpriseId: string }[]>;
     };
   };
   tenantId: string;
@@ -1287,9 +1300,25 @@ export async function completeImportBatch(input: {
     }
 
     try {
+      const primaryBusinessLineId = normalizedData.businessLineIds[0] ?? null;
+      const primaryEnterpriseId = normalizedData.enterpriseId;
+      const contact = primaryEnterpriseId
+        ? await upsertScopedContact({
+            tenantId: input.tenantId,
+            enterpriseId: primaryEnterpriseId,
+            name: normalizedData.name || normalizedData.company || normalizedData.wechat || normalizedData.phone || `导入客户-${previewRow.rowIndex}`,
+            phone: normalizedData.phone,
+            wechat: normalizedData.wechat || null,
+            company: normalizedData.company || null,
+            notes: normalizedData.message
+          })
+        : null;
       const lead = await input.prisma.lead.create({
         data: {
           tenantId: input.tenantId,
+          enterpriseId: primaryEnterpriseId ?? undefined,
+          businessLineId: primaryBusinessLineId ?? undefined,
+          contactId: contact?.id,
           name: normalizedData.name || normalizedData.company || normalizedData.wechat || normalizedData.phone || `导入客户-${previewRow.rowIndex}`,
           phone: normalizedData.phone,
           wechat: normalizedData.wechat || null,
@@ -1317,6 +1346,8 @@ export async function completeImportBatch(input: {
         await upsertLeadSourceAttribution({
           db: input.prisma,
           tenantId: input.tenantId,
+          enterpriseId: primaryEnterpriseId,
+          businessLineId: primaryBusinessLineId,
           leadId: lead.id,
           userId: input.createdById,
           attribution: sourceAttribution
@@ -1329,6 +1360,8 @@ export async function completeImportBatch(input: {
         dueAt.setHours(18, 0, 0, 0);
         await createTaskWithAudit({
           tenantId: input.tenantId,
+          enterpriseId: lead.enterpriseId,
+          businessLineId: lead.businessLineId,
           leadId: lead.id,
           ownerId: normalizedData.ownerId,
           createdById: input.createdById,

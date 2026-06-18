@@ -33,6 +33,11 @@ export type LeadSourceAttributionInput = {
   submittedAt?: Date | string | null;
 };
 
+export type LeadSourceScopeInput = {
+  enterpriseId?: string | null;
+  businessLineId?: string | null;
+};
+
 type NormalizedLeadSourceAttributionInput = Omit<LeadSourceAttributionInput, "firstSeenAt" | "submittedAt"> & {
   firstSeenAt?: Date;
   submittedAt?: Date;
@@ -291,6 +296,8 @@ export function parseSourceAttributionFromFormData(
 export async function upsertLeadSourceAttribution(input: {
   db: SourceAttributionDb;
   tenantId: string;
+  enterpriseId?: string | null;
+  businessLineId?: string | null;
   leadId: string;
   userId?: string | null;
   attribution: LeadSourceAttributionInput;
@@ -351,6 +358,8 @@ export async function upsertLeadSourceAttribution(input: {
     const created = await input.db.leadSourceAttribution.create({
       data: {
         tenantId: input.tenantId,
+        enterpriseId: input.enterpriseId ?? null,
+        businessLineId: input.businessLineId ?? null,
         leadId: input.leadId,
         ...prepared
       }
@@ -379,7 +388,11 @@ export async function upsertLeadSourceAttribution(input: {
 
   const updated = await input.db.leadSourceAttribution.update({
     where: { id: existing.id },
-    data: merged
+    data: {
+      enterpriseId: existing.enterpriseId ?? input.enterpriseId ?? null,
+      businessLineId: existing.businessLineId ?? input.businessLineId ?? null,
+      ...merged
+    }
   });
 
   await safeWriteAuditLog({

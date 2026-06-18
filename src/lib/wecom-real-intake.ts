@@ -20,6 +20,7 @@ import {
 } from "@prisma/client";
 import { addMinutes, buildCnasExtraData, buildCnasLeadMessage, CNAS_BUSINESS_LINE_NAME, CNAS_BUSINESS_LINE_SLUG, getCnasDiagnosisResult, getCnasStructuredTags, type CnasFormValues } from "@/lib/cnas";
 import { prisma } from "@/lib/prisma";
+import { resolveBusinessLineScopeByKeys, upsertScopedContact } from "@/lib/scope";
 import { upsertLeadSourceAttribution } from "@/lib/source-attribution";
 import { createFirstFollowTask, createHighIntentTask, createTaskWithAudit } from "@/lib/tasks";
 import { getDefaultTenantUser } from "@/lib/tenant";
@@ -179,6 +180,14 @@ export async function intakeWecomExternalContact(input: WecomExternalContactEven
     wecomUserId: input.wecomUserId
   });
   const isCnasTemplate = input.tenant.templateKey === "cnas-pilot";
+  const scope = await resolveBusinessLineScopeByKeys({
+    tenantId: input.tenant.id,
+    enterpriseKey: isCnasTemplate ? "hangyu" : undefined,
+    businessLineKey: isCnasTemplate ? "cnas" : undefined
+  });
+  if (!scope.enterpriseId || !scope.businessLineId) {
+    throw new Error("当前企微真实承接缺少企业或业务线归属。");
+  }
   const cnasValues = isCnasTemplate ? buildCnasValues(profile, addedAt, input.state) : null;
   const cnasResult = cnasValues ? getCnasDiagnosisResult(cnasValues) : null;
   const existingLead = await prisma.lead.findFirst({
@@ -216,16 +225,29 @@ export async function intakeWecomExternalContact(input: WecomExternalContactEven
     ...(cnasValues && cnasResult ? buildCnasExtraData(cnasValues, cnasResult) : {})
   });
   const nextFollowAt = cnasResult ? addMinutes(addedAt, cnasResult.dueInMinutes) : undefined;
+  const customerType = isCnasTemplate ? CustomerType.CNAS_LAB_OWNER : existingLead?.customerType ?? CustomerType.OTHER;
+  const contact = await upsertScopedContact({
+    tenantId: input.tenant.id,
+    enterpriseId: scope.enterpriseId,
+    name: profile.name ?? profile.externalUserId,
+    phone: existingLead?.phone ?? "",
+    wechat: profile.externalUserId,
+    company: profile.corpName,
+    notes: cnasValues && cnasResult ? buildCnasLeadMessage(cnasValues, cnasResult) : "来自企业微信外部联系人新增事件。"
+  });
 
   const lead = existingLead
     ? await prisma.lead.update({
         where: { id: existingLead.id },
         data: {
+          enterpriseId: scope.enterpriseId,
+          businessLineId: scope.businessLineId,
+          contactId: contact.id,
           name: profile.name ?? existingLead.name,
           wechat: profile.externalUserId,
           company: profile.corpName ?? existingLead.company,
           source: LeadSource.other,
-          customerType: isCnasTemplate ? CustomerType.OTHER : existingLead.customerType,
+          customerType,
           needType: isCnasTemplate ? NeedType.BOOK_CONSULTATION : existingLead.needType,
           intentionLevel: cnasResult?.intentionLevel ?? existingLead.intentionLevel,
           stage: isCnasTemplate ? LeadStage.DIAGNOSED : existingLead.stage,
@@ -238,12 +260,15 @@ export async function intakeWecomExternalContact(input: WecomExternalContactEven
     : await prisma.lead.create({
         data: {
           tenantId: input.tenant.id,
+          enterpriseId: scope.enterpriseId,
+          businessLineId: scope.businessLineId,
+          contactId: contact.id,
           name: profile.name ?? profile.externalUserId,
           phone: "",
           wechat: profile.externalUserId,
           company: profile.corpName,
           source: LeadSource.other,
-          customerType: CustomerType.OTHER,
+          customerType,
           needType: isCnasTemplate ? NeedType.BOOK_CONSULTATION : NeedType.OTHER,
           intentionLevel: cnasResult?.intentionLevel ?? IntentionLevel.MEDIUM,
           stage: isCnasTemplate ? LeadStage.DIAGNOSED : LeadStage.NEW,
@@ -257,6 +282,8 @@ export async function intakeWecomExternalContact(input: WecomExternalContactEven
   await upsertLeadSourceAttribution({
     db: prisma,
     tenantId: input.tenant.id,
+    enterpriseId: scope.enterpriseId,
+    businessLineId: scope.businessLineId,
     leadId: lead.id,
     attribution: {
       sourceChannel: "企业微信",
