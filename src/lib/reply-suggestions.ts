@@ -13,12 +13,14 @@ import type {
   BusinessLine,
   CustomerType,
   CustomerTypeStrategy,
+  FollowUp,
   Lead,
   LeadStage,
   Material,
   NeedType,
   ReplySuggestion,
   ReplySuggestionStyle,
+  TaskTemplate,
   TagGroup
 } from "@prisma/client";
 import {
@@ -62,6 +64,8 @@ type StrategyContext = Pick<
 > | null;
 
 type MaterialContext = Pick<Material, "id" | "title" | "description" | "customerType">;
+type FollowUpContext = Pick<FollowUp, "content" | "nextAction" | "createdAt">;
+type TaskTemplateContext = Pick<TaskTemplate, "title" | "description" | "customerType" | "stage" | "defaultDueDays">;
 type BusinessLineContext = Pick<
   BusinessLine,
   | "id"
@@ -282,6 +286,191 @@ function buildDefaultConfig(): CustomerTypeConfig {
 }
 
 function getCustomerTypeConfig(customerType: CustomerType): CustomerTypeConfig {
+  if (customerType === "CNAS_LAB_OWNER") {
+    return {
+      materialTitles: {
+        PRICE: ["认可路径判断表", "认可准备清单"],
+        COOPERATION: ["认可路径判断表", "实验室状态诊断表"],
+        CASE: ["实验室状态诊断表", "认可准备清单"],
+        DELIVERY: ["认可准备清单", "认可路径判断表"],
+        SYSTEM_COMPARE: ["认可路径判断表", "实验室状态诊断表"],
+        UNCLEAR: ["认可路径判断表", "实验室状态诊断表", "认可准备清单"]
+      },
+      nextActions: {
+        PRICE: "先判断实验室当前认可阶段，再安排电话评估",
+        COOPERATION: "先确认实验室类型、认可范围和启动计划",
+        CASE: "先让客户补充人员、设备、体系文件和运行记录现状",
+        DELIVERY: "先发送认可路径判断表，再约 30 分钟路径梳理",
+        SYSTEM_COMPARE: "先讲清 CNAS 认可路径和普通资质咨询的区别",
+        UNCLEAR: "先确认实验室当前处于了解、建设、文件准备还是申请阶段"
+      },
+      answers: {
+        PRICE: "CNAS 认可咨询不能先按单一价格判断，通常要看实验室类型、认可范围、人员设备和当前准备阶段。",
+        COOPERATION: "如果要推进 CNAS 认可，第一步不是马上做材料，而是先判断当前处于哪个认可准备阶段。",
+        CASE: "实验室情况差异很大，建议先用状态诊断表把人员、设备、文件和运行记录过一遍。",
+        DELIVERY: "CNAS 路径要按阶段推进，先判断现状，再决定是补体系文件、运行记录还是评审准备。",
+        SYSTEM_COMPARE: "CNAS 认可不是普通资料代办，核心是把体系、技术能力和现场运行证据准备到位。",
+        UNCLEAR: "这个问题建议先不一句说满，先把实验室当前状态判断清楚，再给认可路径建议。"
+      },
+      warnings: {
+        PRICE: "不要先报死价，必须先判断实验室范围和准备阶段。",
+        COOPERATION: "不要承诺包过或固定周期。",
+        CASE: "不要只发清单不做状态判断。",
+        DELIVERY: "不要跳过认可阶段判断直接承诺交付。",
+        SYSTEM_COMPARE: "不要把认可咨询说成简单代办。",
+        UNCLEAR: "先判断阶段，再给资料和任务。"
+      }
+    };
+  }
+
+  if (customerType === "ZHENGMU_GEO_INTENT") {
+    return {
+      materialTitles: {
+        PRICE: ["GEO推广说明", "官网诊断表"],
+        COOPERATION: ["GEO推广说明", "行业排名内容样稿"],
+        CASE: ["行业排名内容样稿", "官网诊断表"],
+        DELIVERY: ["官网诊断表", "GEO推广说明"],
+        SYSTEM_COMPARE: ["GEO推广说明", "行业排名内容样稿"],
+        UNCLEAR: ["GEO推广说明", "行业排名内容样稿", "官网诊断表"]
+      },
+      nextActions: {
+        PRICE: "先做官网和 AI 搜索可见性诊断",
+        COOPERATION: "先确认品牌关键词、官网基础和内容底座",
+        CASE: "先发行业排名内容样稿，再追问客户想提升的关键词",
+        DELIVERY: "先用官网诊断表判断收录、内容和承接基础",
+        SYSTEM_COMPARE: "先讲清 GEO 推广与传统 SEO、投流的边界",
+        UNCLEAR: "先问清客户想提升 AI 搜索、官网收录还是行业排名内容"
+      },
+      answers: {
+        PRICE: "GEO 推广不能只看一个报价，先看官网基础、品牌关键词和内容底座，判断有没有必要进入推广。",
+        COOPERATION: "如果是 GEO 意向，我建议先做一次官网和 AI 可见性诊断，再判断适合从哪一步启动。",
+        CASE: "案例和样稿可以先给您看，但更关键的是确认您想被哪些关键词和场景搜索到。",
+        DELIVERY: "这类推广能不能推进，取决于官网、内容、关键词和品牌资料是否先补齐。",
+        SYSTEM_COMPARE: "GEO 不是传统 SEO 的简单替代，更偏 AI 搜索时代的内容可见性和品牌信任建设。",
+        UNCLEAR: "这个问题可以先收口到一个方向：您更想解决官网诊断、AI 搜索可见性，还是行业排名内容？"
+      },
+      warnings: {
+        PRICE: "不要承诺固定排名或固定见效周期。",
+        COOPERATION: "不要把 GEO 说成包推荐。",
+        CASE: "不要只发案例，要追问关键词和行业场景。",
+        DELIVERY: "不要忽略官网和内容底座。",
+        SYSTEM_COMPARE: "不要混成普通 SEO 套餐。",
+        UNCLEAR: "先诊断，再推荐方案。"
+      }
+    };
+  }
+
+  if (customerType === "ZHENGMU_MEMBERSHIP_INTENT") {
+    return {
+      materialTitles: {
+        PRICE: ["整木网会员权益", "品牌展示案例"],
+        COOPERATION: ["整木网会员权益", "优选联盟说明"],
+        CASE: ["品牌展示案例", "整木网会员权益"],
+        DELIVERY: ["优选联盟说明", "整木网会员权益"],
+        SYSTEM_COMPARE: ["整木网会员权益", "品牌展示案例"],
+        UNCLEAR: ["整木网会员权益", "品牌展示案例", "优选联盟说明"]
+      },
+      nextActions: {
+        PRICE: "先判断客户更需要会员展示、品牌增信还是联盟资源",
+        COOPERATION: "发送会员权益和品牌展示案例，再约一次会员沟通",
+        CASE: "先发品牌展示案例，确认客户想看曝光、背书还是转化",
+        DELIVERY: "先讲清会员权益边界和后续承接动作",
+        SYSTEM_COMPARE: "先说明会员服务与普通广告投放的区别",
+        UNCLEAR: "先问客户最想通过会员解决曝光、增信还是资源链接"
+      },
+      answers: {
+        PRICE: "会员服务不是只看价格，更要看您现在最需要品牌展示、行业背书还是资源链接。",
+        COOPERATION: "如果您在看整木网会员，建议先把会员权益、品牌展示和联盟资源边界讲清楚。",
+        CASE: "这块可以先给您看品牌展示案例，再判断哪类权益更适合您现在的阶段。",
+        DELIVERY: "会员价值要和后续承接一起看，不是开通后就自动产生转化。",
+        SYSTEM_COMPARE: "它和普通广告位不一样，更偏长期行业露出、增信和资源协同。",
+        UNCLEAR: "先把您最想获得的会员价值说清楚，我再按这个方向给您资料。"
+      },
+      warnings: {
+        PRICE: "不要先报套餐，先判断会员价值诉求。",
+        COOPERATION: "不要承诺开通后必然带来客户。",
+        CASE: "不要只讲展示，要回到客户的承接目标。",
+        DELIVERY: "不要把会员权益说成自动成交。",
+        SYSTEM_COMPARE: "不要等同于投流广告。",
+        UNCLEAR: "先问目标，再推荐资料。"
+      }
+    };
+  }
+
+  if (customerType === "ZHENGMU_TIANTUAN_CLIENT") {
+    return {
+      materialTitles: {
+        PRICE: ["优选联盟说明", "城市伙伴", "共创合作"],
+        COOPERATION: ["优选联盟说明", "城市伙伴", "共创合作"],
+        CASE: ["优选联盟说明", "共创合作"],
+        DELIVERY: ["城市伙伴", "共创合作"],
+        SYSTEM_COMPARE: ["优选联盟说明", "城市伙伴"],
+        UNCLEAR: ["优选联盟说明", "城市伙伴", "共创合作"]
+      },
+      nextActions: {
+        PRICE: "先明确对方想参与整木天团、城市伙伴还是共创合作",
+        COOPERATION: "先梳理资源边界，再安排一次天团合作沟通",
+        CASE: "先确认客户更想看城市伙伴、资源共创还是联合活动",
+        DELIVERY: "先讲清共创合作的角色、边界和推进节奏",
+        SYSTEM_COMPARE: "先说明整木天团与普通会员展示的区别",
+        UNCLEAR: "先问客户更关心天团合作、城市伙伴还是资源共创"
+      },
+      answers: {
+        PRICE: "整木天团和城市伙伴不是单一报价问题，先看双方资源、合作角色和共创范围更稳。",
+        COOPERATION: "如果是天团合作意向，建议先把城市伙伴、资源共创和合作边界讲清楚。",
+        CASE: "这类合作更适合先看共创方向，再判断是联合活动、城市伙伴还是资源互换。",
+        DELIVERY: "共创合作能不能推进，关键在角色分工、资源边界和后续承接节奏。",
+        SYSTEM_COMPARE: "整木天团更偏资源共创和城市伙伴协作，不是普通会员展示或单次广告位。",
+        UNCLEAR: "这个问题可以先收口：您更想参与整木天团、城市伙伴，还是做具体共创合作？"
+      },
+      warnings: {
+        PRICE: "不要先承诺固定权益或结果。",
+        COOPERATION: "不要模糊城市伙伴和共创合作边界。",
+        CASE: "不要只讲资源，要确认双方投入。",
+        DELIVERY: "不要承诺所有城市都能开放。",
+        SYSTEM_COMPARE: "不要和普通会员权益混讲。",
+        UNCLEAR: "先问合作角色和资源边界。"
+      }
+    };
+  }
+
+  if (customerType === "YOUXI_DESIGNER_CLIENT") {
+    return {
+      materialTitles: {
+        PRICE: ["柚木空间案例", "材料说明"],
+        COOPERATION: ["柚木空间案例", "供应链能力介绍", "合作规则"],
+        CASE: ["柚木空间案例", "材料说明"],
+        DELIVERY: ["供应链能力介绍", "合作规则"],
+        SYSTEM_COMPARE: ["材料说明", "供应链能力介绍"],
+        UNCLEAR: ["柚木空间案例", "材料说明", "供应链能力介绍", "合作规则"]
+      },
+      nextActions: {
+        PRICE: "先确认项目类型、材料需求和预算区间",
+        COOPERATION: "先发柚木空间案例、材料说明和合作规则",
+        CASE: "先确认设计项目风格、空间类型和落地节点",
+        DELIVERY: "先讲清供应链能力、交付边界和合作规则",
+        SYSTEM_COMPARE: "先说明柚木材料、空间案例和供应链能力差异",
+        UNCLEAR: "先问客户是设计项目咨询、材料选型还是合作推荐"
+      },
+      answers: {
+        PRICE: "设计师项目通常要结合空间类型、材料规格和落地要求看，不适合先报一个笼统价格。",
+        COOPERATION: "如果是设计师合作，建议先看柚木空间案例、材料说明和合作规则，再判断项目怎么配合。",
+        CASE: "案例可以先给您看，但我会更想先知道项目风格和空间类型，这样推荐更准。",
+        DELIVERY: "落地关键在材料稳定性、供应链能力和协作规则，建议先把边界讲清楚。",
+        SYSTEM_COMPARE: "柚木材料和普通木作不只是价格差异，更要看材料特性、供应链和项目适配。",
+        UNCLEAR: "这个问题可以先收口一下：您更关心空间案例、材料说明，还是后续合作规则？"
+      },
+      warnings: {
+        PRICE: "不要脱离项目体量报价。",
+        COOPERATION: "不要模糊推荐规则和合作边界。",
+        CASE: "不要只发图，要追问项目类型。",
+        DELIVERY: "不要承诺所有节点都能无条件满足。",
+        SYSTEM_COMPARE: "不要只按价格比较材料。",
+        UNCLEAR: "先确认项目场景。"
+      }
+    };
+  }
+
   if (customerType === "OWNER_CLIENT") {
     return {
       materialTitles: {
@@ -1086,12 +1275,21 @@ function prependBusinessLineMaterials(
 
   for (const { line } of matchedBusinessLines) {
     for (const materialId of parseBusinessLineIdList(line.recommendedMaterialIds)) {
-      pushMaterial(allMaterials.find((material) => material.id === materialId));
+      const material = allMaterials.find((item) => item.id === materialId);
+      if (material && (!material.customerType || material.customerType === lead.customerType)) {
+        pushMaterial(material);
+      }
     }
   }
 
   for (const material of pickedMaterials) {
     pushMaterial(material);
+  }
+
+  for (const material of allMaterials) {
+    if (material.customerType === lead.customerType) {
+      pushMaterial(material);
+    }
   }
 
   return ordered;
@@ -1112,11 +1310,31 @@ function resolveBusinessLineNextAction(
   return matchedBusinessLines.find((item) => item.line.defaultNextAction?.trim())?.line.defaultNextAction?.trim() ?? fallbackNextAction;
 }
 
+function resolveTaskTemplateNextAction(
+  fallbackNextAction: string,
+  taskTemplates: TaskTemplateContext[] = []
+) {
+  const template = taskTemplates.find((item) => item.title?.trim()) ?? null;
+  if (!template) return fallbackNextAction;
+
+  return `${fallbackNextAction}；可同步创建任务「${template.title}」`;
+}
+
+function buildRecentFollowUpHint(followUps: FollowUpContext[] = []) {
+  const latest = followUps.find((item) => item.content?.trim() || item.nextAction?.trim());
+  if (!latest) return "";
+
+  const summary = latest.nextAction?.trim() || latest.content.trim();
+  return `最近跟进记录提示：${truncateText(summary, 42)}`;
+}
+
 export function generateReplySuggestions(input: {
   lead: LeadContext;
   strategy: StrategyContext;
   materials: MaterialContext[];
   businessLines?: BusinessLineContext[];
+  recentFollowUps?: FollowUpContext[];
+  taskTemplates?: TaskTemplateContext[];
   customerQuestion: string;
 }): GeneratedReplySuggestion[] {
   const questionType = detectQuestionType(input.customerQuestion);
@@ -1136,8 +1354,10 @@ export function generateReplySuggestions(input: {
     input.lead,
     input.customerQuestion
   );
+  const finalNextAction = resolveTaskTemplateNextAction(recommendedNextAction, input.taskTemplates);
   const answer = customerTypeConfig.answers[questionType];
   const warning = customerTypeConfig.warnings[questionType];
+  const recentFollowUpHint = buildRecentFollowUpHint(input.recentFollowUps);
   const suggestedTags = mergeBusinessLineSuggestedTags(
     buildSuggestedTags(input.lead, input.customerQuestion),
     input.businessLines ?? [],
@@ -1149,9 +1369,9 @@ export function generateReplySuggestions(input: {
   return styleOrder.map((style) => ({
     style,
     questionType,
-    suggestionText: truncateText(getStyleWrap(style, answer, nextQuestion, stageHint)),
+    suggestionText: truncateText([getStyleWrap(style, answer, nextQuestion, stageHint), recentFollowUpHint].filter(Boolean).join(" ")),
     recommendedMaterialIds: materialMatches.map((material) => material.id),
-    recommendedNextAction,
+    recommendedNextAction: finalNextAction,
     warning,
     suggestedTags
   }));

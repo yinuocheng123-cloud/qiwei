@@ -117,6 +117,7 @@ export function MarketClawAssistant({
   const createTaskAction = createMarketClawTask.bind(null, tenantSlug, leadId);
   const feedbackAction = createMarketClawFeedback.bind(null, tenantSlug, leadId);
   const notifyAction = triggerWecomInternalNotification.bind(null, tenantSlug);
+  const currentBusinessLine = businessLines[0] ?? null;
 
   return (
     <Card>
@@ -124,7 +125,7 @@ export function MarketClawAssistant({
         <div>
           <h2 className="text-base font-semibold text-slate-950">AI 推荐回复</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            客户提问后，系统会生成回复建议，并给出风险提醒。销售需要人工确认和修改，本轮仍不做真实自动对外发送。
+            客户提问后，系统会基于当前 Lead 所属业务线生成回复建议、资料推荐和任务建议。销售需要人工确认和修改，本轮仍不做真实自动对外发送，也不会跳转或影响外部官网。
           </p>
         </div>
         <div className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
@@ -136,14 +137,14 @@ export function MarketClawAssistant({
       <form action={generateAction} className="mt-5 space-y-4">
         <Textarea label="客户问题" name="customerQuestion" rows={3} />
         <div className="grid gap-4 md:grid-cols-2">
-          <Select
-            label="业务线"
-            name="businessLineId"
-            options={[
-              { value: "", label: "自动判断或使用默认业务线" },
-              ...businessLines.map((item) => ({ value: item.id, label: item.name }))
-            ]}
-          />
+          <div>
+            <input name="businessLineId" type="hidden" value={currentBusinessLine?.id ?? ""} />
+            <p className="text-sm font-medium text-slate-700">当前业务线</p>
+            <p className="mt-1 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
+              {currentBusinessLine?.name ?? "跟随当前 Lead 归属"}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">V3.1 只按当前 Lead 的企业 / 业务线生成建议，不在这里跨业务线切换。</p>
+          </div>
           <Select label="回复风格" name="replyType" options={[{ value: "ALL", label: "全部生成" }, ...replyTypeOptions]} defaultValue="ALL" />
         </div>
         <SubmitButton>生成回复草稿</SubmitButton>

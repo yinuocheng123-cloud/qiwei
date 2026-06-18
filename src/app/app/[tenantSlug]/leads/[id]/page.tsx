@@ -404,6 +404,7 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
             leadName={lead.name}
             customerType={lead.customerType}
             stage={lead.stage}
+            latestFollowUpContext={lead.followUps[0] ? `${lead.followUps[0].content} 下一步：${lead.followUps[0].nextAction ?? "-"}` : null}
             suggestions={replySuggestions}
             materials={assistantMaterials.map((material) => ({ id: material.id, title: material.title }))}
             existingTags={lead.tags.map((tag) => ({ id: tag.id, tagName: tag.tagName }))}

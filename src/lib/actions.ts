@@ -1150,20 +1150,52 @@ export async function generateReplySuggestionsForLead(tenantSlug: string, leadId
   const customerQuestion = text(formData, "customerQuestion");
   if (!customerQuestion) return;
 
-  const [strategy, materials, businessLines] = await Promise.all([
-    prisma.customerTypeStrategy.findUnique({
-      where: { tenantId_customerType: { tenantId: tenant.id, customerType: lead.customerType } }
+  const [strategy, materials, businessLines, recentFollowUps, taskTemplates] = await Promise.all([
+    prisma.customerTypeStrategy.findFirst({
+      where: {
+        tenantId: tenant.id,
+        enterpriseId: lead.enterpriseId ?? null,
+        businessLineId: lead.businessLineId ?? null,
+        customerType: lead.customerType
+      }
     }),
     prisma.material.findMany({
-      where: { tenantId: tenant.id },
+      where: {
+        tenantId: tenant.id,
+        enterpriseId: lead.enterpriseId ?? null,
+        businessLineId: lead.businessLineId ?? null
+      },
       orderBy: { createdAt: "desc" }
     }),
     prisma.businessLine.findMany({
       where: {
         tenantId: tenant.id,
-        status: "ACTIVE"
+        status: "ACTIVE",
+        ...(lead.enterpriseId ? { enterpriseId: lead.enterpriseId } : {}),
+        ...(lead.businessLineId ? { id: lead.businessLineId } : {})
       },
       orderBy: [{ priority: "asc" }, { updatedAt: "desc" }]
+    }),
+    prisma.followUp.findMany({
+      where: {
+        tenantId: tenant.id,
+        leadId: lead.id,
+        enterpriseId: lead.enterpriseId ?? null,
+        businessLineId: lead.businessLineId ?? null
+      },
+      orderBy: { createdAt: "desc" },
+      take: 3
+    }),
+    prisma.taskTemplate.findMany({
+      where: {
+        tenantId: tenant.id,
+        enterpriseId: lead.enterpriseId ?? null,
+        businessLineId: lead.businessLineId ?? null,
+        isActive: true,
+        AND: [{ OR: [{ customerType: lead.customerType }, { customerType: null }] }, { OR: [{ stage: lead.stage }, { stage: null }] }]
+      },
+      orderBy: [{ customerType: "desc" }, { updatedAt: "desc" }],
+      take: 3
     })
   ]);
 
@@ -1178,6 +1210,8 @@ export async function generateReplySuggestionsForLead(tenantSlug: string, leadId
     strategy,
     materials,
     businessLines,
+    recentFollowUps,
+    taskTemplates,
     customerQuestion
   });
 
@@ -1213,6 +1247,8 @@ export async function generateReplySuggestionsForLead(tenantSlug: string, leadId
       entityId: suggestion.id,
       metadata: {
         leadId: lead.id,
+        enterpriseId: lead.enterpriseId ?? null,
+        businessLineId: lead.businessLineId ?? null,
         customerType: lead.customerType,
         questionType,
         style: suggestion.style
@@ -1230,6 +1266,8 @@ export async function generateReplySuggestionsForLead(tenantSlug: string, leadId
       metadata: {
         leadId: lead.id,
         replySuggestionId: createdSuggestions[0].id,
+        enterpriseId: lead.enterpriseId ?? null,
+        businessLineId: lead.businessLineId ?? null,
         customerType: lead.customerType,
         questionType: tagTopic,
         suggestedTagsCount: suggestions[0]?.suggestedTags.length ?? 0,
@@ -3538,27 +3576,36 @@ export async function generateMarketClawReplyDraft(tenantSlug: string, leadId: s
   if (!customerQuestion) return;
   const departmentName = text(formData, "departmentName") ?? inferMarketClawDepartmentName(user);
 
-  let businessLineId = text(formData, "businessLineId");
+  const leadBusinessLineId = lead.businessLineId ?? null;
   const [businessLines, knowledgeItems, materials] = await Promise.all([
     prisma.businessLine.findMany({
-      where: { tenantId: tenant.id, status: "ACTIVE" },
+      where: {
+        tenantId: tenant.id,
+        status: "ACTIVE",
+        ...(lead.enterpriseId ? { enterpriseId: lead.enterpriseId } : {}),
+        ...(leadBusinessLineId ? { id: leadBusinessLineId } : {})
+      },
       orderBy: [{ priority: "asc" }, { updatedAt: "desc" }]
     }),
     prisma.marketClawKnowledgeItem.findMany({
-      where: { tenantId: tenant.id, status: "ACTIVE" },
+      where: {
+        tenantId: tenant.id,
+        status: "ACTIVE",
+        OR: leadBusinessLineId ? [{ businessLineId: leadBusinessLineId }, { businessLineId: null }] : [{ businessLineId: null }]
+      },
       orderBy: [{ sortOrder: "asc" }, { updatedAt: "desc" }]
     }),
     prisma.material.findMany({
-      where: { tenantId: tenant.id },
+      where: {
+        tenantId: tenant.id,
+        enterpriseId: lead.enterpriseId ?? null,
+        businessLineId: leadBusinessLineId
+      },
       orderBy: { createdAt: "desc" }
     })
   ]);
 
-  if (!businessLineId) {
-    businessLineId = businessLines.find((item) => item.name.includes("增长推广") && customerQuestion.includes("增长推广"))?.id ?? businessLines[0]?.id;
-  }
-
-  const businessLine = businessLines.find((item) => item.id === businessLineId) ?? null;
+  const businessLine = businessLines.find((item) => item.id === leadBusinessLineId) ?? businessLines[0] ?? null;
   const reply = generateMarketClawReply({
     lead: {
       name: lead.name,
@@ -3615,6 +3662,7 @@ export async function generateMarketClawReplyDraft(tenantSlug: string, leadId: s
     entityId: draft.id,
     metadata: {
       leadId: lead.id,
+      enterpriseId: lead.enterpriseId ?? null,
       businessLineId: businessLine?.id ?? null,
       departmentName,
       replyDraftId: draft.id,

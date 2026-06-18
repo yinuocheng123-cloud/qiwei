@@ -33,6 +33,7 @@ export function LeadReplyAssistant({
   leadName,
   customerType,
   stage,
+  latestFollowUpContext,
   suggestions,
   materials,
   existingTags
@@ -42,6 +43,7 @@ export function LeadReplyAssistant({
   leadName: string;
   customerType: CustomerType;
   stage: LeadStage;
+  latestFollowUpContext?: string | null;
   suggestions: ReplySuggestion[];
   materials: MaterialRecord[];
   existingTags: ExistingTagRecord[];
@@ -57,9 +59,9 @@ export function LeadReplyAssistant({
     <Card>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-slate-950">智能跟进助手</h2>
+          <h2 className="text-base font-semibold text-slate-950">V3.1 智能跟进助手</h2>
           <p className="mt-2 text-sm text-slate-600">
-            智能跟进助手不会自动替你回复客户，它只根据当前客户类型和跟进阶段，给销售提供可复制、可修改的回复建议。
+            以当前 Lead 为中心读取企业、业务线、客户主体、最近跟进、资料包和任务模板，只生成可复制、可修改的内部建议，不会自动发送到企微，也不会读取其他业务线资料。
           </p>
         </div>
         <div className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">
@@ -68,9 +70,14 @@ export function LeadReplyAssistant({
         </div>
       </div>
 
+      <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-600">
+        <p className="font-medium text-slate-700">最近跟进上下文</p>
+        <p className="mt-1">{latestFollowUpContext || "暂无最近跟进记录，生成建议时会先按当前客户类型、阶段、资料包和任务模板判断。"}</p>
+      </div>
+
       <form action={generateAction} className="mt-5 space-y-4">
         <Textarea label="客户刚问了什么" name="customerQuestion" defaultValue={latestQuestion} rows={3} />
-        <p className="text-xs text-slate-500">建议尽量输入客户原话，系统会生成直接型、温和型、专业型三条建议回复。</p>
+        <p className="text-xs text-slate-500">建议尽量输入客户原话，系统会生成 2-3 条建议回复，并推荐当前业务线内的资料和下一步任务。</p>
         <SubmitButton>生成建议回复</SubmitButton>
       </form>
 
