@@ -83,7 +83,6 @@ import {
 import { buildBusinessLineSlug, parseBusinessLineRecommendedTagText } from "@/lib/business-lines";
 import {
   CNAS_BUSINESS_LINE_NAME,
-  CNAS_BUSINESS_LINE_SLUG,
   CNAS_SOURCE_PAGE,
   CNAS_TARGET_TENANT_SLUG,
   addMinutes,
@@ -154,7 +153,7 @@ import {
   defaultDueAfterDays,
   syncInAppReminderForTask
 } from "@/lib/tasks";
-import { resolveBusinessLineScopeByKeys } from "@/lib/scope";
+import { resolveBusinessLineScopeByKeys, upsertScopedContact } from "@/lib/scope";
 import { getDefaultTenantUser } from "@/lib/tenant";
 
 function text(formData: FormData, key: string) {
@@ -207,6 +206,20 @@ function intentionRank(level: IntentionLevel) {
     STRONG: 3
   };
   return ranks[level];
+}
+
+async function resolvePublicIntakeScope(input: {
+  tenantId: string;
+  enterpriseKey?: string | null;
+  businessLineKey?: string | null;
+}) {
+  const scope = await resolveBusinessLineScopeByKeys(input);
+  const enterpriseId = scope.enterpriseId;
+  const businessLineId = scope.businessLineId;
+  if (!enterpriseId || !businessLineId) {
+    throw new Error("公开表单业务线范围不可用，请联系管理员检查 MarketClaw 企业 / 业务线配置。");
+  }
+  return { ...scope, enterpriseId, businessLineId };
 }
 
 function mergeJsonRecord(existing: unknown, next: Record<string, unknown>): Prisma.InputJsonValue {
@@ -305,10 +318,29 @@ export async function submitIntakeForm(tenantSlug: string, formType: FormType, f
   const urgent = text(formData, "urgent") === "on";
   const intentionLevel = urgent ? IntentionLevel.STRONG : formType === "diagnosis" ? IntentionLevel.HIGH : IntentionLevel.MEDIUM;
   const owner = await getDefaultTenantUser(tenant.id);
+  const scope = await resolvePublicIntakeScope({
+    tenantId: tenant.id,
+    enterpriseKey: text(formData, "enterpriseKey"),
+    businessLineKey: text(formData, "businessLineKey")
+  });
+  const contact = await upsertScopedContact({
+    tenantId: tenant.id,
+    enterpriseId: scope.enterpriseId,
+    name,
+    phone,
+    company: text(formData, "company"),
+    wechat: text(formData, "wechat"),
+    city: text(formData, "city"),
+    industry: text(formData, "industry"),
+    notes: text(formData, "message")
+  });
 
   const lead = await prisma.lead.create({
     data: {
       tenantId: tenant.id,
+      enterpriseId: scope.enterpriseId,
+      businessLineId: scope.businessLineId,
+      contactId: contact.id,
       name,
       phone,
       wechat: text(formData, "wechat"),
@@ -328,6 +360,9 @@ export async function submitIntakeForm(tenantSlug: string, formType: FormType, f
   await prisma.intakeForm.create({
     data: {
       tenantId: tenant.id,
+      enterpriseId: scope.enterpriseId,
+      businessLineId: scope.businessLineId,
+      contactId: contact.id,
       formType,
       source,
       name,
@@ -362,7 +397,10 @@ export async function submitIntakeForm(tenantSlug: string, formType: FormType, f
       customerType,
       needType,
       intentionLevel,
-      ownerId: owner?.id ?? null
+      ownerId: owner?.id ?? null,
+      enterpriseId: scope.enterpriseId,
+      businessLineId: scope.businessLineId,
+      contactId: contact.id
     }
   });
   await createFirstFollowTask(lead);
@@ -415,17 +453,25 @@ export async function submitCnasPathCheckForm(formData: FormData) {
 
   const result = getCnasDiagnosisResult(values);
   const owner = await getDefaultTenantUser(tenant.id);
-  const businessLine = await prisma.businessLine.findFirst({
-    where: {
-      tenantId: tenant.id,
-      slug: CNAS_BUSINESS_LINE_SLUG,
-      status: "ACTIVE"
-    }
+  const scope = await resolvePublicIntakeScope({
+    tenantId: tenant.id,
+    enterpriseKey: "hangyu",
+    businessLineKey: "cnas"
+  });
+  const contact = await upsertScopedContact({
+    tenantId: tenant.id,
+    enterpriseId: scope.enterpriseId,
+    name: contactName,
+    phone,
+    company,
+    notes: values.note
   });
 
   const existingLead = await prisma.lead.findFirst({
     where: {
       tenantId: tenant.id,
+      enterpriseId: scope.enterpriseId,
+      businessLineId: scope.businessLineId,
       OR: [{ phone }, { name: contactName, company }]
     },
     orderBy: { updatedAt: "desc" }
@@ -435,6 +481,9 @@ export async function submitCnasPathCheckForm(formData: FormData) {
   const nextExtraData = buildCnasExtraData(values, result);
   const leadPayload = {
     tenantId: tenant.id,
+    enterpriseId: scope.enterpriseId,
+    businessLineId: scope.businessLineId,
+    contactId: contact.id,
     name: contactName,
     phone,
     company,
@@ -464,6 +513,9 @@ export async function submitCnasPathCheckForm(formData: FormData) {
   const intakeForm = await prisma.intakeForm.create({
     data: {
       tenantId: tenant.id,
+      enterpriseId: scope.enterpriseId,
+      businessLineId: scope.businessLineId,
+      contactId: contact.id,
       formType: FormType.cnas_path_check,
       source: result.leadSource,
       name: contactName,
@@ -480,6 +532,8 @@ export async function submitCnasPathCheckForm(formData: FormData) {
   await upsertLeadSourceAttribution({
     db: prisma,
     tenantId: tenant.id,
+    enterpriseId: scope.enterpriseId,
+    businessLineId: scope.businessLineId,
     leadId: lead.id,
     attribution: parseSourceAttributionFromFormData(formData, {
       sourceChannel: "CNAS问卷",
@@ -517,7 +571,10 @@ export async function submitCnasPathCheckForm(formData: FormData) {
     entityId: lead.id,
     metadata: {
       leadId: lead.id,
-      businessLine: businessLine?.name ?? CNAS_BUSINESS_LINE_NAME,
+      businessLine: scope.businessLine?.name ?? CNAS_BUSINESS_LINE_NAME,
+      enterpriseId: scope.enterpriseId,
+      businessLineId: scope.businessLineId,
+      contactId: contact.id,
       diagnosisType: result.diagnosisType,
       intentionLevel: result.intentionLevel,
       labType: values.labType,
@@ -536,7 +593,10 @@ export async function submitCnasPathCheckForm(formData: FormData) {
     entityId: intakeForm.id,
     metadata: {
       leadId: lead.id,
-      businessLine: businessLine?.name ?? CNAS_BUSINESS_LINE_NAME,
+      businessLine: scope.businessLine?.name ?? CNAS_BUSINESS_LINE_NAME,
+      enterpriseId: scope.enterpriseId,
+      businessLineId: scope.businessLineId,
+      contactId: contact.id,
       diagnosisType: result.diagnosisType,
       intentionLevel: result.intentionLevel,
       labType: values.labType,
@@ -562,7 +622,10 @@ export async function submitCnasPathCheckForm(formData: FormData) {
       dueAt,
       auditAction: "cnas_follow_task_created",
       auditMetadata: {
-        businessLine: businessLine?.name ?? CNAS_BUSINESS_LINE_NAME,
+        businessLine: scope.businessLine?.name ?? CNAS_BUSINESS_LINE_NAME,
+        enterpriseId: scope.enterpriseId,
+        businessLineId: scope.businessLineId,
+        contactId: contact.id,
         diagnosisType: result.diagnosisType,
         intentionLevel: result.intentionLevel,
         sourcePage: values.sourcePage
@@ -584,6 +647,8 @@ export async function addFollowUp(tenantSlug: string, leadId: string, formData: 
   const followUp = await prisma.followUp.create({
     data: {
       tenantId: tenant.id,
+      enterpriseId: lead.enterpriseId ?? undefined,
+      businessLineId: lead.businessLineId ?? undefined,
       leadId: lead.id,
       userId: user.id,
       content,
@@ -611,6 +676,9 @@ export async function addFollowUp(tenantSlug: string, leadId: string, formData: 
     entityId: followUp.id,
     metadata: {
       leadId: lead.id,
+      enterpriseId: lead.enterpriseId ?? null,
+      businessLineId: lead.businessLineId ?? null,
+      contactId: lead.contactId ?? null,
       stageBefore: lead.stage,
       stageAfter,
       nextFollowAt: nextFollowAt?.toISOString() ?? null
@@ -4196,6 +4264,8 @@ export async function saveMarketClawReplyDraftAsFollowUp(tenantSlug: string, lea
   const followUp = await prisma.followUp.create({
     data: {
       tenantId: tenant.id,
+      enterpriseId: lead.enterpriseId ?? undefined,
+      businessLineId: draft.businessLineId ?? lead.businessLineId ?? undefined,
       leadId: lead.id,
       userId: user.id,
       marketClawReplyDraftId: draft.id,
@@ -4228,6 +4298,9 @@ export async function saveMarketClawReplyDraftAsFollowUp(tenantSlug: string, lea
     entityId: followUp.id,
     metadata: {
       leadId: lead.id,
+      enterpriseId: lead.enterpriseId ?? null,
+      businessLineId: draft.businessLineId ?? lead.businessLineId ?? null,
+      contactId: lead.contactId ?? null,
       stageBefore: lead.stage,
       stageAfter: lead.stage,
       nextFollowAt: null
