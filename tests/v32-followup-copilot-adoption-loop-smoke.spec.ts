@@ -180,15 +180,19 @@ async function submitAdoption(page: Page, buttonName: string) {
 }
 
 async function findAuditLog(action: string, entityType: string, entityId: string) {
-  const log = await prisma.auditLog.findFirst({
-    where: {
-      action,
-      entityType,
-      entityId,
-      metadata: { path: ["testRun"], equals: testRun }
-    },
-    orderBy: { createdAt: "desc" }
-  });
+  let log: AuditLog | null = null;
+  await expect.poll(async () => {
+    log = await prisma.auditLog.findFirst({
+      where: {
+        action,
+        entityType,
+        entityId,
+        metadata: { path: ["testRun"], equals: testRun }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+    return Boolean(log);
+  }).toBe(true);
   expect(log, `${action} 审计日志应存在`).toBeTruthy();
   return log!;
 }
