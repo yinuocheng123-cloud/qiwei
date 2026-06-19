@@ -8,6 +8,7 @@
  *   第三部分：主界面渲染
  *   第四部分：辅助展示组件
  */
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { LeadReplyAssistant } from "@/components/LeadReplyAssistant";
 import { MarketClawAssistant } from "@/components/MarketClawAssistant";
@@ -30,6 +31,7 @@ import {
 } from "@/lib/options";
 import { prisma } from "@/lib/prisma";
 import { getLatestReplySuggestionBatch } from "@/lib/reply-suggestions";
+import { appendScopeToHref } from "@/lib/scope";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +63,9 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
   const lead = await prisma.lead.findFirst({
     where: { id: params.id, tenantId: tenant.id },
     include: {
+      enterprise: { select: { id: true, name: true, key: true } },
+      businessLine: { select: { id: true, name: true, key: true } },
+      contact: { select: { id: true, name: true, company: true, phone: true } },
       owner: true,
       sourceAttribution: true,
       tags: true,
@@ -71,6 +76,10 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
   if (!lead) notFound();
   const cnasData = readCnasExtraData(lead.extraData);
   const wecomRealIntake = readWecomRealIntake(lead.extraData);
+  const leadScopeWhere = {
+    enterpriseId: lead.enterpriseId ?? null,
+    businessLineId: lead.businessLineId ?? null
+  };
 
   const [
     strategyResult,
@@ -84,16 +93,33 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
     marketClawKnowledgeItemsResult,
     activeBusinessLinesResult
   ] = await Promise.all([
-    safeLeadDetailRead(() => prisma.customerTypeStrategy.findUnique({ where: { tenantId_customerType: { tenantId: tenant.id, customerType: lead.customerType } } }), null),
+    safeLeadDetailRead(
+      () =>
+        prisma.customerTypeStrategy.findFirst({
+          where: {
+            tenantId: tenant.id,
+            ...leadScopeWhere,
+            customerType: lead.customerType
+          }
+        }),
+      null
+    ),
     safeLeadDetailRead(
       () =>
         prisma.material.findMany({
-          where: { tenantId: tenant.id, OR: [{ customerType: lead.customerType }, { customerType: null }] },
+          where: { tenantId: tenant.id, ...leadScopeWhere, OR: [{ customerType: lead.customerType }, { customerType: null }] },
           orderBy: { createdAt: "desc" }
         }),
       []
     ),
-    safeLeadDetailRead(() => prisma.material.findMany({ where: { tenantId: tenant.id }, orderBy: { createdAt: "desc" } }), []),
+    safeLeadDetailRead(
+      () =>
+        prisma.material.findMany({
+          where: { tenantId: tenant.id, ...leadScopeWhere },
+          orderBy: { createdAt: "desc" }
+        }),
+      []
+    ),
     safeLeadDetailRead(
       () =>
         prisma.user.findMany({
@@ -111,6 +137,7 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
         prisma.taskTemplate.findMany({
           where: {
             tenantId: tenant.id,
+            ...leadScopeWhere,
             isActive: true,
             AND: [{ OR: [{ customerType: lead.customerType }, { customerType: null }] }, { OR: [{ stage: lead.stage }, { stage: null }] }]
           },
@@ -124,6 +151,7 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
           where: {
             tenantId: tenant.id,
             leadId: lead.id,
+            ...leadScopeWhere,
             status: { in: ["PENDING", "DELAYED", "DONE"] }
           },
           include: { owner: true },
@@ -139,7 +167,8 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
           where: {
             tenantId: tenant.id,
             leadId: lead.id,
-            createdById: user.id
+            createdById: user.id,
+            businessLineId: lead.businessLineId ?? null
           },
           include: {
             trainingCase: {
@@ -159,7 +188,8 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
         prisma.marketClawKnowledgeItem.findMany({
           where: {
             tenantId: tenant.id,
-            status: "ACTIVE"
+            status: "ACTIVE",
+            OR: lead.businessLineId ? [{ businessLineId: lead.businessLineId }, { businessLineId: null }] : [{ businessLineId: null }]
           },
           select: { id: true, title: true },
           orderBy: { updatedAt: "desc" }
@@ -171,7 +201,9 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
         prisma.businessLine.findMany({
           where: {
             tenantId: tenant.id,
-            status: "ACTIVE"
+            status: "ACTIVE",
+            ...(lead.enterpriseId ? { enterpriseId: lead.enterpriseId } : {}),
+            ...(lead.businessLineId ? { id: lead.businessLineId } : {})
           },
           select: { id: true, name: true },
           orderBy: [{ priority: "asc" }, { updatedAt: "desc" }]
@@ -204,11 +236,32 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
   const taskTemplateOptions = [{ value: "", label: "不使用模板" }, ...taskTemplates.map((template) => ({ value: template.id, label: template.name }))];
   const manualTaskTypeOptions = [{ value: "", label: "沿用模板默认类型" }, ...taskTypeOptions];
   const manualTaskPriorityOptions = [{ value: "", label: "沿用模板默认优先级" }, ...taskPriorityOptions];
+  const leadScope = { enterpriseKey: lead.enterprise?.key, businessLineKey: lead.businessLine?.key };
+  const withLeadScope = (href: string) => appendScopeToHref(href, leadScope);
+  const copilotFollowUpIdsResult = await safeLeadDetailRead(
+    () =>
+      lead.followUps.length
+        ? prisma.auditLog.findMany({
+            where: {
+              tenantId: tenant.id,
+              action: "followup_created",
+              entityType: "FollowUp",
+              entityId: { in: lead.followUps.map((item) => item.id) },
+              metadata: { path: ["source"], equals: "copilot" }
+            },
+            select: { entityId: true }
+          })
+        : Promise.resolve([]),
+    []
+  );
+  const copilotFollowUpIds = new Set(copilotFollowUpIdsResult.data.map((item) => item.entityId).filter((id): id is string => Boolean(id)));
 
   return (
     <PageShell
       tenant={tenant}
       title={`客户详情：${lead.name}`}
+      enterpriseKey={lead.enterprise?.key}
+      businessLineKey={lead.businessLine?.key}
       breadcrumbs={[
         { label: "客户管理", href: `/app/${tenant.slug}/leads` },
         { label: "客户详情", href: `/app/${tenant.slug}/leads/${lead.id}` },
@@ -218,6 +271,83 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
     >
       <div className="grid gap-6 lg:grid-cols-[1fr_440px]">
         <div className="space-y-6">
+          {user.role === "SALES" ? (
+            <Card className="border-emerald-200 bg-emerald-50">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-medium text-emerald-700">下一步跟进卡</p>
+                  <h2 className="mt-1 text-lg font-semibold text-slate-950">{lead.name}</h2>
+                  <p className="mt-1 text-sm text-slate-600">当前客户状态：{labelOf(stageOptions, lead.stage)}</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <a className="rounded-md bg-slate-950 px-4 py-2 text-sm font-medium text-white" href="#record-followup">
+                    记录跟进
+                  </a>
+                  <a className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700" href="#smart-assistant">
+                    查看智能建议
+                  </a>
+                  <Link className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700" href={withLeadScope(`/app/${tenant.slug}/todos`)}>
+                    返回待办
+                  </Link>
+                  <Link className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700" href={withLeadScope(`/app/${tenant.slug}/materials`)}>
+                    发送资料
+                  </Link>
+                </div>
+              </div>
+              <div className="mt-4 grid gap-3 text-sm leading-6 text-slate-700 md:grid-cols-2">
+                <div>
+                  <p className="font-medium text-slate-900">当前范围</p>
+                  <p>{lead.enterprise?.name ?? "未设置企业"} / {lead.businessLine?.name ?? "未设置业务线"}</p>
+                </div>
+                <div>
+                  <p className="font-medium text-slate-900">客户类型</p>
+                  <p>{labelOf(customerTypeOptions, lead.customerType)}</p>
+                </div>
+                <div>
+                  <p className="font-medium text-slate-900">下一步任务</p>
+                  <p>{currentTasks[0]?.title ?? strategy?.recommendedNextAction ?? "先补充客户信息，再确认下次跟进时间。"}</p>
+                </div>
+                <div>
+                  <p className="font-medium text-slate-900">推荐话术</p>
+                  <p>{strategy?.day3Script ?? strategy?.welcomeScript ?? "先确认客户需求，再给出资料和电话沟通建议。"}</p>
+                </div>
+                <div>
+                  <p className="font-medium text-slate-900">推荐资料</p>
+                  <p>{materials[0]?.title ?? "优先发送公司介绍、成功案例或常见问题资料。"}</p>
+                </div>
+                <div>
+                  <p className="font-medium text-slate-900">最近一次跟进记录</p>
+                  <p>{lead.followUps[0]?.content ?? "还没有跟进记录，建议先保存一次沟通摘要。"}</p>
+                </div>
+              </div>
+              <div className="mt-4 rounded-md border border-emerald-200 bg-white/70 p-3 text-sm leading-6 text-emerald-900">
+                今日路径：查看客户和最近跟进 → 在右侧生成智能建议 → 复制或采纳 → 页面刷新后在“销售跟进记录 / 当前任务”确认写入；系统不会自动发送企微。
+              </div>
+            </Card>
+          ) : (
+          <Card className="border-emerald-200 bg-emerald-50">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <h2 className="text-base font-semibold text-slate-950">客户跟进卡</h2>
+              <Link className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700" href={withLeadScope(`/app/${tenant.slug}/todos`)}>
+                返回待办
+              </Link>
+            </div>
+            <div className="mt-3 grid gap-3 text-sm leading-6 text-slate-700 md:grid-cols-3">
+              <div>
+                <p className="font-medium text-slate-900">下一步任务</p>
+                <p>{strategy?.recommendedNextAction ?? "先补充客户信息，再确认下次跟进时间。"}</p>
+              </div>
+              <div>
+                <p className="font-medium text-slate-900">推荐话术</p>
+                <p>{strategy?.day3Script ?? strategy?.welcomeScript ?? "先确认客户需求，再给出资料和电话沟通建议。"}</p>
+              </div>
+              <div>
+                <p className="font-medium text-slate-900">推荐资料</p>
+                <p>{materials[0]?.title ?? "优先发送产品介绍、成交案例或常见问题资料。"}</p>
+              </div>
+            </div>
+          </Card>
+          )}
           <Card>
             <h2 className="mb-4 text-base font-semibold">客户基础信息</h2>
             <div className="grid gap-3 text-sm md:grid-cols-2">
@@ -226,6 +356,9 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
               <Info label="公司" value={lead.company} />
               <Info label="城市" value={lead.city} />
               <Info label="来源渠道" value={labelOf(sourceOptions, lead.source)} />
+              <Info label="客户主体" value={lead.contact ? `${lead.contact.name} / ${lead.contact.company ?? lead.contact.phone}` : "未绑定 Contact"} />
+              <Info label="所属企业" value={lead.enterprise?.name ?? "未设置"} />
+              <Info label="所属业务线" value={lead.businessLine?.name ?? "未设置"} />
               <Info label="当前客户类型" value={labelOf(customerTypeOptions, lead.customerType)} />
               <Info label="需求类型" value={labelOf(needTypeOptions, lead.needType)} />
               <Info label="意向等级" value={labelOf(intentionOptions, lead.intentionLevel)} />
@@ -343,6 +476,9 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
                     </div>
                     <p className="mt-2 text-slate-800">{item.content}</p>
                     <p className="mt-2 text-slate-500">下一步：{item.nextAction ?? "-"}</p>
+                    {copilotFollowUpIds.has(item.id) ? (
+                      <p className="mt-1 rounded-md bg-emerald-50 px-2 py-1 text-xs text-emerald-700">已写入跟进记录：来自智能建议采纳，不自动发送企微。</p>
+                    ) : null}
                     <p className="text-slate-500">
                       阶段：{labelOf(stageOptions, item.stageBefore)} 到 {labelOf(stageOptions, item.stageAfter)}
                     </p>
@@ -369,6 +505,9 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
                     </p>
                     <p className="mt-1 text-slate-500">负责人：{task.owner?.name ?? "未分配"}</p>
                     {task.description ? <p className="mt-1 text-slate-500">{task.description}</p> : null}
+                    {task.description?.includes("来源：copilot") ? (
+                      <p className="mt-2 rounded-md bg-emerald-50 px-2 py-1 text-xs text-emerald-700">已创建下一步任务：来自智能建议采纳，不自动发送企微。</p>
+                    ) : null}
                   </div>
                 ))
               ) : (
@@ -381,8 +520,8 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
         <aside className="space-y-6">
           <Callout title={user.role === "SALES" ? "销售作战卡片" : "当前页面路径"} tone={user.role === "SALES" ? "emerald" : "slate"}>
             {user.role === "SALES"
-              ? "先看客户当前阶段和任务，再在这里查看 AI 推荐回复，人工修改后保存跟进并确认下一步动作。"
-              : "这里是客户管理和 AI 推荐回复的交汇点，既能看客户状态，也能验证回复、资料和跟进建议是否匹配。"}
+              ? "先看客户当前阶段和任务，再在这里查看推荐话术，人工修改后保存跟进并确认下一步动作。"
+              : "这里是客户信息、推荐话术和资料建议的交汇点，既能看客户状态，也能验证回复、资料和跟进建议是否匹配。"}
           </Callout>
 
           <MarketClawAssistant
@@ -397,18 +536,19 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
             unavailable={aiRecommendationUnavailable}
           />
 
-          {showAdvancedOperations ? (
-          <LeadReplyAssistant
-            tenantSlug={tenant.slug}
-            leadId={lead.id}
-            leadName={lead.name}
-            customerType={lead.customerType}
-            stage={lead.stage}
-            suggestions={replySuggestions}
-            materials={assistantMaterials.map((material) => ({ id: material.id, title: material.title }))}
-            existingTags={lead.tags.map((tag) => ({ id: tag.id, tagName: tag.tagName }))}
-          />
-          ) : null}
+          <section id="smart-assistant">
+            <LeadReplyAssistant
+              tenantSlug={tenant.slug}
+              leadId={lead.id}
+              leadName={lead.name}
+              customerType={lead.customerType}
+              stage={lead.stage}
+              latestFollowUpContext={lead.followUps[0] ? `${lead.followUps[0].content} 下一步：${lead.followUps[0].nextAction ?? "-"}` : null}
+              suggestions={replySuggestions}
+              materials={assistantMaterials.map((material) => ({ id: material.id, title: material.title }))}
+              existingTags={lead.tags.map((tag) => ({ id: tag.id, tagName: tag.tagName }))}
+            />
+          </section>
 
           {showAdvancedOperations ? (
           <Card>
@@ -437,10 +577,10 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
             <div className="space-y-2 text-sm">
               {materials.length ? (
                 materials.map((material) => (
-                  <a key={material.id} className="block rounded-md border border-slate-200 px-3 py-2 text-emerald-700" href={material.url} target="_blank">
+                  <div key={material.id} className="block rounded-md border border-slate-200 px-3 py-2 text-slate-700">
                     <span className="font-medium">{material.title}</span>
                     <span className="ml-2 text-slate-500">{material.description ?? ""}</span>
-                  </a>
+                  </div>
                 ))
               ) : (
                 <p className="text-slate-500">暂无匹配资料。</p>
@@ -489,7 +629,7 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
 
           <Card>
             <h2 className="mb-4 text-base font-semibold">新增跟进</h2>
-            <form action={followAction} className="space-y-4">
+            <form id="record-followup" action={followAction} className="space-y-4">
               <Textarea label="跟进内容" name="content" rows={4} />
               <Input label="下一步动作" name="nextAction" defaultValue={strategy?.recommendedNextAction ?? ""} />
               {strategy?.recommendedNextAction ? <p className="text-xs text-slate-500">已默认填入推荐下一步动作，可按实际沟通修改。</p> : null}

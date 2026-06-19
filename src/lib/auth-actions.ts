@@ -20,8 +20,21 @@ function text(formData: FormData, key: string) {
   return typeof value === "string" && value.trim() ? value.trim() : "";
 }
 
+const loginAliases: Record<string, string> = {
+  admin: "admin@marketclaw.local",
+  boss: "boss@marketclaw.local",
+  opr: "opr@marketclaw.local",
+  sale: "sale@marketclaw.local"
+};
+
+function normalizeLoginAccount(account: string) {
+  const normalized = account.trim().toLowerCase();
+  return loginAliases[normalized] ?? normalized;
+}
+
 export async function loginAction(formData: FormData) {
-  const email = text(formData, "email").toLowerCase();
+  const account = text(formData, "email");
+  const email = normalizeLoginAccount(account);
   const password = text(formData, "password");
   const next = text(formData, "next");
 

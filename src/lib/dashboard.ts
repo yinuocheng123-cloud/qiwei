@@ -33,15 +33,19 @@ function startOfMonth(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), 1);
 }
 
-function scopedWhere(tenantId: string, ownerId?: string): Prisma.LeadWhereInput {
-  return ownerId ? { tenantId, ownerId } : { tenantId };
+function scopedWhere(tenantId: string, ownerId?: string, businessLineId?: string): Prisma.LeadWhereInput {
+  return {
+    tenantId,
+    ...(ownerId ? { ownerId } : {}),
+    ...(businessLineId ? { businessLineId } : {})
+  };
 }
 
-export function todoWhere(tenantId: string, ownerId?: string) {
+export function todoWhere(tenantId: string, ownerId?: string, businessLineId?: string) {
   const now = new Date();
   const today = startOfDay(now);
   const tomorrow = endOfDay(now);
-  const base = scopedWhere(tenantId, ownerId);
+  const base = scopedWhere(tenantId, ownerId, businessLineId);
 
   return {
     todayFollow: {
@@ -62,6 +66,7 @@ export function todoWhere(tenantId: string, ownerId?: string) {
     },
     unassigned: {
       tenantId,
+      ...(businessLineId ? { businessLineId } : {}),
       ownerId: null
     },
     reactivate: {
@@ -72,14 +77,14 @@ export function todoWhere(tenantId: string, ownerId?: string) {
   } satisfies Record<string, Prisma.LeadWhereInput>;
 }
 
-export async function getDashboardMetrics(tenantId: string, ownerId?: string) {
+export async function getDashboardMetrics(tenantId: string, ownerId?: string, businessLineId?: string) {
   const now = new Date();
   const today = startOfDay(now);
   const week = startOfWeek(now);
   const month = startOfMonth(now);
-  const baseWhere = scopedWhere(tenantId, ownerId);
-  const todos = todoWhere(tenantId, ownerId);
-  const tasks = followTaskWhere(tenantId, ownerId);
+  const baseWhere = scopedWhere(tenantId, ownerId, businessLineId);
+  const todos = todoWhere(tenantId, ownerId, businessLineId);
+  const tasks = followTaskWhere(tenantId, ownerId, businessLineId);
 
   const [
     todayCount,
@@ -133,7 +138,7 @@ export async function getDashboardMetrics(tenantId: string, ownerId?: string) {
     prisma.lead.groupBy({ by: ["customerType"], where: baseWhere, _count: true }),
     prisma.lead.groupBy({ by: ["intentionLevel"], where: baseWhere, _count: true }),
     prisma.lead.groupBy({ by: ["stage"], where: baseWhere, _count: true }),
-    ownerId ? Promise.resolve([]) : getSalesOverview(tenantId)
+    ownerId ? Promise.resolve([]) : getSalesOverview(tenantId, businessLineId)
   ]);
 
   return {
@@ -160,7 +165,7 @@ export async function getDashboardMetrics(tenantId: string, ownerId?: string) {
   };
 }
 
-export async function getSalesOverview(tenantId: string) {
+export async function getSalesOverview(tenantId: string, businessLineId?: string) {
   const users = await prisma.user.findMany({
     where: {
       tenantId,
@@ -172,15 +177,15 @@ export async function getSalesOverview(tenantId: string) {
 
   return Promise.all(
     users.map(async (user) => {
-      const todos = todoWhere(tenantId, user.id);
-      const tasks = followTaskWhere(tenantId, user.id);
+      const todos = todoWhere(tenantId, user.id, businessLineId);
+      const tasks = followTaskWhere(tenantId, user.id, businessLineId);
       const [leadCount, todayFollowCount, overdueFollowCount, highIntentCount, quotedCount, wonCount, todayTaskCount, overdueTaskCount, doneTaskCount] = await Promise.all([
-        prisma.lead.count({ where: { tenantId, ownerId: user.id } }),
+        prisma.lead.count({ where: { tenantId, ownerId: user.id, ...(businessLineId ? { businessLineId } : {}) } }),
         prisma.lead.count({ where: todos.todayFollow }),
         prisma.lead.count({ where: todos.overdueFollow }),
         prisma.lead.count({ where: todos.highIntent }),
-        prisma.lead.count({ where: { tenantId, ownerId: user.id, stage: "QUOTED" } }),
-        prisma.lead.count({ where: { tenantId, ownerId: user.id, dealStatus: "WON" } }),
+        prisma.lead.count({ where: { tenantId, ownerId: user.id, stage: "QUOTED", ...(businessLineId ? { businessLineId } : {}) } }),
+        prisma.lead.count({ where: { tenantId, ownerId: user.id, dealStatus: "WON", ...(businessLineId ? { businessLineId } : {}) } }),
         prisma.followTask.count({ where: tasks.today }),
         prisma.followTask.count({ where: tasks.overdue }),
         prisma.followTask.count({ where: tasks.done })

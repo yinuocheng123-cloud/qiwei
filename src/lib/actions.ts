@@ -154,6 +154,7 @@ import {
   defaultDueAfterDays,
   syncInAppReminderForTask
 } from "@/lib/tasks";
+import { resolveBusinessLineScopeByKeys } from "@/lib/scope";
 import { getDefaultTenantUser } from "@/lib/tenant";
 
 function text(formData: FormData, key: string) {
@@ -1150,20 +1151,52 @@ export async function generateReplySuggestionsForLead(tenantSlug: string, leadId
   const customerQuestion = text(formData, "customerQuestion");
   if (!customerQuestion) return;
 
-  const [strategy, materials, businessLines] = await Promise.all([
-    prisma.customerTypeStrategy.findUnique({
-      where: { tenantId_customerType: { tenantId: tenant.id, customerType: lead.customerType } }
+  const [strategy, materials, businessLines, recentFollowUps, taskTemplates] = await Promise.all([
+    prisma.customerTypeStrategy.findFirst({
+      where: {
+        tenantId: tenant.id,
+        enterpriseId: lead.enterpriseId ?? null,
+        businessLineId: lead.businessLineId ?? null,
+        customerType: lead.customerType
+      }
     }),
     prisma.material.findMany({
-      where: { tenantId: tenant.id },
+      where: {
+        tenantId: tenant.id,
+        enterpriseId: lead.enterpriseId ?? null,
+        businessLineId: lead.businessLineId ?? null
+      },
       orderBy: { createdAt: "desc" }
     }),
     prisma.businessLine.findMany({
       where: {
         tenantId: tenant.id,
-        status: "ACTIVE"
+        status: "ACTIVE",
+        ...(lead.enterpriseId ? { enterpriseId: lead.enterpriseId } : {}),
+        ...(lead.businessLineId ? { id: lead.businessLineId } : {})
       },
       orderBy: [{ priority: "asc" }, { updatedAt: "desc" }]
+    }),
+    prisma.followUp.findMany({
+      where: {
+        tenantId: tenant.id,
+        leadId: lead.id,
+        enterpriseId: lead.enterpriseId ?? null,
+        businessLineId: lead.businessLineId ?? null
+      },
+      orderBy: { createdAt: "desc" },
+      take: 3
+    }),
+    prisma.taskTemplate.findMany({
+      where: {
+        tenantId: tenant.id,
+        enterpriseId: lead.enterpriseId ?? null,
+        businessLineId: lead.businessLineId ?? null,
+        isActive: true,
+        AND: [{ OR: [{ customerType: lead.customerType }, { customerType: null }] }, { OR: [{ stage: lead.stage }, { stage: null }] }]
+      },
+      orderBy: [{ customerType: "desc" }, { updatedAt: "desc" }],
+      take: 3
     })
   ]);
 
@@ -1178,6 +1211,8 @@ export async function generateReplySuggestionsForLead(tenantSlug: string, leadId
     strategy,
     materials,
     businessLines,
+    recentFollowUps,
+    taskTemplates,
     customerQuestion
   });
 
@@ -1213,6 +1248,8 @@ export async function generateReplySuggestionsForLead(tenantSlug: string, leadId
       entityId: suggestion.id,
       metadata: {
         leadId: lead.id,
+        enterpriseId: lead.enterpriseId ?? null,
+        businessLineId: lead.businessLineId ?? null,
         customerType: lead.customerType,
         questionType,
         style: suggestion.style
@@ -1230,6 +1267,8 @@ export async function generateReplySuggestionsForLead(tenantSlug: string, leadId
       metadata: {
         leadId: lead.id,
         replySuggestionId: createdSuggestions[0].id,
+        enterpriseId: lead.enterpriseId ?? null,
+        businessLineId: lead.businessLineId ?? null,
         customerType: lead.customerType,
         questionType: tagTopic,
         suggestedTagsCount: suggestions[0]?.suggestedTags.length ?? 0,
@@ -1320,6 +1359,7 @@ export async function saveReplySuggestionAsFollowUp(tenantSlug: string, leadId: 
   const { user, tenant, lead } = await requireLeadAccess(tenantSlug, leadId);
   const suggestionId = text(formData, "suggestionId");
   if (!suggestionId) return;
+  const testRun = text(formData, "testRun");
 
   const suggestion = await prisma.replySuggestion.findFirst({
     where: {
@@ -1331,16 +1371,12 @@ export async function saveReplySuggestionAsFollowUp(tenantSlug: string, leadId: 
   if (!suggestion) return;
 
   const questionType = detectQuestionType(suggestion.customerQuestion);
-  const followUp = await prisma.followUp.create({
-    data: {
-      tenantId: tenant.id,
-      leadId: lead.id,
-      userId: user.id,
-      content: suggestion.suggestionText,
-      nextAction: suggestion.recommendedNextAction,
-      stageBefore: lead.stage,
-      stageAfter: lead.stage
-    }
+  const followUp = await createCopilotFollowUpFromSuggestion({
+    tenantId: tenant.id,
+    userId: user.id,
+    lead,
+    suggestion,
+    testRun
   });
 
   await prisma.lead.update({
@@ -1355,7 +1391,12 @@ export async function saveReplySuggestionAsFollowUp(tenantSlug: string, leadId: 
     entityType: "FollowUp",
     entityId: followUp.id,
     metadata: {
+      source: "copilot",
       leadId: lead.id,
+      contactId: lead.contactId ?? null,
+      enterpriseId: lead.enterpriseId ?? null,
+      businessLineId: lead.businessLineId ?? null,
+      testRun: testRun ?? null,
       stageBefore: lead.stage,
       stageAfter: lead.stage,
       nextFollowAt: null
@@ -1368,7 +1409,12 @@ export async function saveReplySuggestionAsFollowUp(tenantSlug: string, leadId: 
     entityType: "ReplySuggestion",
     entityId: suggestion.id,
     metadata: {
+      source: "copilot",
       leadId: lead.id,
+      contactId: lead.contactId ?? null,
+      enterpriseId: lead.enterpriseId ?? null,
+      businessLineId: lead.businessLineId ?? null,
+      testRun: testRun ?? null,
       customerType: lead.customerType,
       questionType,
       style: suggestion.style
@@ -1380,6 +1426,159 @@ export async function saveReplySuggestionAsFollowUp(tenantSlug: string, leadId: 
   revalidatePath(`/app/${tenantSlug}/dashboard`);
   revalidatePath(`/app/${tenantSlug}/audit-logs`);
 }
+
+export async function adoptReplySuggestionAndCreateTask(tenantSlug: string, leadId: string, formData: FormData) {
+  const { user, tenant, lead } = await requireLeadAccess(tenantSlug, leadId);
+  const suggestionId = text(formData, "suggestionId");
+  if (!suggestionId) return;
+  const testRun = text(formData, "testRun");
+
+  const suggestion = await prisma.replySuggestion.findFirst({
+    where: {
+      id: suggestionId,
+      tenantId: tenant.id,
+      leadId: lead.id
+    }
+  });
+  if (!suggestion) return;
+
+  const dueAt = defaultDueAfterDays(1);
+  const followUp = await createCopilotFollowUpFromSuggestion({
+    tenantId: tenant.id,
+    userId: user.id,
+    lead,
+    suggestion,
+    nextFollowAt: dueAt,
+    testRun
+  });
+  const taskOwnerId = lead.ownerId ?? user.id;
+  const task = await prisma.followTask.create({
+    data: {
+      tenantId: tenant.id,
+      enterpriseId: lead.enterpriseId ?? undefined,
+      businessLineId: lead.businessLineId ?? undefined,
+      leadId: lead.id,
+      ownerId: taskOwnerId,
+      createdById: user.id,
+      title: `智能建议跟进：${truncateAuditQuestion(suggestion.recommendedNextAction, 48)}`,
+      description: [
+        "来源：copilot",
+        testRun ? `testRun：${testRun}` : null,
+        `客户：${lead.name}`,
+        `建议回复：${suggestion.suggestionText}`,
+        `下一步动作：${suggestion.recommendedNextAction}`
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      type: FollowTaskType.WECHAT_FOLLOW,
+      status: FollowTaskStatus.PENDING,
+      priority: FollowTaskPriority.NORMAL,
+      dueAt
+    }
+  });
+
+  await prisma.lead.update({
+    where: { id: lead.id },
+    data: { lastFollowAt: new Date(), nextFollowAt: dueAt }
+  });
+
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "followup_created",
+    entityType: "FollowUp",
+    entityId: followUp.id,
+    metadata: {
+      source: "copilot",
+      leadId: lead.id,
+      contactId: lead.contactId ?? null,
+      enterpriseId: lead.enterpriseId ?? null,
+      businessLineId: lead.businessLineId ?? null,
+      testRun: testRun ?? null,
+      stageBefore: lead.stage,
+      stageAfter: lead.stage,
+      nextFollowAt: dueAt.toISOString()
+    }
+  });
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "copilot_task_created",
+    entityType: "FollowTask",
+    entityId: task.id,
+    metadata: {
+      source: "copilot",
+      leadId: lead.id,
+      contactId: lead.contactId ?? null,
+      enterpriseId: lead.enterpriseId ?? null,
+      businessLineId: lead.businessLineId ?? null,
+      testRun: testRun ?? null,
+      followUpId: followUp.id,
+      suggestionId: suggestion.id,
+      ownerId: taskOwnerId,
+      dueAt: dueAt.toISOString()
+    }
+  });
+  await syncInAppReminderForTask(task, { userId: user.id });
+  await safeWriteAuditLog({
+    tenantId: tenant.id,
+    userId: user.id,
+    action: "reply_suggestion_adopted_with_task",
+    entityType: "ReplySuggestion",
+    entityId: suggestion.id,
+    metadata: {
+      source: "copilot",
+      leadId: lead.id,
+      contactId: lead.contactId ?? null,
+      enterpriseId: lead.enterpriseId ?? null,
+      businessLineId: lead.businessLineId ?? null,
+      testRun: testRun ?? null,
+      customerType: lead.customerType,
+      questionType: detectQuestionType(suggestion.customerQuestion),
+      style: suggestion.style,
+      followUpId: followUp.id,
+      taskId: task.id
+    }
+  });
+
+  revalidatePath(`/app/${tenantSlug}/leads/${leadId}`);
+  revalidatePath(`/app/${tenantSlug}/todos`);
+  revalidatePath(`/app/${tenantSlug}/dashboard`);
+  revalidatePath(`/app/${tenantSlug}/audit-logs`);
+}
+
+async function createCopilotFollowUpFromSuggestion(input: {
+  tenantId: string;
+  userId: string;
+  lead: {
+    id: string;
+    enterpriseId: string | null;
+    businessLineId: string | null;
+    stage: LeadStage;
+  };
+  suggestion: {
+    suggestionText: string;
+    recommendedNextAction: string;
+  };
+  nextFollowAt?: Date | null;
+  testRun?: string | null;
+}) {
+  return prisma.followUp.create({
+    data: {
+      tenantId: input.tenantId,
+      enterpriseId: input.lead.enterpriseId ?? undefined,
+      businessLineId: input.lead.businessLineId ?? undefined,
+      leadId: input.lead.id,
+      userId: input.userId,
+      content: input.testRun ? `[${input.testRun}] ${input.suggestion.suggestionText}` : input.suggestion.suggestionText,
+      nextAction: input.suggestion.recommendedNextAction,
+      nextFollowAt: input.nextFollowAt ?? undefined,
+      stageBefore: input.lead.stage,
+      stageAfter: input.lead.stage
+    }
+  });
+}
+
 
 function parseTagGroup(value?: string) {
   return value && Object.values(TagGroup).includes(value as TagGroup) ? (value as TagGroup) : TagGroup.CUSTOM;
@@ -3538,27 +3737,36 @@ export async function generateMarketClawReplyDraft(tenantSlug: string, leadId: s
   if (!customerQuestion) return;
   const departmentName = text(formData, "departmentName") ?? inferMarketClawDepartmentName(user);
 
-  let businessLineId = text(formData, "businessLineId");
+  const leadBusinessLineId = lead.businessLineId ?? null;
   const [businessLines, knowledgeItems, materials] = await Promise.all([
     prisma.businessLine.findMany({
-      where: { tenantId: tenant.id, status: "ACTIVE" },
+      where: {
+        tenantId: tenant.id,
+        status: "ACTIVE",
+        ...(lead.enterpriseId ? { enterpriseId: lead.enterpriseId } : {}),
+        ...(leadBusinessLineId ? { id: leadBusinessLineId } : {})
+      },
       orderBy: [{ priority: "asc" }, { updatedAt: "desc" }]
     }),
     prisma.marketClawKnowledgeItem.findMany({
-      where: { tenantId: tenant.id, status: "ACTIVE" },
+      where: {
+        tenantId: tenant.id,
+        status: "ACTIVE",
+        OR: leadBusinessLineId ? [{ businessLineId: leadBusinessLineId }, { businessLineId: null }] : [{ businessLineId: null }]
+      },
       orderBy: [{ sortOrder: "asc" }, { updatedAt: "desc" }]
     }),
     prisma.material.findMany({
-      where: { tenantId: tenant.id },
+      where: {
+        tenantId: tenant.id,
+        enterpriseId: lead.enterpriseId ?? null,
+        businessLineId: leadBusinessLineId
+      },
       orderBy: { createdAt: "desc" }
     })
   ]);
 
-  if (!businessLineId) {
-    businessLineId = businessLines.find((item) => item.name.includes("增长推广") && customerQuestion.includes("增长推广"))?.id ?? businessLines[0]?.id;
-  }
-
-  const businessLine = businessLines.find((item) => item.id === businessLineId) ?? null;
+  const businessLine = businessLines.find((item) => item.id === leadBusinessLineId) ?? businessLines[0] ?? null;
   const reply = generateMarketClawReply({
     lead: {
       name: lead.name,
@@ -3615,6 +3823,7 @@ export async function generateMarketClawReplyDraft(tenantSlug: string, leadId: s
     entityId: draft.id,
     metadata: {
       leadId: lead.id,
+      enterpriseId: lead.enterpriseId ?? null,
       businessLineId: businessLine?.id ?? null,
       departmentName,
       replyDraftId: draft.id,
@@ -4364,10 +4573,21 @@ export async function createBusinessLine(tenantSlug: string, formData: FormData)
   if (payload.status === "ARCHIVED" && user.role !== "TENANT_ADMIN") {
     redirect("/forbidden");
   }
+  const scope = await resolveBusinessLineScopeByKeys({
+    tenantId: tenant.id,
+    enterpriseKey: text(formData, "enterpriseKey"),
+    businessLineKey: text(formData, "businessLineKey")
+  });
+  if (!scope.enterpriseId) {
+    throw new Error("当前业务线缺少企业归属。");
+  }
+  const businessLineKey = text(formData, "key") || payload.slug;
 
   const businessLine = await prisma.businessLine.create({
     data: {
       tenantId: tenant.id,
+      enterpriseId: scope.enterpriseId,
+      key: businessLineKey,
       ...payload
     }
   });

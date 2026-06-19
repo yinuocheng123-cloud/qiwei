@@ -29,6 +29,8 @@ type TaskAuditUser = {
 type TaskLead = {
   id: string;
   tenantId: string;
+  enterpriseId?: string | null;
+  businessLineId?: string | null;
   ownerId: string | null;
   name: string;
   intentionLevel: IntentionLevel;
@@ -89,13 +91,17 @@ export function priorityForIntention(intentionLevel: IntentionLevel): FollowTask
   return FollowTaskPriority.NORMAL;
 }
 
-export function taskWhere(tenantId: string, ownerId?: string) {
+export function taskWhere(tenantId: string, ownerId?: string, businessLineId?: string) {
   const now = new Date();
   const today = startOfDay(now);
   const tomorrow = endOfDay(now);
   const weekEnd = endOfWeek(now);
   const openStatuses = [FollowTaskStatus.PENDING, FollowTaskStatus.DELAYED];
-  const base: Prisma.FollowTaskWhereInput = ownerId ? { tenantId, ownerId } : { tenantId };
+  const base: Prisma.FollowTaskWhereInput = {
+    tenantId,
+    ...(ownerId ? { ownerId } : {}),
+    ...(businessLineId ? { businessLineId } : {})
+  };
   const openBase: Prisma.FollowTaskWhereInput = { ...base, status: { in: openStatuses } };
 
   return {
@@ -202,6 +208,8 @@ export async function cancelPendingRemindersForTask(task: { id: string; tenantId
 
 export async function createTaskWithAudit(input: {
   tenantId: string;
+  enterpriseId?: string | null;
+  businessLineId?: string | null;
   leadId?: string | null;
   ownerId?: string | null;
   createdById?: string | null;
@@ -262,6 +270,8 @@ export async function createTaskWithAudit(input: {
   const task = await prisma.followTask.create({
     data: {
       tenantId: input.tenantId,
+      enterpriseId: input.enterpriseId ?? undefined,
+      businessLineId: input.businessLineId ?? undefined,
       leadId: input.leadId ?? undefined,
       ownerId: input.ownerId ?? undefined,
       createdById: input.createdById ?? undefined,
@@ -297,6 +307,8 @@ export async function createFirstFollowTask(lead: TaskLead, input: TaskAuditUser
   if (!lead.ownerId) return null;
   return createTaskWithAudit({
     tenantId: lead.tenantId,
+    enterpriseId: lead.enterpriseId,
+    businessLineId: lead.businessLineId,
     leadId: lead.id,
     ownerId: lead.ownerId,
     createdById: input.userId,
@@ -312,6 +324,8 @@ export async function createHighIntentTask(lead: TaskLead, input: TaskAuditUser 
   if (!lead.ownerId || !["HIGH", "STRONG"].includes(lead.intentionLevel)) return null;
   return createTaskWithAudit({
     tenantId: lead.tenantId,
+    enterpriseId: lead.enterpriseId,
+    businessLineId: lead.businessLineId,
     leadId: lead.id,
     ownerId: lead.ownerId,
     createdById: input.userId,
@@ -328,6 +342,8 @@ export async function createStageDrivenTask(lead: TaskLead, stageAfter: LeadStag
   if (stageAfter === LeadStage.QUOTED) {
     return createTaskWithAudit({
       tenantId: lead.tenantId,
+      enterpriseId: lead.enterpriseId,
+      businessLineId: lead.businessLineId,
       leadId: lead.id,
       ownerId: lead.ownerId,
       createdById: input.userId,
@@ -341,6 +357,8 @@ export async function createStageDrivenTask(lead: TaskLead, stageAfter: LeadStag
   if (stageAfter === LeadStage.TO_REACTIVATE) {
     return createTaskWithAudit({
       tenantId: lead.tenantId,
+      enterpriseId: lead.enterpriseId,
+      businessLineId: lead.businessLineId,
       leadId: lead.id,
       ownerId: lead.ownerId,
       createdById: input.userId,
@@ -358,6 +376,8 @@ export async function createNextFollowTask(lead: TaskLead, nextFollowAt: Date, i
   if (!lead.ownerId) return null;
   return createTaskWithAudit({
     tenantId: lead.tenantId,
+    enterpriseId: lead.enterpriseId,
+    businessLineId: lead.businessLineId,
     leadId: lead.id,
     ownerId: lead.ownerId,
     createdById: input.userId,

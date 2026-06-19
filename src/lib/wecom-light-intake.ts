@@ -34,6 +34,7 @@ import {
   type CnasFormValues
 } from "@/lib/cnas";
 import { prisma } from "@/lib/prisma";
+import { resolveBusinessLineScopeByKeys, upsertScopedContact } from "@/lib/scope";
 import { upsertLeadSourceAttribution } from "@/lib/source-attribution";
 import { createFirstFollowTask, createHighIntentTask, createTaskWithAudit } from "@/lib/tasks";
 import { getDefaultTenantUser } from "@/lib/tenant";
@@ -123,6 +124,14 @@ export async function simulateWecomCustomerImport(tenantSlug: string, formData: 
   const sourceScene = text(formData, "sourceScene") ?? "手工模拟导入";
   const sourceCampaign = text(formData, "sourceCampaign") ?? (isCnasTemplate ? "CNAS企微承接MVP" : "企微轻承接MVP");
   const externalUserId = text(formData, "externalUserId");
+  const scope = await resolveBusinessLineScopeByKeys({
+    tenantId: tenant.id,
+    enterpriseKey: isCnasTemplate ? "hangyu" : text(formData, "enterpriseKey"),
+    businessLineKey: isCnasTemplate ? "cnas" : text(formData, "businessLineKey")
+  });
+  if (!scope.enterpriseId || !scope.businessLineId) {
+    throw new Error("当前企微轻承接缺少企业或业务线归属。");
+  }
   const cnasValues = isCnasTemplate ? buildCnasValues(formData, submittedAt) : null;
   const cnasResult = cnasValues ? getCnasDiagnosisResult(cnasValues) : null;
   const existingLead = await prisma.lead.findFirst({
@@ -146,15 +155,28 @@ export async function simulateWecomCustomerImport(tenantSlug: string, formData: 
     ...cnasExtraData
   });
   const nextFollowAt = cnasResult ? addMinutes(submittedAt, cnasResult.dueInMinutes) : undefined;
+  const customerType = isCnasTemplate ? CustomerType.CNAS_LAB_OWNER : enumValue(CustomerType, text(formData, "customerType"), CustomerType.OTHER);
+  const contact = await upsertScopedContact({
+    tenantId: tenant.id,
+    enterpriseId: scope.enterpriseId,
+    name,
+    phone,
+    company: text(formData, "company"),
+    wechat: externalUserId ?? text(formData, "wechat"),
+    notes: cnasValues && cnasResult ? buildCnasLeadMessage(cnasValues, cnasResult) : text(formData, "message")
+  });
 
   const leadPayload = {
     tenantId: tenant.id,
+    enterpriseId: scope.enterpriseId,
+    businessLineId: scope.businessLineId,
+    contactId: contact.id,
     name,
     phone,
     wechat: externalUserId ?? text(formData, "wechat"),
     company: text(formData, "company"),
     source: LeadSource.other,
-    customerType: isCnasTemplate ? CustomerType.OTHER : enumValue(CustomerType, text(formData, "customerType"), CustomerType.OTHER),
+    customerType,
     needType: isCnasTemplate ? NeedType.BOOK_CONSULTATION : enumValue(NeedType, text(formData, "needType"), NeedType.OTHER),
     intentionLevel: cnasResult?.intentionLevel ?? enumValue(IntentionLevel, text(formData, "intentionLevel"), IntentionLevel.MEDIUM),
     stage: isCnasTemplate ? LeadStage.DIAGNOSED : LeadStage.NEW,
@@ -176,6 +198,8 @@ export async function simulateWecomCustomerImport(tenantSlug: string, formData: 
   await upsertLeadSourceAttribution({
     db: prisma,
     tenantId: tenant.id,
+    enterpriseId: scope.enterpriseId,
+    businessLineId: scope.businessLineId,
     leadId: lead.id,
     userId: user.id,
     attribution: {

@@ -17,7 +17,7 @@ export default function LoginPage({ searchParams }: { searchParams: { error?: st
       <Card className="mt-6">
         <form action={loginAction} className="space-y-4">
           <input type="hidden" name="next" value={searchParams.next ?? ""} />
-          <Input label="邮箱" name="email" type="email" required />
+          <Input label="账号" name="email" required />
           <Input label="密码" name="password" type="password" required />
           {errorText ? <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{errorText}</p> : null}
           <SubmitButton>登录</SubmitButton>

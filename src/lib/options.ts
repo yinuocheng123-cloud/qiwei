@@ -1,3 +1,5 @@
+import { getCustomerTypeLabel, marketClawEnterprises } from "@/lib/marketclaw-context";
+
 export type Option = {
   value: string;
   label: string;
@@ -17,20 +19,14 @@ export const sourceOptions: Option[] = [
 ];
 
 export const customerTypeOptions: Option[] = [
-  { value: "OWNER_CLIENT", label: "潜在客户" },
-  { value: "DEALER_CLIENT", label: "合作伙伴" },
-  { value: "DESIGNER_CLIENT", label: "意向客户" },
-  { value: "FACTORY_CLIENT", label: "重点客户" },
-  { value: "CHANNEL_PARTNER", label: "合作伙伴" },
-  { value: "OLD_CLIENT", label: "重点客户" },
-  { value: "PLATFORM_FACTORY_OWNER", label: "重点客户" },
-  { value: "PLATFORM_MEMBERSHIP_CLIENT", label: "合作伙伴" },
-  { value: "PLATFORM_GEO_AI_CLIENT", label: "意向客户" },
-  { value: "PLATFORM_TRAINING_CLIENT", label: "意向客户" },
-  { value: "PLATFORM_EVENT_RESOURCE_CLIENT", label: "合作伙伴" },
-  { value: "PLATFORM_SUPPLY_CHAIN_CLIENT", label: "合作伙伴" },
-  { value: "PLATFORM_AFTERMARKET_CLIENT", label: "重点客户" },
-  { value: "PLATFORM_PARTNER_CLIENT", label: "合作伙伴" },
+  ...marketClawEnterprises.flatMap((enterprise) =>
+    enterprise.businessLines.flatMap((businessLine) =>
+      businessLine.customerTypes.map((customerType) => ({
+        value: customerType.value,
+        label: customerType.label
+      }))
+    )
+  ),
   { value: "OTHER", label: "其他" }
 ];
 
@@ -124,7 +120,7 @@ export const taskPriorityOptions: Option[] = [
 ];
 
 export function labelOf(options: Option[], value?: string | null) {
-  return options.find((option) => option.value === value)?.label ?? value ?? "-";
+  return options.find((option) => option.value === value)?.label ?? getCustomerTypeLabel(value) ?? value ?? "-";
 }
 
 export function formatDate(value?: Date | string | null) {

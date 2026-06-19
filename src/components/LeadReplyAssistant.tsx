@@ -9,7 +9,12 @@
  *   第四部分：建议卡片与辅助展示组件
  */
 import type { CustomerType, LeadStage, LeadTag, Material, ReplySuggestion } from "@prisma/client";
-import { confirmReplySuggestionTags, generateReplySuggestionsForLead, saveReplySuggestionAsFollowUp } from "@/lib/actions";
+import {
+  adoptReplySuggestionAndCreateTask,
+  confirmReplySuggestionTags,
+  generateReplySuggestionsForLead,
+  saveReplySuggestionAsFollowUp
+} from "@/lib/actions";
 import { CopySuggestionButton } from "@/components/CopySuggestionButton";
 import { Card, SubmitButton, Textarea } from "@/components/Ui";
 import { customerTypeOptions, labelOf, stageOptions } from "@/lib/options";
@@ -33,6 +38,7 @@ export function LeadReplyAssistant({
   leadName,
   customerType,
   stage,
+  latestFollowUpContext,
   suggestions,
   materials,
   existingTags
@@ -42,12 +48,14 @@ export function LeadReplyAssistant({
   leadName: string;
   customerType: CustomerType;
   stage: LeadStage;
+  latestFollowUpContext?: string | null;
   suggestions: ReplySuggestion[];
   materials: MaterialRecord[];
   existingTags: ExistingTagRecord[];
 }) {
   const generateAction = generateReplySuggestionsForLead.bind(null, tenantSlug, leadId);
   const saveSuggestionAction = saveReplySuggestionAsFollowUp.bind(null, tenantSlug, leadId);
+  const adoptWithTaskAction = adoptReplySuggestionAndCreateTask.bind(null, tenantSlug, leadId);
   const confirmTagsAction = confirmReplySuggestionTags.bind(null, tenantSlug, leadId);
   const latestQuestion = suggestions[0]?.customerQuestion ?? "";
   const latestSuggestion = suggestions[0] ?? null;
@@ -57,9 +65,9 @@ export function LeadReplyAssistant({
     <Card>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-slate-950">智能跟进助手</h2>
+          <h2 className="text-base font-semibold text-slate-950">V3.1 智能跟进助手</h2>
           <p className="mt-2 text-sm text-slate-600">
-            智能跟进助手不会自动替你回复客户，它只根据当前客户类型和跟进阶段，给销售提供可复制、可修改的回复建议。
+            以当前 Lead 为中心读取企业、业务线、客户主体、最近跟进、资料包和任务模板，只生成可复制、可修改的内部建议，不会自动发送到企微，也不会读取其他业务线资料。
           </p>
         </div>
         <div className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">
@@ -68,9 +76,14 @@ export function LeadReplyAssistant({
         </div>
       </div>
 
+      <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-600">
+        <p className="font-medium text-slate-700">最近跟进上下文</p>
+        <p className="mt-1">{latestFollowUpContext || "暂无最近跟进记录，生成建议时会先按当前客户类型、阶段、资料包和任务模板判断。"}</p>
+      </div>
+
       <form action={generateAction} className="mt-5 space-y-4">
         <Textarea label="客户刚问了什么" name="customerQuestion" defaultValue={latestQuestion} rows={3} />
-        <p className="text-xs text-slate-500">建议尽量输入客户原话，系统会生成直接型、温和型、专业型三条建议回复。</p>
+        <p className="text-xs text-slate-500">建议尽量输入客户原话，系统会生成 2-3 条建议回复，并推荐当前业务线内的资料和下一步任务。</p>
         <SubmitButton>生成建议回复</SubmitButton>
       </form>
 
@@ -90,6 +103,7 @@ export function LeadReplyAssistant({
               materials={materials}
               suggestion={suggestion}
               saveSuggestionAction={saveSuggestionAction}
+              adoptWithTaskAction={adoptWithTaskAction}
             />
           ))
         ) : (
@@ -206,11 +220,13 @@ function SuggestionCard({
   suggestion,
   materials,
   saveSuggestionAction,
+  adoptWithTaskAction,
   leadName
 }: {
   suggestion: ReplySuggestion;
   materials: MaterialRecord[];
   saveSuggestionAction: (formData: FormData) => Promise<void>;
+  adoptWithTaskAction: (formData: FormData) => Promise<void>;
   leadName: string;
 }) {
   const materialTitles = parseRecommendedMaterialIds(suggestion.recommendedMaterialIds)
@@ -242,9 +258,16 @@ function SuggestionCard({
         <CopySuggestionButton text={suggestion.suggestionText} />
         <form action={saveSuggestionAction}>
           <input name="suggestionId" type="hidden" value={suggestion.id} />
-          <SubmitButton>保存为跟进记录</SubmitButton>
+          <SubmitButton>采纳为跟进记录</SubmitButton>
+        </form>
+        <form action={adoptWithTaskAction}>
+          <input name="suggestionId" type="hidden" value={suggestion.id} />
+          <SubmitButton>采纳并创建下一步任务</SubmitButton>
         </form>
       </div>
+      <p className="mt-3 text-xs leading-5 text-slate-500">
+        采纳后页面会刷新：已写入跟进记录会出现在“销售跟进记录”，已创建下一步任务会出现在“当前任务”；这里只做内部记录，不对外发送消息。
+      </p>
     </div>
   );
 }

@@ -9,26 +9,42 @@
  */
 import { createTaskTemplate, deactivateTaskTemplate, updateTaskTemplate } from "@/lib/actions";
 import { requireTenantAccess } from "@/lib/auth";
-import { customerTypeOptions, labelOf, stageOptions, taskPriorityOptions, taskTypeOptions } from "@/lib/options";
+import { getCustomerTypeOptionsForBusinessLine } from "@/lib/marketclaw-context";
+import { labelOf, stageOptions, taskPriorityOptions, taskTypeOptions } from "@/lib/options";
 import { prisma } from "@/lib/prisma";
+import { resolveBusinessLineScope } from "@/lib/scope";
 import { PageShell } from "@/components/Shell";
 import { Card, Input, Select, SubmitButton, Textarea } from "@/components/Ui";
 
 export const dynamic = "force-dynamic";
 
-const anyCustomerTypeOptions = [{ value: "", label: "不限客户类型" }, ...customerTypeOptions];
 const anyStageOptions = [{ value: "", label: "不限客户阶段" }, ...stageOptions];
 
-export default async function TaskTemplatesPage({ params }: { params: { tenantSlug: string } }) {
+export default async function TaskTemplatesPage({
+  params,
+  searchParams
+}: {
+  params: { tenantSlug: string };
+  searchParams?: Record<string, string | undefined>;
+}) {
   const { tenant } = await requireTenantAccess(params.tenantSlug, ["TENANT_ADMIN", "OPERATOR"]);
+  const scope = await resolveBusinessLineScope(tenant.id, searchParams);
+  const scopedCustomerTypeOptions = getCustomerTypeOptionsForBusinessLine(scope.enterpriseKey, scope.businessLineKey);
+  const anyCustomerTypeOptions = [{ value: "", label: "不限客户类型" }, ...scopedCustomerTypeOptions];
   const templates = await prisma.taskTemplate.findMany({
-    where: { tenantId: tenant.id },
+    where: { tenantId: tenant.id, ...(scope.businessLineId ? { businessLineId: scope.businessLineId } : {}) },
     orderBy: [{ isActive: "desc" }, { updatedAt: "desc" }]
   });
   const createAction = createTaskTemplate.bind(null, tenant.slug);
 
   return (
-    <PageShell tenant={tenant} title="任务模板" description="模板用于快速创建销售跟进任务，后续可作为自动化提醒规则的配置基础。">
+    <PageShell
+      tenant={tenant}
+      title={`任务模板 · ${scope.businessLineDefinition.name}`}
+      description={`模板用于快速创建 ${scope.businessLineDefinition.name} 的销售跟进任务，后续可作为自动化提醒规则的配置基础。`}
+      enterpriseKey={scope.enterpriseKey}
+      businessLineKey={scope.businessLineKey}
+    >
       <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
         <Card>
           <h2 className="mb-4 text-base font-semibold">新增模板</h2>

@@ -27,6 +27,11 @@ enum TenantPlan {
   flagship
 }
 
+enum EnterpriseStatus {
+  ACTIVE
+  PAUSED
+}
+
 enum UserRole {
   PLATFORM_ADMIN
   TENANT_ADMIN
@@ -67,6 +72,24 @@ enum CustomerType {
   PLATFORM_SUPPLY_CHAIN_CLIENT
   PLATFORM_AFTERMARKET_CLIENT
   PLATFORM_PARTNER_CLIENT
+  CNAS_LAB_OWNER
+  CNAS_BUSINESS_OWNER
+  CNAS_QUALITY_OWNER
+  CNAS_TECH_OWNER
+  CNAS_TESTING_AGENCY
+  CNAS_CONSULTING_INTENT
+  ZHENGMU_FACTORY_OWNER
+  ZHENGMU_GEO_INTENT
+  ZHENGMU_MEMBERSHIP_INTENT
+  ZHENGMU_STORE_CLIENT
+  ZHENGMU_SUPPLIER_CLIENT
+  ZHENGMU_TIANTUAN_CLIENT
+  YOUXI_FLOORING_CLIENT
+  YOUXI_WHOLE_HOME_CLIENT
+  YOUXI_FURNITURE_CLIENT
+  YOUXI_DESIGNER_CLIENT
+  YOUXI_VENDOR_CLIENT
+  YOUXI_COMMUNITY_CLIENT
   OTHER
 }
 
@@ -429,8 +452,10 @@ model Tenant {
   expiredAt   DateTime?
   createdAt   DateTime               @default(now())
   updatedAt   DateTime               @updatedAt
+  enterprises Enterprise[]
   users       User[]
   leads       Lead[]
+  contacts    Contact[]
   leadTags    LeadTag[]
   followUps   FollowUp[]
   strategies  CustomerTypeStrategy[]
@@ -458,6 +483,33 @@ model Tenant {
   marketClawReplyFeedbacks       MarketClawReplyFeedback[]
   marketClawIngestionBatches     MarketClawIngestionBatch[]
   marketClawKnowledgeCandidates  MarketClawKnowledgeCandidate[]
+}
+
+model Enterprise {
+  id           String           @id @default(cuid())
+  tenantId     String
+  tenant       Tenant           @relation(fields: [tenantId], references: [id])
+  name         String
+  key          String
+  description  String?
+  status       EnterpriseStatus @default(ACTIVE)
+  sortOrder    Int              @default(100)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  businessLines BusinessLine[]
+  contacts     Contact[]
+  leads        Lead[]
+  followUps    FollowUp[]
+  strategies   CustomerTypeStrategy[]
+  materials    Material[]
+  intakeForms  IntakeForm[]
+  leadSourceAttributions LeadSourceAttribution[]
+  auditLogs    AuditLog[]
+  followTasks  FollowTask[]
+  taskTemplates TaskTemplate[]
+
+  @@unique([tenantId, key])
+  @@index([tenantId, status, sortOrder])
 }
 
 model User {
@@ -497,6 +549,28 @@ model User {
   @@index([tenantId, role])
 }
 
+model Contact {
+  id           String     @id @default(cuid())
+  tenantId     String
+  tenant       Tenant     @relation(fields: [tenantId], references: [id])
+  enterpriseId String
+  enterprise   Enterprise @relation(fields: [enterpriseId], references: [id])
+  name         String
+  company      String?
+  phone        String
+  wechat       String?
+  city         String?
+  industry     String?
+  notes        String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  leads        Lead[]
+  intakeForms  IntakeForm[]
+
+  @@index([tenantId, enterpriseId, name])
+  @@index([tenantId, phone])
+}
+
 model Session {
   id        String   @id @default(cuid())
   userId    String
@@ -514,6 +588,12 @@ model Lead {
   id             String          @id @default(cuid())
   tenantId       String
   tenant         Tenant          @relation(fields: [tenantId], references: [id])
+  enterpriseId   String?
+  enterprise     Enterprise?     @relation(fields: [enterpriseId], references: [id])
+  businessLineId String?
+  businessLine   BusinessLine?   @relation(fields: [businessLineId], references: [id])
+  contactId      String?
+  contact        Contact?        @relation(fields: [contactId], references: [id])
   name           String
   phone          String
   wechat         String?
@@ -546,6 +626,7 @@ model Lead {
   marketClawReplyFeedbacks MarketClawReplyFeedback[]
 
   @@index([tenantId, createdAt])
+  @@index([tenantId, enterpriseId, businessLineId, createdAt])
   @@index([tenantId, source])
   @@index([tenantId, customerType])
   @@index([tenantId, stage])
@@ -568,6 +649,10 @@ model FollowUp {
   id           String     @id @default(cuid())
   tenantId     String
   tenant       Tenant     @relation(fields: [tenantId], references: [id])
+  enterpriseId String?
+  enterprise   Enterprise? @relation(fields: [enterpriseId], references: [id])
+  businessLineId String?
+  businessLine BusinessLine? @relation(fields: [businessLineId], references: [id])
   leadId       String
   lead         Lead       @relation(fields: [leadId], references: [id])
   userId       String
@@ -582,6 +667,7 @@ model FollowUp {
   createdAt    DateTime   @default(now())
 
   @@index([tenantId, leadId, createdAt])
+  @@index([tenantId, enterpriseId, businessLineId, createdAt])
 }
 
 model ReplySuggestion {
@@ -609,6 +695,10 @@ model CustomerTypeStrategy {
   id                        String       @id @default(cuid())
   tenantId                  String
   tenant                    Tenant       @relation(fields: [tenantId], references: [id])
+  enterpriseId              String?
+  enterprise                Enterprise?  @relation(fields: [enterpriseId], references: [id])
+  businessLineId            String?
+  businessLine              BusinessLine? @relation(fields: [businessLineId], references: [id])
   customerType              CustomerType
   name                      String
   painPoints                String[]
@@ -624,12 +714,17 @@ model CustomerTypeStrategy {
   updatedAt                 DateTime     @updatedAt
 
   @@unique([tenantId, customerType])
+  @@index([tenantId, enterpriseId, businessLineId, customerType])
 }
 
 model Material {
   id           String        @id @default(cuid())
   tenantId     String
   tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  enterpriseId String?
+  enterprise   Enterprise?   @relation(fields: [enterpriseId], references: [id])
+  businessLineId String?
+  businessLine BusinessLine? @relation(fields: [businessLineId], references: [id])
   title        String
   description  String?
   type         MaterialType  @default(link)
@@ -639,14 +734,18 @@ model Material {
   updatedAt    DateTime      @updatedAt
 
   @@index([tenantId, customerType])
+  @@index([tenantId, enterpriseId, businessLineId, customerType])
 }
 
 model BusinessLine {
   id                         String               @id @default(cuid())
   tenantId                   String
   tenant                     Tenant               @relation(fields: [tenantId], references: [id])
+  enterpriseId               String
+  enterprise                 Enterprise           @relation(fields: [enterpriseId], references: [id])
   name                       String
   slug                       String
+  key                        String
   description                String?
   status                     BusinessLineStatus   @default(ACTIVE)
   category                   BusinessLineCategory @default(OTHER)
@@ -659,6 +758,14 @@ model BusinessLine {
   notes                      String?
   createdAt                  DateTime             @default(now())
   updatedAt                  DateTime             @updatedAt
+  leads                      Lead[]
+  followUps                  FollowUp[]
+  strategies                 CustomerTypeStrategy[]
+  materials                  Material[]
+  intakeForms                IntakeForm[]
+  leadSourceAttributions     LeadSourceAttribution[]
+  followTasks                FollowTask[]
+  taskTemplates              TaskTemplate[]
   marketClawKnowledgeItems   MarketClawKnowledgeItem[]
   marketClawTrainingCases    MarketClawTrainingCase[]
   marketClawReplyDrafts      MarketClawReplyDraft[]
@@ -666,6 +773,7 @@ model BusinessLine {
   marketClawKnowledgeCandidates MarketClawKnowledgeCandidate[]
 
   @@unique([tenantId, slug])
+  @@unique([tenantId, key])
   @@index([tenantId, status, priority])
 }
 
@@ -724,6 +832,12 @@ model IntakeForm {
   id            String        @id @default(cuid())
   tenantId      String
   tenant        Tenant        @relation(fields: [tenantId], references: [id])
+  enterpriseId  String?
+  enterprise    Enterprise?   @relation(fields: [enterpriseId], references: [id])
+  businessLineId String?
+  businessLine  BusinessLine? @relation(fields: [businessLineId], references: [id])
+  contactId     String?
+  contact       Contact?      @relation(fields: [contactId], references: [id])
   formType      FormType
   source        LeadSource    @default(other)
   name          String
@@ -741,6 +855,7 @@ model IntakeForm {
   createdAt     DateTime      @default(now())
 
   @@index([tenantId, createdAt])
+  @@index([tenantId, enterpriseId, businessLineId, createdAt])
 }
 
 model WeComConfig {
@@ -900,6 +1015,10 @@ model LeadSourceAttribution {
   id               String   @id @default(cuid())
   tenantId         String
   tenant           Tenant   @relation(fields: [tenantId], references: [id])
+  enterpriseId     String?
+  enterprise       Enterprise? @relation(fields: [enterpriseId], references: [id])
+  businessLineId   String?
+  businessLine     BusinessLine? @relation(fields: [businessLineId], references: [id])
   leadId           String   @unique
   lead             Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
   sourceChannel    String?
@@ -924,6 +1043,7 @@ model LeadSourceAttribution {
   updatedAt        DateTime @updatedAt
 
   @@index([tenantId, sourceChannel, createdAt])
+  @@index([tenantId, enterpriseId, businessLineId, createdAt])
   @@index([tenantId, sourceProject, createdAt])
   @@index([tenantId, sourceCampaign, createdAt])
   @@index([tenantId, sourceScene, createdAt])
@@ -1183,6 +1303,8 @@ model AuditLog {
   id         String   @id @default(cuid())
   tenantId   String?
   tenant     Tenant?  @relation(fields: [tenantId], references: [id])
+  enterpriseId String?
+  enterprise Enterprise? @relation(fields: [enterpriseId], references: [id])
   userId     String?
   user       User?    @relation(fields: [userId], references: [id])
   action     String
@@ -1194,6 +1316,7 @@ model AuditLog {
   createdAt  DateTime @default(now())
 
   @@index([tenantId, createdAt])
+  @@index([tenantId, enterpriseId, createdAt])
   @@index([userId, createdAt])
   @@index([action, createdAt])
 }
@@ -1202,6 +1325,10 @@ model FollowTask {
   id          String             @id @default(cuid())
   tenantId    String
   tenant      Tenant             @relation(fields: [tenantId], references: [id])
+  enterpriseId String?
+  enterprise   Enterprise?       @relation(fields: [enterpriseId], references: [id])
+  businessLineId String?
+  businessLine BusinessLine?     @relation(fields: [businessLineId], references: [id])
   leadId      String?
   lead        Lead?              @relation(fields: [leadId], references: [id])
   ownerId     String?
@@ -1221,6 +1348,7 @@ model FollowTask {
   reminderQueues ReminderQueue[]
 
   @@index([tenantId, status, dueAt])
+  @@index([tenantId, enterpriseId, businessLineId, status, dueAt])
   @@index([tenantId, ownerId, status, dueAt])
   @@index([tenantId, leadId])
 }
@@ -1229,6 +1357,10 @@ model TaskTemplate {
   id             String             @id @default(cuid())
   tenantId       String
   tenant         Tenant             @relation(fields: [tenantId], references: [id])
+  enterpriseId   String?
+  enterprise     Enterprise?        @relation(fields: [enterpriseId], references: [id])
+  businessLineId String?
+  businessLine   BusinessLine?      @relation(fields: [businessLineId], references: [id])
   name           String
   type           FollowTaskType     @default(CUSTOM)
   title          String
@@ -1242,6 +1374,7 @@ model TaskTemplate {
   updatedAt      DateTime           @updatedAt
 
   @@index([tenantId, isActive])
+  @@index([tenantId, enterpriseId, businessLineId, isActive])
   @@index([tenantId, customerType, stage])
 }
 
