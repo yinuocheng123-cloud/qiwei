@@ -154,6 +154,7 @@ import {
   defaultDueAfterDays,
   syncInAppReminderForTask
 } from "@/lib/tasks";
+import { resolveBusinessLineScopeByKeys } from "@/lib/scope";
 import { getDefaultTenantUser } from "@/lib/tenant";
 
 function text(formData: FormData, key: string) {
@@ -4572,10 +4573,21 @@ export async function createBusinessLine(tenantSlug: string, formData: FormData)
   if (payload.status === "ARCHIVED" && user.role !== "TENANT_ADMIN") {
     redirect("/forbidden");
   }
+  const scope = await resolveBusinessLineScopeByKeys({
+    tenantId: tenant.id,
+    enterpriseKey: text(formData, "enterpriseKey"),
+    businessLineKey: text(formData, "businessLineKey")
+  });
+  if (!scope.enterpriseId) {
+    throw new Error("当前业务线缺少企业归属。");
+  }
+  const businessLineKey = text(formData, "key") ?? payload.slug;
 
   const businessLine = await prisma.businessLine.create({
     data: {
       tenantId: tenant.id,
+      enterpriseId: scope.enterpriseId,
+      key: businessLineKey,
       ...payload
     }
   });
