@@ -4581,7 +4581,7 @@ export async function createBusinessLine(tenantSlug: string, formData: FormData)
   if (!scope.enterpriseId) {
     throw new Error("当前业务线缺少企业归属。");
   }
-  const businessLineKey = text(formData, "key") ?? payload.slug;
+  const businessLineKey = text(formData, "key") || payload.slug;
 
   const businessLine = await prisma.businessLine.create({
     data: {
