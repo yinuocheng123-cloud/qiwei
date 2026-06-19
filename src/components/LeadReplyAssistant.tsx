@@ -9,7 +9,12 @@
  *   第四部分：建议卡片与辅助展示组件
  */
 import type { CustomerType, LeadStage, LeadTag, Material, ReplySuggestion } from "@prisma/client";
-import { confirmReplySuggestionTags, generateReplySuggestionsForLead, saveReplySuggestionAsFollowUp } from "@/lib/actions";
+import {
+  adoptReplySuggestionAndCreateTask,
+  confirmReplySuggestionTags,
+  generateReplySuggestionsForLead,
+  saveReplySuggestionAsFollowUp
+} from "@/lib/actions";
 import { CopySuggestionButton } from "@/components/CopySuggestionButton";
 import { Card, SubmitButton, Textarea } from "@/components/Ui";
 import { customerTypeOptions, labelOf, stageOptions } from "@/lib/options";
@@ -50,6 +55,7 @@ export function LeadReplyAssistant({
 }) {
   const generateAction = generateReplySuggestionsForLead.bind(null, tenantSlug, leadId);
   const saveSuggestionAction = saveReplySuggestionAsFollowUp.bind(null, tenantSlug, leadId);
+  const adoptWithTaskAction = adoptReplySuggestionAndCreateTask.bind(null, tenantSlug, leadId);
   const confirmTagsAction = confirmReplySuggestionTags.bind(null, tenantSlug, leadId);
   const latestQuestion = suggestions[0]?.customerQuestion ?? "";
   const latestSuggestion = suggestions[0] ?? null;
@@ -97,6 +103,7 @@ export function LeadReplyAssistant({
               materials={materials}
               suggestion={suggestion}
               saveSuggestionAction={saveSuggestionAction}
+              adoptWithTaskAction={adoptWithTaskAction}
             />
           ))
         ) : (
@@ -213,11 +220,13 @@ function SuggestionCard({
   suggestion,
   materials,
   saveSuggestionAction,
+  adoptWithTaskAction,
   leadName
 }: {
   suggestion: ReplySuggestion;
   materials: MaterialRecord[];
   saveSuggestionAction: (formData: FormData) => Promise<void>;
+  adoptWithTaskAction: (formData: FormData) => Promise<void>;
   leadName: string;
 }) {
   const materialTitles = parseRecommendedMaterialIds(suggestion.recommendedMaterialIds)
@@ -249,9 +258,16 @@ function SuggestionCard({
         <CopySuggestionButton text={suggestion.suggestionText} />
         <form action={saveSuggestionAction}>
           <input name="suggestionId" type="hidden" value={suggestion.id} />
-          <SubmitButton>保存为跟进记录</SubmitButton>
+          <SubmitButton>采纳为跟进记录</SubmitButton>
+        </form>
+        <form action={adoptWithTaskAction}>
+          <input name="suggestionId" type="hidden" value={suggestion.id} />
+          <SubmitButton>采纳并创建下一步任务</SubmitButton>
         </form>
       </div>
+      <p className="mt-3 text-xs leading-5 text-slate-500">
+        采纳后页面会刷新：已写入跟进记录会出现在“销售跟进记录”，已创建下一步任务会出现在“当前任务”；这里只做内部记录，不对外发送消息。
+      </p>
     </div>
   );
 }

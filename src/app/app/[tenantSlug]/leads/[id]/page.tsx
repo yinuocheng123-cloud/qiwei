@@ -204,6 +204,23 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
   const taskTemplateOptions = [{ value: "", label: "不使用模板" }, ...taskTemplates.map((template) => ({ value: template.id, label: template.name }))];
   const manualTaskTypeOptions = [{ value: "", label: "沿用模板默认类型" }, ...taskTypeOptions];
   const manualTaskPriorityOptions = [{ value: "", label: "沿用模板默认优先级" }, ...taskPriorityOptions];
+  const copilotFollowUpIdsResult = await safeLeadDetailRead(
+    () =>
+      lead.followUps.length
+        ? prisma.auditLog.findMany({
+            where: {
+              tenantId: tenant.id,
+              action: "followup_created",
+              entityType: "FollowUp",
+              entityId: { in: lead.followUps.map((item) => item.id) },
+              metadata: { path: ["source"], equals: "copilot" }
+            },
+            select: { entityId: true }
+          })
+        : Promise.resolve([]),
+    []
+  );
+  const copilotFollowUpIds = new Set(copilotFollowUpIdsResult.data.map((item) => item.entityId).filter((id): id is string => Boolean(id)));
 
   return (
     <PageShell
@@ -343,6 +360,9 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
                     </div>
                     <p className="mt-2 text-slate-800">{item.content}</p>
                     <p className="mt-2 text-slate-500">下一步：{item.nextAction ?? "-"}</p>
+                    {copilotFollowUpIds.has(item.id) ? (
+                      <p className="mt-1 rounded-md bg-emerald-50 px-2 py-1 text-xs text-emerald-700">已写入跟进记录：来自智能建议采纳，不自动发送企微。</p>
+                    ) : null}
                     <p className="text-slate-500">
                       阶段：{labelOf(stageOptions, item.stageBefore)} 到 {labelOf(stageOptions, item.stageAfter)}
                     </p>
@@ -369,6 +389,9 @@ export default async function LeadDetailPage({ params }: { params: { tenantSlug:
                     </p>
                     <p className="mt-1 text-slate-500">负责人：{task.owner?.name ?? "未分配"}</p>
                     {task.description ? <p className="mt-1 text-slate-500">{task.description}</p> : null}
+                    {task.description?.includes("来源：copilot") ? (
+                      <p className="mt-2 rounded-md bg-emerald-50 px-2 py-1 text-xs text-emerald-700">已创建下一步任务：来自智能建议采纳，不自动发送企微。</p>
+                    ) : null}
                   </div>
                 ))
               ) : (
