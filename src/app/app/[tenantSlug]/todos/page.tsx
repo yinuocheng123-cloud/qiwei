@@ -12,8 +12,10 @@ import { FollowTaskPriority, FollowTaskStatus, FollowTaskType, type Prisma } fro
 import { cancelTask, completeTask, delayTask, triggerWecomInternalNotification } from "@/lib/actions";
 import { canViewAllTenantLeads, requireTenantAccess } from "@/lib/auth";
 import { todoWhere } from "@/lib/dashboard";
+import { getCustomerTypeOptionsForBusinessLine } from "@/lib/marketclaw-context";
 import { customerTypeOptions, formatDate, intentionOptions, labelOf, stageOptions, taskPriorityOptions, taskStatusOptions, taskTypeOptions } from "@/lib/options";
 import { prisma } from "@/lib/prisma";
+import { appendScopeToHref, resolveBusinessLineScope } from "@/lib/scope";
 import { taskWhere } from "@/lib/tasks";
 import { PageShell } from "@/components/Shell";
 import { Callout, Card, SectionTabs, StatCard } from "@/components/Ui";
@@ -60,6 +62,60 @@ function tomorrowDefault() {
   return dateTimeLocal(due);
 }
 
+function SalesTaskSection({
+  tenantSlug,
+  leadHref,
+  sectionId,
+  title,
+  tasks,
+  urgent = false,
+  readOnly = false
+}: {
+  tenantSlug: string;
+  leadHref: (leadId: string) => string;
+  sectionId: string;
+  title: string;
+  tasks: TaskItem[];
+  urgent?: boolean;
+  readOnly?: boolean;
+}) {
+  return (
+    <section id={sectionId}>
+      <Card>
+        <h2 className="mb-3 text-base font-semibold text-slate-950">{title}</h2>
+        <div className="space-y-3">
+          {tasks.length ? (
+            tasks.map((task) => (
+              <div key={task.id} className={urgent ? "rounded-md border border-red-200 bg-red-50 p-3 text-sm" : "rounded-md border border-slate-200 p-3 text-sm"}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-medium text-slate-950">{task.lead?.name ?? task.title}</span>
+                  <span className={urgent ? "text-red-700" : "text-slate-500"}>{formatDate(task.dueAt)}</span>
+                </div>
+                <p className="mt-2 text-slate-600">下一步动作：{task.description || task.title}</p>
+                <p className="mt-1 text-slate-500">客户阶段：{task.lead ? labelOf(stageOptions, task.lead.stage) : "未绑定客户"}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {task.lead ? (
+                    <Link className="rounded-md bg-slate-950 px-3 py-1.5 text-xs font-medium text-white" href={leadHref(task.lead.id)}>
+                      去跟进
+                    </Link>
+                  ) : null}
+                  {!readOnly ? (
+                    <form action={completeTask.bind(null, tenantSlug, task.id)}>
+                      <button className="rounded-md border border-emerald-200 px-3 py-1.5 text-xs font-medium text-emerald-700">标记完成</button>
+                    </form>
+                  ) : null}
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-slate-500">暂无任务</p>
+          )}
+        </div>
+      </Card>
+    </section>
+  );
+}
+
 function filterValue<T extends Record<string, string>>(allowed: T, value?: string): T[keyof T] | undefined {
   return value && Object.values(allowed).includes(value) ? (value as T[keyof T]) : undefined;
 }
@@ -72,13 +128,17 @@ export default async function TodosPage({
   searchParams?: { status?: string; type?: string; priority?: string; ownerId?: string; view?: string };
 }) {
   const { user, tenant } = await requireTenantAccess(params.tenantSlug, ["TENANT_ADMIN", "OPERATOR", "SALES"]);
+  const scope = await resolveBusinessLineScope(tenant.id, searchParams);
+  const scopedCustomerTypeOptions = getCustomerTypeOptionsForBusinessLine(scope.enterpriseKey, scope.businessLineKey);
+  const withScope = (href: string) => appendScopeToHref(href, scope);
+  const leadHref = (leadId: string) => withScope(`/app/${tenant.slug}/leads/${leadId}`);
   const canViewAll = canViewAllTenantLeads(user.role);
   const requestedView = searchParams?.view;
   const currentView =
     requestedView === "overdue" || requestedView === "done" || requestedView === "priority" || requestedView === "filtered" ? requestedView : "today";
   const ownerId = canViewAll ? undefined : user.id;
-  const taskRules = taskWhere(tenant.id, ownerId);
-  const leadRules = todoWhere(tenant.id, ownerId);
+  const taskRules = taskWhere(tenant.id, ownerId, scope.businessLineId ?? undefined);
+  const leadRules = todoWhere(tenant.id, ownerId, scope.businessLineId ?? undefined);
   const notifyAction = triggerWecomInternalNotification.bind(null, tenant.slug);
 
   const statusFilter = filterValue(FollowTaskStatus, searchParams?.status);
@@ -89,6 +149,7 @@ export default async function TodosPage({
 
   const filteredWhere: Prisma.FollowTaskWhereInput = {
     tenantId: tenant.id,
+    ...(scope.businessLineId ? { businessLineId: scope.businessLineId } : {}),
     ...(ownerId ? { ownerId } : {}),
     ...(ownerFilter ? { ownerId: ownerFilter } : {}),
     ...(statusFilter ? { status: statusFilter } : {}),
@@ -118,7 +179,7 @@ export default async function TodosPage({
         : Promise.resolve([]),
       prisma.lead.findMany({ where: leadRules.highIntent, include: { owner: true }, orderBy: { updatedAt: "desc" }, take: 30 }),
       prisma.lead.findMany({
-        where: { tenantId: tenant.id, ...(ownerId ? { ownerId } : {}), stage: "QUOTED" },
+        where: { tenantId: tenant.id, ...(scope.businessLineId ? { businessLineId: scope.businessLineId } : {}), ...(ownerId ? { ownerId } : {}), stage: "QUOTED" },
         include: { owner: true },
         orderBy: { updatedAt: "desc" },
         take: 30
@@ -132,10 +193,46 @@ export default async function TodosPage({
         : Promise.resolve([])
     ]);
 
+  if (!canViewAll) {
+    return (
+      <PageShell
+        tenant={tenant}
+        title={`我的跟进任务 · ${scope.businessLineDefinition.name}`}
+        enterpriseKey={scope.enterpriseKey}
+        businessLineKey={scope.businessLineKey}
+        breadcrumbs={[
+          { label: "今日跟进", href: `/app/${tenant.slug}/dashboard` },
+          { label: "我的跟进任务" }
+        ]}
+        description={`销售只看 ${scope.businessLineDefinition.name} 下自己的跟进任务：今天必须跟、已超时、本周要推进和已完成。`}
+      >
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="今天必须跟" value={todayTasks.length} />
+          <StatCard label="已超时" value={overdueTasks.length} />
+          <StatCard label="本周要推进" value={weekTasks.length} />
+          <StatCard label="已完成" value={doneTasks.length} />
+        </div>
+
+        <Callout className="mt-4" title="今日处理顺序" tone="emerald">
+          先处理已超时，再处理今天必须跟的客户；每条任务都回到客户详情页完成记录、资料和下一步动作。
+        </Callout>
+
+        <div className="mt-6 grid gap-5 xl:grid-cols-2">
+          <SalesTaskSection tenantSlug={tenant.slug} leadHref={leadHref} sectionId="today-tasks" title="今天必须跟" tasks={todayTasks} />
+          <SalesTaskSection tenantSlug={tenant.slug} leadHref={leadHref} sectionId="overdue-tasks" title="已超时" tasks={overdueTasks} urgent />
+          <SalesTaskSection tenantSlug={tenant.slug} leadHref={leadHref} sectionId="week-tasks" title="本周要推进" tasks={weekTasks} />
+          <SalesTaskSection tenantSlug={tenant.slug} leadHref={leadHref} sectionId="done-tasks" title="已完成" tasks={doneTasks} readOnly />
+        </div>
+      </PageShell>
+    );
+  }
+
   return (
     <PageShell
       tenant={tenant}
-      title="跟进工作台"
+      title={`跟进工作台 · ${scope.enterpriseDefinition.name} / ${scope.businessLineDefinition.name}`}
+      enterpriseKey={scope.enterpriseKey}
+      businessLineKey={scope.businessLineKey}
       breadcrumbs={[
         { label: "跟进工作台", href: `/app/${tenant.slug}/todos` },
         {
@@ -150,7 +247,9 @@ export default async function TodosPage({
         }
       ]}
       description={
-        canViewAll ? "把今日待办、逾期任务、已完成记录和任务模板入口收口在一个工作台里。" : "销售先看今天该跟谁，再处理逾期未跟进客户，最后回到客户详情页继续回复与推进。"
+        canViewAll
+          ? `把 ${scope.businessLineDefinition.name} 的今日待办、逾期任务、已完成记录和任务模板入口收口在一个工作台里。`
+          : `销售先看 ${scope.businessLineDefinition.name} 里今天该跟谁，再处理逾期未跟进客户，最后回到客户详情页继续回复与推进。`
       }
     >
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
@@ -164,11 +263,11 @@ export default async function TodosPage({
       <SectionTabs
         current={currentView}
         items={[
-          { key: "today", label: "今日待办", href: `/app/${tenant.slug}/todos?view=today#today-tasks` },
-          { key: "overdue", label: "逾期任务", href: `/app/${tenant.slug}/todos?view=overdue#overdue-tasks` },
-          { key: "done", label: "已完成", href: `/app/${tenant.slug}/todos?view=done#done-tasks` },
-          ...(canViewAll ? [{ key: "priority", label: "高优先级任务", href: `/app/${tenant.slug}/todos?view=priority#high-priority-tasks` }] : []),
-          ...(canViewAll ? [{ key: "templates", label: "任务模板", href: `/app/${tenant.slug}/task-templates` }] : [])
+          { key: "today", label: "今日待办", href: withScope(`/app/${tenant.slug}/todos?view=today#today-tasks`) },
+          { key: "overdue", label: "逾期任务", href: withScope(`/app/${tenant.slug}/todos?view=overdue#overdue-tasks`) },
+          { key: "done", label: "已完成", href: withScope(`/app/${tenant.slug}/todos?view=done#done-tasks`) },
+          ...(canViewAll ? [{ key: "priority", label: "高优先级任务", href: withScope(`/app/${tenant.slug}/todos?view=priority#high-priority-tasks`) }] : []),
+          ...(canViewAll ? [{ key: "templates", label: "任务模板", href: withScope(`/app/${tenant.slug}/task-templates`) }] : [])
         ]}
         className="mt-4"
       />
@@ -183,11 +282,11 @@ export default async function TodosPage({
         <h2 className="text-lg font-semibold text-slate-950">工作入口</h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">复杂任务不再拆成多个一级菜单，而是在工作台内部继续分流。</p>
         <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <WorkbenchEntryCard title="今日待办" description="先处理今天必须完成的跟进动作。" href="#today-tasks" />
-          <WorkbenchEntryCard title="逾期任务" description="优先清理已经超时的跟进事项，避免客户失联。" href="#overdue-tasks" />
-          <WorkbenchEntryCard title="已完成" description="回看已完成的任务和推进节奏。" href="#done-tasks" />
+          <WorkbenchEntryCard title="今日待办" description="先处理今天必须完成的跟进动作。" href={withScope(`/app/${tenant.slug}/todos?view=today#today-tasks`)} />
+          <WorkbenchEntryCard title="逾期任务" description="优先清理已经超时的跟进事项，避免客户失联。" href={withScope(`/app/${tenant.slug}/todos?view=overdue#overdue-tasks`)} />
+          <WorkbenchEntryCard title="已完成" description="回看已完成的任务和推进节奏。" href={withScope(`/app/${tenant.slug}/todos?view=done#done-tasks`)} />
           {canViewAll ? (
-            <WorkbenchEntryCard title="任务模板" description="管理员和运营继续维护标准化任务模板。" href={`/app/${tenant.slug}/task-templates`} />
+            <WorkbenchEntryCard title="任务模板" description="管理员和运营继续维护标准化任务模板。" href={withScope(`/app/${tenant.slug}/task-templates`)} />
           ) : null}
         </div>
       </section>
@@ -202,7 +301,7 @@ export default async function TodosPage({
               <h2 className="text-base font-semibold text-slate-950">任务筛选</h2>
               <p className="mt-1 text-sm text-slate-500">手动创建任务请进入客户详情页，任务会自动进入提醒队列。</p>
             </div>
-            <Link className="rounded-md border border-slate-300 px-3 py-2 text-sm" href={`/app/${tenant.slug}/leads`}>
+            <Link className="rounded-md border border-slate-300 px-3 py-2 text-sm" href={withScope(`/app/${tenant.slug}/leads`)}>
               选择客户创建任务
             </Link>
           </div>
@@ -248,15 +347,15 @@ export default async function TodosPage({
       </details>
 
       <div className="mt-6 grid gap-5 xl:grid-cols-2">
-        {hasFilters ? <TaskSection notifyAction={notifyAction} tenantSlug={tenant.slug} sectionId="filtered-tasks" title="筛选结果" tasks={filteredTasks} /> : null}
-        <TaskSection notifyAction={notifyAction} tenantSlug={tenant.slug} sectionId="today-tasks" title="今日待办" tasks={todayTasks} />
-        <TaskSection notifyAction={notifyAction} tenantSlug={tenant.slug} sectionId="overdue-tasks" title="逾期任务" tasks={overdueTasks} urgent />
-        <TaskSection notifyAction={notifyAction} tenantSlug={tenant.slug} sectionId="high-priority-tasks" title="高优先级任务" tasks={highPriorityTasks} />
-        <TaskSection notifyAction={notifyAction} tenantSlug={tenant.slug} sectionId="week-tasks" title="本周待跟进" tasks={weekTasks} />
-        <TaskSection notifyAction={notifyAction} tenantSlug={tenant.slug} sectionId="done-tasks" title="已完成" tasks={doneTasks} readOnly />
-        <LeadSection tenantSlug={tenant.slug} title="高意向客户" leads={highIntentLeads} />
-        <LeadSection tenantSlug={tenant.slug} title="报价客户" leads={quotedLeads} />
-        <LeadSection tenantSlug={tenant.slug} title="待激活客户" leads={reactivateLeads} />
+        {hasFilters ? <TaskSection notifyAction={notifyAction} tenantSlug={tenant.slug} leadHref={leadHref} sectionId="filtered-tasks" title="筛选结果" tasks={filteredTasks} customerTypeOptions={scopedCustomerTypeOptions} /> : null}
+        <TaskSection notifyAction={notifyAction} tenantSlug={tenant.slug} leadHref={leadHref} sectionId="today-tasks" title="今日待办" tasks={todayTasks} customerTypeOptions={scopedCustomerTypeOptions} />
+        <TaskSection notifyAction={notifyAction} tenantSlug={tenant.slug} leadHref={leadHref} sectionId="overdue-tasks" title="逾期任务" tasks={overdueTasks} urgent customerTypeOptions={scopedCustomerTypeOptions} />
+        <TaskSection notifyAction={notifyAction} tenantSlug={tenant.slug} leadHref={leadHref} sectionId="high-priority-tasks" title="高优先级任务" tasks={highPriorityTasks} customerTypeOptions={scopedCustomerTypeOptions} />
+        <TaskSection notifyAction={notifyAction} tenantSlug={tenant.slug} leadHref={leadHref} sectionId="week-tasks" title="本周待跟进" tasks={weekTasks} customerTypeOptions={scopedCustomerTypeOptions} />
+        <TaskSection notifyAction={notifyAction} tenantSlug={tenant.slug} leadHref={leadHref} sectionId="done-tasks" title="已完成" tasks={doneTasks} readOnly customerTypeOptions={scopedCustomerTypeOptions} />
+        <LeadSection leadHref={leadHref} title="高意向客户" leads={highIntentLeads} customerTypeOptions={scopedCustomerTypeOptions} />
+        <LeadSection leadHref={leadHref} title="报价客户" leads={quotedLeads} customerTypeOptions={scopedCustomerTypeOptions} />
+        <LeadSection leadHref={leadHref} title="待激活客户" leads={reactivateLeads} customerTypeOptions={scopedCustomerTypeOptions} />
       </div>
     </PageShell>
   );
@@ -264,20 +363,24 @@ export default async function TodosPage({
 
 function TaskSection({
   tenantSlug,
+  leadHref,
   sectionId,
   title,
   tasks,
   urgent = false,
   readOnly = false,
-  notifyAction
+  notifyAction,
+  customerTypeOptions
 }: {
   tenantSlug: string;
+  leadHref: (leadId: string) => string;
   sectionId: string;
   title: string;
   tasks: TaskItem[];
   urgent?: boolean;
   readOnly?: boolean;
   notifyAction: (formData: FormData) => Promise<void>;
+  customerTypeOptions: { value: string; label: string }[];
 }) {
   return (
     <section id={sectionId}>
@@ -299,7 +402,7 @@ function TaskSection({
                 {task.description ? <p className="mt-1 text-slate-500">{task.description}</p> : null}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   {task.lead ? (
-                    <Link className="rounded-md border border-slate-300 px-3 py-1 text-xs" href={`/app/${tenantSlug}/leads/${task.lead.id}`}>
+                    <Link className="rounded-md border border-slate-300 px-3 py-1 text-xs" href={leadHref(task.lead.id)}>
                       进入客户详情
                     </Link>
                   ) : null}
@@ -340,14 +443,24 @@ function TaskSection({
   );
 }
 
-function LeadSection({ tenantSlug, title, leads }: { tenantSlug: string; title: string; leads: LeadItem[] }) {
+function LeadSection({
+  leadHref,
+  title,
+  leads,
+  customerTypeOptions
+}: {
+  leadHref: (leadId: string) => string;
+  title: string;
+  leads: LeadItem[];
+  customerTypeOptions: { value: string; label: string }[];
+}) {
   return (
     <Card>
       <h2 className="mb-3 text-base font-semibold text-slate-950">{title}</h2>
       <div className="space-y-2">
         {leads.length ? (
           leads.map((lead) => (
-            <Link key={lead.id} className="block rounded-md border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50" href={`/app/${tenantSlug}/leads/${lead.id}`}>
+            <Link key={lead.id} className="block rounded-md border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50" href={leadHref(lead.id)}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="font-medium text-emerald-700">{lead.name}</span>
                 <span className="text-slate-500">{formatDate(lead.nextFollowAt)}</span>

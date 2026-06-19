@@ -11,12 +11,16 @@ import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { bulkUpdateLeads } from "@/lib/actions";
 import { canImportTenantLeads, canViewAllTenantLeads, requireTenantAccess } from "@/lib/auth";
+import { getCustomerTypeOptionsForBusinessLine } from "@/lib/marketclaw-context";
 import { customerTypeOptions, formatDate, intentionOptions, labelOf, needTypeOptions, sourceOptions, stageOptions } from "@/lib/options";
 import { prisma } from "@/lib/prisma";
+import { appendScopeToHref, resolveBusinessLineScope } from "@/lib/scope";
 import { PageShell } from "@/components/Shell";
 import { Callout, Card, Input, SectionTabs, Select, StatCard, SubmitButton } from "@/components/Ui";
 
 export const dynamic = "force-dynamic";
+
+type LeadWithOwner = Prisma.LeadGetPayload<{ include: { owner: true } }>;
 
 function CustomerEntryCard({
   title,
@@ -48,6 +52,59 @@ function Badge({ children, tone }: { children: React.ReactNode; tone: "red" | "a
   return <span className={`rounded-md px-2 py-1 text-xs ${className}`}>{children}</span>;
 }
 
+function leadNextAction(lead: LeadWithOwner) {
+  if (lead.stage === "NEW") return "补充客户需求，发送公司介绍。";
+  if (lead.stage === "CONTACTED") return "确认客户顾虑，发送成功案例。";
+  if (lead.stage === "DIAGNOSED") return "约电话沟通，明确预算和时间。";
+  if (lead.stage === "QUOTED") return "解释报价范围，推动下一次确认。";
+  return "确认下一步时间，并保存沟通记录。";
+}
+
+function leadRecommendedMaterial(lead: LeadWithOwner) {
+  if (lead.stage === "NEW") return "公司介绍";
+  if (lead.stage === "CONTACTED") return "成功案例";
+  if (lead.stage === "DIAGNOSED") return "服务流程";
+  if (lead.stage === "QUOTED") return "报价说明";
+  return "产品资料";
+}
+
+function SalesLeadFollowupCard({ lead, now, href }: { lead: LeadWithOwner; now: Date; href: string }) {
+  const overdue = lead.nextFollowAt ? lead.nextFollowAt < now : false;
+  const highIntent = lead.intentionLevel === "HIGH" || lead.intentionLevel === "STRONG";
+
+  return (
+    <Card className={overdue ? "border-red-200 bg-red-50" : "h-full"}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold text-slate-950">{lead.name}</h2>
+          <p className="mt-1 text-sm text-slate-500">{labelOf(stageOptions, lead.stage)}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {overdue ? <Badge tone="red">超时提醒</Badge> : null}
+          {highIntent ? <Badge tone="amber">重点客户</Badge> : null}
+        </div>
+      </div>
+      <div className="mt-4 grid gap-2 text-sm text-slate-600">
+        <p>
+          <span className="font-medium text-slate-900">上次跟进：</span>
+          {formatDate(lead.lastFollowAt)}
+        </p>
+        <p>
+          <span className="font-medium text-slate-900">下一步动作：</span>
+          {leadNextAction(lead)}
+        </p>
+        <p>
+          <span className="font-medium text-slate-900">推荐资料：</span>
+          {leadRecommendedMaterial(lead)}
+        </p>
+      </div>
+      <Link className="mt-4 inline-flex rounded-md bg-slate-950 px-4 py-2 text-sm font-medium text-white" href={href}>
+        去跟进
+      </Link>
+    </Card>
+  );
+}
+
 export default async function LeadsPage({
   params,
   searchParams
@@ -56,13 +113,17 @@ export default async function LeadsPage({
   searchParams: Record<string, string | undefined>;
 }) {
   const { user, tenant } = await requireTenantAccess(params.tenantSlug, ["TENANT_ADMIN", "OPERATOR", "SALES"]);
+  const scope = await resolveBusinessLineScope(tenant.id, searchParams);
+  const scopedCustomerTypeOptions = getCustomerTypeOptionsForBusinessLine(scope.enterpriseKey, scope.businessLineKey);
+  const withScope = (href: string) => appendScopeToHref(href, scope);
+  const leadHref = (leadId: string) => withScope(`/app/${tenant.slug}/leads/${leadId}`);
   const canViewAll = canViewAllTenantLeads(user.role);
   const canImport = canImportTenantLeads(user.role);
   const currentView =
     searchParams.view === "source" || searchParams.view === "tags" || searchParams.view === "forms" || searchParams.view === "imports"
       ? searchParams.view
       : "list";
-  const where: Prisma.LeadWhereInput = { tenantId: tenant.id };
+  const where: Prisma.LeadWhereInput = { tenantId: tenant.id, ...(scope.businessLineId ? { businessLineId: scope.businessLineId } : {}) };
   const sourceAttributionFilter: Prisma.LeadSourceAttributionWhereInput = {};
 
   if (!canViewAll) {
@@ -107,14 +168,14 @@ export default async function LeadsPage({
     }),
     canViewAll
       ? prisma.leadSourceAttribution.findMany({
-          where: { tenantId: tenant.id },
+          where: { tenantId: tenant.id, ...(scope.businessLineId ? { businessLineId: scope.businessLineId } : {}) },
           orderBy: { createdAt: "desc" },
           take: 6
         })
       : Promise.resolve([]),
     canViewAll
       ? prisma.intakeForm.findMany({
-          where: { tenantId: tenant.id },
+          where: { tenantId: tenant.id, ...(scope.businessLineId ? { businessLineId: scope.businessLineId } : {}) },
           include: { createdLead: true },
           orderBy: { createdAt: "desc" },
           take: 6
@@ -129,7 +190,7 @@ export default async function LeadsPage({
       : Promise.resolve([]),
     canViewAll
       ? prisma.leadTag.findMany({
-          where: { tenantId: tenant.id },
+          where: { tenantId: tenant.id, ...(scope.businessLineId ? { lead: { businessLineId: scope.businessLineId } } : {}) },
           select: { tagName: true, tagGroup: true },
           orderBy: { createdAt: "desc" },
           take: 120
@@ -159,18 +220,68 @@ export default async function LeadsPage({
     .sort((left, right) => right.count - left.count)
     .slice(0, 8);
 
+  if (!canViewAll) {
+    return (
+      <PageShell
+        tenant={tenant}
+        title="客户跟进清单"
+        enterpriseKey={scope.enterpriseKey}
+        businessLineKey={scope.businessLineKey}
+        breadcrumbs={[
+          { label: "今日跟进", href: `/app/${tenant.slug}/dashboard` },
+          { label: "客户跟进清单" }
+        ]}
+        description="销售只看自己负责的客户，先判断谁要跟、下一步做什么、该发什么资料。"
+      >
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="我的客户" value={leads.length} />
+          <StatCard label="重点客户" value={highIntentCount} />
+          <StatCard label="超时未跟进" value={overdueCount} />
+          <StatCard label="新客户" value={leads.filter((lead) => lead.stage === "NEW").length} />
+        </div>
+
+        <Callout className="mt-4" title="销售使用方式" tone="emerald">
+          先处理超时和重点客户，再进入客户详情页记录跟进、查看推荐话术和发送资料。低频信息放在详情页里看。
+        </Callout>
+
+        <section className="mt-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-950">客户跟进清单</h2>
+              <p className="mt-1 text-sm text-slate-600">每个客户只保留跟进所需的信息：状态、上次跟进、下一步动作、推荐资料和提醒。</p>
+            </div>
+            <Link className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700" href={withScope(`/app/${tenant.slug}/todos`)}>
+              我的跟进任务
+            </Link>
+          </div>
+          <div className="mt-4 grid gap-4 xl:grid-cols-2">
+            {leads.length ? (
+              leads.map((lead) => <SalesLeadFollowupCard key={lead.id} href={leadHref(lead.id)} lead={lead} now={now} />)
+            ) : (
+              <Card>
+                <p className="text-sm text-slate-500">当前还没有分配给你的客户。</p>
+              </Card>
+            )}
+          </div>
+        </section>
+      </PageShell>
+    );
+  }
+
   return (
     <PageShell
       tenant={tenant}
-      title="客户管理"
+      title={`客户管理 · ${scope.enterpriseDefinition.name} / ${scope.businessLineDefinition.name}`}
+      enterpriseKey={scope.enterpriseKey}
+      businessLineKey={scope.businessLineKey}
       breadcrumbs={[
         { label: "客户管理", href: `/app/${tenant.slug}/leads` },
         { label: currentView === "list" ? "客户列表" : currentView === "imports" ? "客户导入" : currentView === "source" ? "来源归因" : currentView === "tags" ? "标签视图" : "表单线索" }
       ]}
       description={
         canViewAll
-          ? "把客户列表、客户导入、来源归因、标签视图和表单线索收口到同一入口，不再分散成多条一级导航。"
-          : "销售侧只保留客户列表入口，并继续只看自己负责的客户。"
+          ? `把 ${scope.businessLineDefinition.name} 的客户列表、客户导入、来源归因、标签视图和表单线索收口到同一入口，不再分散成多条一级导航。`
+          : `销售侧只保留 ${scope.businessLineDefinition.name} 的客户列表入口，并继续只看自己负责的客户。`
       }
     >
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -183,11 +294,11 @@ export default async function LeadsPage({
       <SectionTabs
         current={currentView}
         items={[
-          { key: "list", label: "客户列表", href: `/app/${tenant.slug}/leads?view=list#lead-table` },
-          ...(canImport ? [{ key: "imports", label: "客户导入", href: `/app/${tenant.slug}/imports` }] : []),
-          ...(canViewAll ? [{ key: "source", label: "来源归因", href: `/app/${tenant.slug}/leads?view=source#source-attribution` }] : []),
-          ...(canViewAll ? [{ key: "tags", label: "标签视图", href: `/app/${tenant.slug}/leads?view=tags#tag-view` }] : []),
-          ...(canViewAll ? [{ key: "forms", label: "表单线索", href: `/app/${tenant.slug}/leads?view=forms#form-leads` }] : [])
+          { key: "list", label: "客户列表", href: withScope(`/app/${tenant.slug}/leads?view=list#lead-table`) },
+          ...(canImport ? [{ key: "imports", label: "客户导入", href: withScope(`/app/${tenant.slug}/imports`) }] : []),
+          ...(canViewAll ? [{ key: "source", label: "来源归因", href: withScope(`/app/${tenant.slug}/leads?view=source#source-attribution`) }] : []),
+          ...(canViewAll ? [{ key: "tags", label: "标签视图", href: withScope(`/app/${tenant.slug}/leads?view=tags#tag-view`) }] : []),
+          ...(canViewAll ? [{ key: "forms", label: "表单线索", href: withScope(`/app/${tenant.slug}/leads?view=forms#form-leads`) }] : [])
         ]}
         className="mt-4"
       />
@@ -202,18 +313,18 @@ export default async function LeadsPage({
         <h2 className="text-lg font-semibold text-slate-950">客户管理入口</h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">一级导航只保留“客户管理”，具体能力在页面内部继续分流。</p>
         <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <CustomerEntryCard title="客户列表" description="查看客户、筛选负责人、判断阶段并进入客户详情继续跟进。" href="#lead-table" />
+          <CustomerEntryCard title="客户列表" description="查看客户、筛选负责人、判断阶段并进入客户详情继续跟进。" href={withScope(`/app/${tenant.slug}/leads?view=list#lead-table`)} />
           {canImport ? (
-            <CustomerEntryCard title="客户导入" description="批量导入历史客户、活动名单和表单线索，统一进入系统跟进。" href={`/app/${tenant.slug}/imports`} />
+            <CustomerEntryCard title="客户导入" description="批量导入历史客户、活动名单和表单线索，统一进入系统跟进。" href={withScope(`/app/${tenant.slug}/imports`)} />
           ) : null}
           {canViewAll ? (
-            <CustomerEntryCard title="来源归因" description="回看客户到底从哪个渠道、活动、场景和页面进入系统。" href="#source-attribution" />
+            <CustomerEntryCard title="来源归因" description="回看客户到底从哪个渠道、活动、场景和页面进入系统。" href={withScope(`/app/${tenant.slug}/leads?view=source#source-attribution`)} />
           ) : null}
           {canViewAll ? (
-            <CustomerEntryCard title="标签视图" description="按标签和分组回看当前客户结构，辅助运营和销售复盘。" href="#tag-view" />
+            <CustomerEntryCard title="标签视图" description="按标签和分组回看当前客户结构，辅助运营和销售复盘。" href={withScope(`/app/${tenant.slug}/leads?view=tags#tag-view`)} />
           ) : null}
           {canViewAll ? (
-            <CustomerEntryCard title="表单线索" description="回看公开表单流入的线索，以及它们转成客户的承接情况。" href="#form-leads" />
+            <CustomerEntryCard title="表单线索" description="回看公开表单流入的线索，以及它们转成客户的承接情况。" href={withScope(`/app/${tenant.slug}/leads?view=forms#form-leads`)} />
           ) : null}
         </div>
       </section>
@@ -226,7 +337,7 @@ export default async function LeadsPage({
           <Card className="mt-3">
             <form className="grid gap-3 md:grid-cols-3 lg:grid-cols-9">
               <Select label="来源" name="source" options={[{ value: "", label: "全部" }, ...sourceOptions]} defaultValue={searchParams.source} />
-              <Select label="客户类型" name="customerType" options={[{ value: "", label: "全部" }, ...customerTypeOptions]} defaultValue={searchParams.customerType} />
+              <Select label="客户类型" name="customerType" options={[{ value: "", label: "全部" }, ...scopedCustomerTypeOptions]} defaultValue={searchParams.customerType} />
               <Select label="需求类型" name="needType" options={[{ value: "", label: "全部" }, ...needTypeOptions]} defaultValue={searchParams.needType} />
               <Select label="意向等级" name="intentionLevel" options={[{ value: "", label: "全部" }, ...intentionOptions]} defaultValue={searchParams.intentionLevel} />
               <Select label="客户阶段" name="stage" options={[{ value: "", label: "全部" }, ...stageOptions]} defaultValue={searchParams.stage} />
@@ -296,13 +407,13 @@ export default async function LeadsPage({
                         </td>
                       ) : null}
                       <td className="px-3 py-3 font-medium">
-                        <Link className="text-emerald-700" href={`/app/${tenant.slug}/leads/${lead.id}`}>
+                        <Link className="text-emerald-700" href={leadHref(lead.id)}>
                           {lead.name}
                         </Link>
                       </td>
                       <td className="px-3 py-3">{lead.phone}</td>
                       <td className="px-3 py-3">{labelOf(sourceOptions, lead.source)}</td>
-                      <td className="px-3 py-3">{labelOf(customerTypeOptions, lead.customerType)}</td>
+                      <td className="px-3 py-3">{labelOf(scopedCustomerTypeOptions, lead.customerType)}</td>
                       <td className="px-3 py-3">{labelOf(needTypeOptions, lead.needType)}</td>
                       <td className="px-3 py-3">{labelOf(intentionOptions, lead.intentionLevel)}</td>
                       <td className="px-3 py-3">{labelOf(stageOptions, lead.stage)}</td>
@@ -400,10 +511,10 @@ export default async function LeadsPage({
                   <p className="mt-2 text-sm text-slate-600">
                     表单类型：{form.formType} / 来源：{labelOf(sourceOptions, form.source)}
                   </p>
-                  <p className="mt-1 text-sm text-slate-600">客户类型：{labelOf(customerTypeOptions, form.customerType)}</p>
+                  <p className="mt-1 text-sm text-slate-600">客户类型：{labelOf(scopedCustomerTypeOptions, form.customerType)}</p>
                   <p className="mt-1 text-sm text-slate-600">创建时间：{formatDate(form.createdAt)}</p>
                   {form.createdLead ? (
-                    <Link className="mt-3 inline-flex text-sm font-medium text-emerald-700" href={`/app/${tenant.slug}/leads/${form.createdLead.id}`}>
+                    <Link className="mt-3 inline-flex text-sm font-medium text-emerald-700" href={leadHref(form.createdLead.id)}>
                       查看转化后的客户
                     </Link>
                   ) : null}
