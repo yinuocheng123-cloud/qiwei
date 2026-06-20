@@ -1,26 +1,26 @@
--- Add MarketClaw V3 enterprise/contact scope structures that exist in schema.prisma
--- but were not present in the historical migration chain.
+-- 文件说明：补齐历史 migration 链中缺失的 MarketClaw V3 企业、联系人和业务归属结构。
+-- 关键约束：BusinessLine 必须先按租户回填企业归属和稳定 key，再收紧为 NOT NULL。
 
 CREATE TYPE "EnterpriseStatus" AS ENUM ('ACTIVE', 'PAUSED');
 
-ALTER TYPE "CustomerType" ADD VALUE 'CNAS_LAB_OWNER';
-ALTER TYPE "CustomerType" ADD VALUE 'CNAS_BUSINESS_OWNER';
-ALTER TYPE "CustomerType" ADD VALUE 'CNAS_QUALITY_OWNER';
-ALTER TYPE "CustomerType" ADD VALUE 'CNAS_TECH_OWNER';
-ALTER TYPE "CustomerType" ADD VALUE 'CNAS_TESTING_AGENCY';
-ALTER TYPE "CustomerType" ADD VALUE 'CNAS_CONSULTING_INTENT';
-ALTER TYPE "CustomerType" ADD VALUE 'ZHENGMU_FACTORY_OWNER';
-ALTER TYPE "CustomerType" ADD VALUE 'ZHENGMU_GEO_INTENT';
-ALTER TYPE "CustomerType" ADD VALUE 'ZHENGMU_MEMBERSHIP_INTENT';
-ALTER TYPE "CustomerType" ADD VALUE 'ZHENGMU_STORE_CLIENT';
-ALTER TYPE "CustomerType" ADD VALUE 'ZHENGMU_SUPPLIER_CLIENT';
-ALTER TYPE "CustomerType" ADD VALUE 'ZHENGMU_TIANTUAN_CLIENT';
-ALTER TYPE "CustomerType" ADD VALUE 'YOUXI_FLOORING_CLIENT';
-ALTER TYPE "CustomerType" ADD VALUE 'YOUXI_WHOLE_HOME_CLIENT';
-ALTER TYPE "CustomerType" ADD VALUE 'YOUXI_FURNITURE_CLIENT';
-ALTER TYPE "CustomerType" ADD VALUE 'YOUXI_DESIGNER_CLIENT';
-ALTER TYPE "CustomerType" ADD VALUE 'YOUXI_VENDOR_CLIENT';
-ALTER TYPE "CustomerType" ADD VALUE 'YOUXI_COMMUNITY_CLIENT';
+ALTER TYPE "CustomerType" ADD VALUE IF NOT EXISTS 'CNAS_LAB_OWNER';
+ALTER TYPE "CustomerType" ADD VALUE IF NOT EXISTS 'CNAS_BUSINESS_OWNER';
+ALTER TYPE "CustomerType" ADD VALUE IF NOT EXISTS 'CNAS_QUALITY_OWNER';
+ALTER TYPE "CustomerType" ADD VALUE IF NOT EXISTS 'CNAS_TECH_OWNER';
+ALTER TYPE "CustomerType" ADD VALUE IF NOT EXISTS 'CNAS_TESTING_AGENCY';
+ALTER TYPE "CustomerType" ADD VALUE IF NOT EXISTS 'CNAS_CONSULTING_INTENT';
+ALTER TYPE "CustomerType" ADD VALUE IF NOT EXISTS 'ZHENGMU_FACTORY_OWNER';
+ALTER TYPE "CustomerType" ADD VALUE IF NOT EXISTS 'ZHENGMU_GEO_INTENT';
+ALTER TYPE "CustomerType" ADD VALUE IF NOT EXISTS 'ZHENGMU_MEMBERSHIP_INTENT';
+ALTER TYPE "CustomerType" ADD VALUE IF NOT EXISTS 'ZHENGMU_STORE_CLIENT';
+ALTER TYPE "CustomerType" ADD VALUE IF NOT EXISTS 'ZHENGMU_SUPPLIER_CLIENT';
+ALTER TYPE "CustomerType" ADD VALUE IF NOT EXISTS 'ZHENGMU_TIANTUAN_CLIENT';
+ALTER TYPE "CustomerType" ADD VALUE IF NOT EXISTS 'YOUXI_FLOORING_CLIENT';
+ALTER TYPE "CustomerType" ADD VALUE IF NOT EXISTS 'YOUXI_WHOLE_HOME_CLIENT';
+ALTER TYPE "CustomerType" ADD VALUE IF NOT EXISTS 'YOUXI_FURNITURE_CLIENT';
+ALTER TYPE "CustomerType" ADD VALUE IF NOT EXISTS 'YOUXI_DESIGNER_CLIENT';
+ALTER TYPE "CustomerType" ADD VALUE IF NOT EXISTS 'YOUXI_VENDOR_CLIENT';
+ALTER TYPE "CustomerType" ADD VALUE IF NOT EXISTS 'YOUXI_COMMUNITY_CLIENT';
 
 CREATE TABLE "Enterprise" (
     "id" TEXT NOT NULL,
@@ -55,9 +55,64 @@ CREATE TABLE "Contact" (
 
 ALTER TABLE "AuditLog" ADD COLUMN "enterpriseId" TEXT;
 
+-- 先以 nullable 形式新增字段，避免历史 BusinessLine 数据阻断 migration。
 ALTER TABLE "BusinessLine"
-ADD COLUMN "enterpriseId" TEXT NOT NULL,
-ADD COLUMN "key" TEXT NOT NULL;
+ADD COLUMN "enterpriseId" TEXT,
+ADD COLUMN "key" TEXT;
+
+-- 按租户和业务线归属补建 Enterprise；确定性 id 让同一租户和 enterprise key 始终得到相同结果。
+WITH "enterpriseScopes" AS (
+    SELECT DISTINCT
+        "tenantId",
+        CASE
+            WHEN LOWER(COALESCE(NULLIF("slug", ''), "id")) = 'cnas' THEN 'hangyu'
+            WHEN LOWER(COALESCE(NULLIF("slug", ''), "id")) IN ('zhengmu', 'youxi') THEN 'youshi'
+            ELSE 'legacy'
+        END AS "enterpriseKey"
+    FROM "BusinessLine"
+)
+INSERT INTO "Enterprise" (
+    "id",
+    "tenantId",
+    "name",
+    "key",
+    "description",
+    "updatedAt"
+)
+SELECT
+    'ent_' || md5("tenantId" || ':' || "enterpriseKey"),
+    "tenantId",
+    CASE
+        WHEN "enterpriseKey" = 'hangyu' THEN '杭育公司'
+        WHEN "enterpriseKey" = 'youshi' THEN '优势文化'
+        ELSE '历史企业空间'
+    END,
+    "enterpriseKey",
+    '由 V3 migration 为存量业务线补建',
+    CURRENT_TIMESTAMP
+FROM "enterpriseScopes"
+ON CONFLICT ("id") DO NOTHING;
+
+-- 优先沿用历史 slug；仅在 slug 为空时回退到 BusinessLine id，确保 tenant 内 key 可用且稳定。
+UPDATE "BusinessLine"
+SET "key" = COALESCE(NULLIF("slug", ''), "id")
+WHERE "key" IS NULL;
+
+-- 按相同映射回填企业归属，未知历史业务线统一进入 tenant 自己的 legacy 企业空间。
+UPDATE "BusinessLine"
+SET "enterpriseId" = 'ent_' || md5(
+    "tenantId" || ':' ||
+    CASE
+        WHEN LOWER("key") = 'cnas' THEN 'hangyu'
+        WHEN LOWER("key") IN ('zhengmu', 'youxi') THEN 'youshi'
+        ELSE 'legacy'
+    END
+)
+WHERE "enterpriseId" IS NULL;
+
+-- 所有存量记录完成回填后再恢复 schema.prisma 要求的非空约束。
+ALTER TABLE "BusinessLine" ALTER COLUMN "enterpriseId" SET NOT NULL;
+ALTER TABLE "BusinessLine" ALTER COLUMN "key" SET NOT NULL;
 
 ALTER TABLE "CustomerTypeStrategy"
 ADD COLUMN "businessLineId" TEXT,
